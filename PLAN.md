@@ -846,11 +846,10 @@ Current role:
   constraints: displacement-based consensus law over relative measurements,
   `FormationSpec` shape builders, closed-loop simulation, and an
   `mrn_formation_demo` CLI
-
-Near-term tasks:
-
-- cooperative coverage / exploration: frontier detection + task allocation
-  (auction / Hungarian)
+- [x] cooperative coverage / exploration: three-state `OccupancyGrid`, frontier
+  detection and clustering, BFS travel cost, and task allocation by greedy
+  auction or optimal Hungarian assignment (cross-checked against brute force);
+  `mrn_coverage_demo` CLI
 
 Later tasks:
 

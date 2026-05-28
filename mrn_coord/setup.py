@@ -22,6 +22,7 @@ setup(
         "console_scripts": [
             "mrn_mapf_demo = mrn_coord.mapf.demo:main",
             "mrn_formation_demo = mrn_coord.formation.demo:main",
+            "mrn_coverage_demo = mrn_coord.coverage.demo:main",
         ],
     },
 )

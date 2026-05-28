@@ -15,7 +15,7 @@ Planned scope, built one module at a time:
    reuses the V2V relative-pose constraints already exchanged by the
    localization stack. **Landed.**
 3. **Coverage** (`mrn_coord.coverage`) — cooperative exploration and task
-   allocation (frontier detection + auction/Hungarian assignment). *Planned.*
+   allocation (frontier detection + auction/Hungarian assignment). **Landed.**
 
 ## MAPF — Multi-Agent Path Finding
 
@@ -135,3 +135,45 @@ ros2 run mrn_coord mrn_formation_demo --leader 1      # anchor the shape to agen
 
 The demo pulls three scattered agents into an equilateral triangle and prints
 the formation error decaying toward zero.
+
+## Coverage — Cooperative Exploration & Task Allocation
+
+Given a partially-explored map and a team of robots, decide *who explores
+where*. Two stages: find the candidate targets, then assign them.
+
+### Occupancy & frontiers (`occupancy.py`, `frontier.py`)
+
+`OccupancyGrid` is a three-state grid — `UNKNOWN`, `FREE`, `OCCUPIED` —
+buildable from text rows (`.` free, `#` occupied, `?` unknown). A **frontier
+cell** is a free cell adjacent to an unknown cell: the boundary of explored
+space, and where moving gains new information. `frontier_cells` lists them and
+`cluster_frontiers` groups 4-connected frontiers into clusters, each with a
+representative (the medoid, so the target sits inside the frontier).
+
+### Allocation (`allocation.py`)
+
+Travel cost is the shortest distance through known-free space
+(`bfs_free_distances`, 4-connected). Two strategies assign frontier targets to
+robots:
+
+- **`greedy_auction`** — repeatedly commit the globally cheapest
+  `(robot, frontier)` pair. Fast, simple, not always optimal.
+- **`hungarian_assignment` / `min_cost_assignment`** — the optimal
+  minimum-total-cost assignment (Kuhn–Munkres), handling rectangular cost
+  matrices by transposing so rows ≤ cols. The implementation is cross-checked
+  against brute-force optimal assignment in the tests.
+
+`allocate_frontiers(grid, robot_positions, frontier_targets, method=...)` ties
+them together: BFS cost from each robot to each target, then an assignment;
+unreachable pairs are dropped.
+
+### Try it
+
+```bash
+ros2 run mrn_coord mrn_coverage_demo                  # optimal (Hungarian)
+ros2 run mrn_coord mrn_coverage_demo --method greedy
+```
+
+The demo builds a small map with two unknown pockets, detects and clusters the
+frontiers, allocates them to two robots by travel cost, and prints the map with
+each robot (`R`) and its assigned frontier target (`F`).
