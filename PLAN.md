@@ -551,14 +551,25 @@ The v0.4 goal:
   `relative_anchor` so the CI smoke path is unchanged
   (`mrn_graph/scripts/fixed_lag_graph_node.py`)
 
-Still pending (needs CI dependency / experiment wiring):
+- [x] three-way comparison in the experiment runner:
+  `experiments/backend_comparison.yaml` runs `local_only` /
+  `relative_anchor` / `fixed_lag` on the GNSS-outage scenario. A new
+  method-vs-method acceptance rule (`max_ate_rmse_ratio_vs_method` +
+  `vs_method_run`) encodes "fixed_lag improves or matches relative_anchor"
+  (ATE ratio ≤ 1.05); the rule logic is unit-tested in CI without launching
+  (`mrn_eval/mrn_eval/experiment_cli.py:evaluate_acceptance`,
+  `experiments/backend_comparison.yaml`,
+  [`docs/experiments.md`](docs/experiments.md) → "Backend Comparison")
+
+Still pending (needs CI dependency / hardware):
 
 - add `ros-jazzy-gtsam` to the CI image, then provide a GTSAM-backed node as
   the high-performance backend (Ceres is the fallback if GTSAM packaging
   regresses CI); the pure-Python `FixedLagBackend` stays the dependency-free
   reference and smoke baseline regardless
-- compare `local_only`, `relative_anchor`, and `fixed_lag_python` in the same
-  experiment runner (add a `methods:` entry and an acceptance row)
+- run `backend_comparison.yaml` end-to-end in CI once launch-based comparison
+  is added to the smoke budget (the acceptance logic is already CI-tested;
+  the full 3-launch run is currently a local/manual experiment)
 - keep dummy backend for smoke tests
 
 Acceptance:

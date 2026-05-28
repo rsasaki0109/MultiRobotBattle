@@ -201,6 +201,40 @@ primary method rows in `rows`, all method rows in `method_rows`, and all method
 network diagnostics in `method_network_rows`. Graph diagnostics are collected
 in `graph_rows` and `method_graph_rows`.
 
+## Backend Comparison
+
+`experiments/backend_comparison.yaml` runs a three-way comparison —
+`local_only`, the `relative_anchor` cooperative baseline, and the pure-Python
+`fixed_lag` graph backend (`graph_executable: fixed_lag_graph_node.py`) — on
+the GNSS-outage scenario:
+
+```bash
+ros2 run mrn_eval mrn_experiment run \
+  experiments/backend_comparison.yaml \
+  --duration 30 \
+  --output-dir out/experiments/backend_comparison
+```
+
+Its acceptance encodes the v0.4 goal "graph backend improves or matches
+`relative_anchor` on synthetic outage scenarios" without a GTSAM dependency:
+each cooperative backend must beat local-only (`min_improvement_vs_local`),
+and the fixed-lag backend must match or improve on the relative-anchor
+baseline via a method-vs-method rule:
+
+```yaml
+- agent_id: robot_2
+  method_run: fixed_lag
+  method: cooperative
+  max_ate_rmse_ratio_vs_method: 1.05   # fixed_lag ATE <= 1.05 x relative_anchor ATE
+  vs_method_run: relative_anchor
+```
+
+`max_ate_rmse_ratio_vs_method` divides this row's `ate_rmse` by the named
+`vs_method_run` row's `ate_rmse` for the same agent and checks the ratio
+against the limit (`<=`). A limit of `1.0` demands strict improve-or-equal;
+`1.05` allows a 5% tolerance band for "matches." The comparison-row absence
+fails the check, so a misconfigured method name cannot silently pass.
+
 ## Parameter Sweeps
 
 Use `sweeps` to run one experiment across multiple scenario values. The runner

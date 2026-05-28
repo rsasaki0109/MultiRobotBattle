@@ -450,6 +450,32 @@ def evaluate_acceptance(config: dict[str, Any], metrics: dict[str, Any]) -> dict
                     ">=",
                 )
             )
+        if "max_ate_rmse_ratio_vs_method" in rule:
+            vs_method_run = str(rule.get("vs_method_run", ""))
+            other_row = _find_metric_row(
+                candidate_rows,
+                agent_id=agent_id,
+                method=method,
+                method_run=vs_method_run,
+            )
+            ratio_limit = float(rule["max_ate_rmse_ratio_vs_method"])
+            this_ate = row.get("ate_rmse")
+            other_ate = other_row.get("ate_rmse") if other_row else None
+            actual_ratio: float | None = None
+            if (
+                this_ate is not None
+                and other_ate is not None
+                and float(other_ate) > 0.0
+            ):
+                actual_ratio = float(this_ate) / float(other_ate)
+            checks.append(
+                _threshold_check(
+                    f"{prefix}.ate_rmse_ratio_vs[{vs_method_run}]",
+                    actual_ratio,
+                    ratio_limit,
+                    "<=",
+                )
+            )
 
     selected_sweep_cases = _selected_sweep_case_names(metrics)
     network_rules = acceptance.get("network")

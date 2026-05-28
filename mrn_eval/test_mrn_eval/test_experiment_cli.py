@@ -336,6 +336,73 @@ class TestExperimentCli(unittest.TestCase):
         self.assertIn("localization[coop_graph:robot_2/cooperative].improvement_vs_local", failed)
         self.assertIn("network[coop_graph].rows", failed)
 
+    def _ratio_config(self, ratio_limit):
+        return {
+            "acceptance": {
+                "localization": [
+                    {
+                        "agent_id": "robot_2",
+                        "method_run": "fixed_lag",
+                        "method": "cooperative",
+                        "max_ate_rmse_ratio_vs_method": ratio_limit,
+                        "vs_method_run": "relative_anchor",
+                    }
+                ]
+            }
+        }
+
+    def _ratio_metrics(self, fixed_lag_ate, relative_anchor_ate):
+        return {
+            "method_rows": [
+                {
+                    "method_run": "fixed_lag",
+                    "agent_id": "robot_2",
+                    "method": "cooperative",
+                    "ate_rmse": fixed_lag_ate,
+                },
+                {
+                    "method_run": "relative_anchor",
+                    "agent_id": "robot_2",
+                    "method": "cooperative",
+                    "ate_rmse": relative_anchor_ate,
+                },
+            ]
+        }
+
+    def test_acceptance_ratio_passes_when_backend_matches_or_improves(self):
+        # fixed_lag 0.10 vs relative_anchor 0.12 -> ratio 0.83 <= 1.05
+        result = evaluate_acceptance(
+            self._ratio_config(1.05), self._ratio_metrics(0.10, 0.12)
+        )
+        self.assertTrue(result["passed"])
+        check = next(
+            c for c in result["checks"] if "ate_rmse_ratio_vs" in c["name"]
+        )
+        self.assertTrue(check["passed"])
+        self.assertAlmostEqual(check["actual"], 0.10 / 0.12, places=6)
+
+    def test_acceptance_ratio_fails_when_backend_worse(self):
+        # fixed_lag 0.20 vs relative_anchor 0.12 -> ratio 1.67 > 1.05
+        result = evaluate_acceptance(
+            self._ratio_config(1.05), self._ratio_metrics(0.20, 0.12)
+        )
+        self.assertFalse(result["passed"])
+
+    def test_acceptance_ratio_fails_when_comparison_row_missing(self):
+        config = self._ratio_config(1.05)
+        metrics = {
+            "method_rows": [
+                {
+                    "method_run": "fixed_lag",
+                    "agent_id": "robot_2",
+                    "method": "cooperative",
+                    "ate_rmse": 0.10,
+                }
+            ]
+        }
+        result = evaluate_acceptance(config, metrics)
+        self.assertFalse(result["passed"])
+
     def test_acceptance_passes_graph_sweep_rules(self):
         config = {
             "acceptance": {
