@@ -29,8 +29,24 @@ no later than the `v1.0.0` cut described in `PLAN.md` §22.
   `mrn_msgs` types; new fields go through the `mrn_msgs` review process.
 - A C++-only API. Python and C++ backends are both first-class. The
   interface description below is language-neutral; concrete bindings live
-  in `mrn_graph/include/mrn_graph/backend.hpp` (C++) and a small Python
-  module to be added alongside the first GTSAM/Ceres backend.
+  in `mrn_graph/include/mrn_graph/backend.hpp` (C++) and
+  `mrn_graph/scripts/graph_backend.py` (Python).
+
+## Python Backend Layer
+
+`mrn_graph/scripts/graph_backend.py` is the Python mirror of the C++
+`Backend` interface, kept ROS-free so the backend logic is unit-tested in
+CI. `FixedLagBackend.step(agents, relatives, gnss)` consumes plain
+dataclasses (`AgentInput`, `RelativeInput`, `GnssInput`) and returns
+`CooperativeEstimate` per agent plus a `GraphDiagnostics` carrying the
+accepted / rejected / stale counts and rejection-reason map this document
+requires. Internally it builds prior + between factors and optimizes them
+with `pose_graph_solver.gauss_newton` (see
+[`graph_architecture.md`](graph_architecture.md) → "Reference Batch
+Backend"). A thin rclpy node converts `AgentState` /
+`RelativePoseConstraint` / GNSS messages to and from these dataclasses and
+publishes the standard topics — keeping the ROS node trivial and the
+optimization + diagnostics logic testable without a running graph.
 
 ## Inputs the Backend Consumes
 

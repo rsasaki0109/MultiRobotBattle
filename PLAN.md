@@ -529,29 +529,35 @@ The v0.4 goal:
   full SE(2) factor-graph API locally, but is absent from the `build_jazzy`
   CI image — a GTSAM-backed node is gated on adding it to CI (documented in
   graph_architecture.md → "GTSAM dependency status")
+- [x] Python `GraphBackend` layer + `FixedLagBackend`: ROS-free mirror of the
+  C++ `Backend` interface that wraps the solver and produces the diagnostics
+  contract (accepted / rejected / stale counts, stable rejection-reason
+  vocabulary, per-agent accepted/rejected, degraded→0 quality). Anchors
+  non-degraded agents, regularizes degraded ones, gates relatives by age and
+  covariance, applies GNSS priors
+  (`mrn_graph/scripts/graph_backend.py`,
+  [`docs/graph_backend_plugin.md`](docs/graph_backend_plugin.md) →
+  "Python Backend Layer")
 
-### 13.2 Backend (pending; needs solver packaging decision)
+### 13.2 Backend integration (pending; ROS node shell + CI gtsam)
 
 The factor families (odometry / GNSS prior / relative pose), robust loss,
-covariance-aware weighting, and rejected-factor reporting are all
-implemented and CI-tested in the pure solver above. What remains is the
-solver-packaging and integration step:
+covariance-aware weighting, rejected-factor reporting, and the backend
+decision logic are all implemented and CI-tested above. What remains is the
+thin ROS shell and the solver-packaging decision:
 
-- add `GraphBackend` plugin interface if not already complete
-- wrap `pose_graph_solver.py` (or GTSAM) behind a fixed-lag graph node and
-  publish cooperative poses + rejected-factor graph status from it
-- add `ros-jazzy-gtsam` to the CI image, then provide a GTSAM-backed node
-  as the high-performance backend (Ceres is the fallback if GTSAM packaging
-  regresses CI)
+- add a `fixed_lag_graph_node.py` rclpy shell that converts `AgentState` /
+  `RelativePoseConstraint` / GNSS messages to/from the `graph_backend.py`
+  dataclasses, calls `FixedLagBackend.step`, and publishes the standard
+  cooperative-pose / cooperative-odom / `/mrn/graph/status` / markers topics
+  (keep the default `graph_executable` on `relative_anchor` so the CI smoke
+  stays green; expose the new node as an opt-in choice)
+- add `ros-jazzy-gtsam` to the CI image, then provide a GTSAM-backed node as
+  the high-performance backend (Ceres is the fallback if GTSAM packaging
+  regresses CI); the pure-Python `FixedLagBackend` stays the dependency-free
+  reference and smoke baseline regardless
 - compare `local_only`, `relative_anchor`, and the graph backend in the same
   experiment runner
-
-Backend choice:
-
-- prefer GTSAM for factor graph semantics if dependency handling is acceptable
-- consider Ceres for batch baseline if GTSAM packaging blocks CI
-- the pure-Python solver remains the dependency-free reference and smoke
-  baseline regardless of which solver is wired in
 - keep dummy backend for smoke tests
 
 Acceptance:
