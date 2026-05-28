@@ -13,6 +13,7 @@ from mrn_eval.offline_ate import (
     AlignmentResult,
     ErrorStats,
     compute_ate,
+    compute_drift_rate,
     compute_rpe,
     load_trajectory_csv,
     stats_to_dict,
@@ -39,9 +40,10 @@ def _build_metrics(
     alignment: AlignmentResult,
     ate: ErrorStats,
     rpe_results: dict[float, ErrorStats],
+    drift_results: dict[float, ErrorStats],
     max_offset_sec: float,
 ) -> dict:
-    return {
+    metrics = {
         "estimated": {
             "label": estimated_label,
             "path": str(estimated_path),
@@ -65,6 +67,12 @@ def _build_metrics(
             for delta, stats in sorted(rpe_results.items())
         },
     }
+    if drift_results:
+        metrics["drift"] = {
+            f"{segment:g}m": stats_to_dict(stats)
+            for segment, stats in sorted(drift_results.items())
+        }
+    return metrics
 
 
 def _build_report(metrics: dict) -> str:
@@ -118,6 +126,27 @@ def _build_report(metrics: dict) -> str:
                 + " |"
             )
         lines.append("")
+    if metrics.get("drift"):
+        lines.append("## Drift Rate (per metre travelled)")
+        lines.append("")
+        lines.append("| Segment | RMSE | Mean | Stddev | Max | Segments |")
+        lines.append("| --- | ---: | ---: | ---: | ---: | ---: |")
+        for segment_key, stats in metrics["drift"].items():
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        segment_key,
+                        _format_float(stats["rmse"]),
+                        _format_float(stats["mean"]),
+                        _format_float(stats["stddev"]),
+                        _format_float(stats["max"]),
+                        str(stats["count"]),
+                    ]
+                )
+                + " |"
+            )
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -143,6 +172,17 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=None,
         help="Time delta(s) for RPE evaluation (repeatable). Default: [1.0].",
+    )
+    parser.add_argument(
+        "--drift-segment-m",
+        type=float,
+        action="append",
+        default=None,
+        help=(
+            "Path-distance segment length(s) for KITTI-style drift rate "
+            "(repeatable). Omitted by default; the drift section appears only "
+            "when at least one segment is given."
+        ),
     )
     parser.add_argument("--estimated-label", default="estimated")
     parser.add_argument("--truth-label", default="truth")
@@ -184,6 +224,10 @@ def main(argv: list[str] | None = None) -> int:
     for delta in deltas:
         rpe_results[delta] = compute_rpe(alignment.pairs, delta_sec=delta)
 
+    drift_results: dict[float, ErrorStats] = {}
+    for segment in args.drift_segment_m or []:
+        drift_results[segment] = compute_drift_rate(alignment.pairs, segment_m=segment)
+
     metrics = _build_metrics(
         estimated_path=args.estimated,
         truth_path=args.truth,
@@ -192,6 +236,7 @@ def main(argv: list[str] | None = None) -> int:
         alignment=alignment,
         ate=ate,
         rpe_results=rpe_results,
+        drift_results=drift_results,
         max_offset_sec=args.max_offset_sec,
     )
     report = _build_report(metrics)

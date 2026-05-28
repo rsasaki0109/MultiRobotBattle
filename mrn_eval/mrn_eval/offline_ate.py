@@ -195,6 +195,72 @@ def compute_rpe(
     return _error_stats(errors)
 
 
+def compute_drift_rate(
+    pairs: Sequence[AlignedPair],
+    segment_m: float,
+    segment_tolerance_m: float | None = None,
+) -> ErrorStats:
+    """Distance-normalized translational drift over fixed-length segments.
+
+    For each starting pair, find the later pair whose cumulative truth path
+    distance is closest to ``segment_m``, then divide the segment's
+    translational error (estimated motion delta vs truth motion delta) by the
+    actual segment length. The returned stats are therefore dimensionless
+    (meters of drift per meter travelled) — the KITTI-style odometry drift,
+    complementing the absolute ATE and the time-based RPE.
+
+    This is the worked example in ``docs/offline_ate.md`` → "Adding a New
+    Evaluator": a pure function over ``AlignedPair`` returning ``ErrorStats``,
+    which the CLI wires into ``metrics.json`` and the report the same way as
+    ATE and RPE.
+    """
+    if segment_m <= 0:
+        raise ValueError("segment_m must be positive")
+    tolerance = (
+        segment_tolerance_m if segment_tolerance_m is not None else segment_m / 2.0
+    )
+    if tolerance < 0:
+        raise ValueError("segment_tolerance_m must be non-negative")
+    sorted_pairs = sorted(pairs, key=lambda pair: pair.stamp_sec)
+    # Cumulative truth path length at each pair.
+    cumulative = [0.0] * len(sorted_pairs)
+    for i in range(1, len(sorted_pairs)):
+        prev, cur = sorted_pairs[i - 1].truth, sorted_pairs[i].truth
+        cumulative[i] = cumulative[i - 1] + sqrt(
+            (cur.x - prev.x) ** 2 + (cur.y - prev.y) ** 2 + (cur.z - prev.z) ** 2
+        )
+    errors: list[float] = []
+    for i, pair_i in enumerate(sorted_pairs):
+        target = cumulative[i] + segment_m
+        best_j = None
+        best_diff = float("inf")
+        for j in range(i + 1, len(sorted_pairs)):
+            diff = abs(cumulative[j] - target)
+            if diff <= best_diff:
+                best_diff = diff
+                best_j = j
+            else:
+                break
+        if best_j is None or best_diff > tolerance:
+            continue
+        pair_j = sorted_pairs[best_j]
+        segment_length = cumulative[best_j] - cumulative[i]
+        if segment_length <= 0.0:
+            continue
+        diff_x = (pair_j.estimated.x - pair_i.estimated.x) - (
+            pair_j.truth.x - pair_i.truth.x
+        )
+        diff_y = (pair_j.estimated.y - pair_i.estimated.y) - (
+            pair_j.truth.y - pair_i.truth.y
+        )
+        diff_z = (pair_j.estimated.z - pair_i.estimated.z) - (
+            pair_j.truth.z - pair_i.truth.z
+        )
+        translational_error = sqrt(diff_x * diff_x + diff_y * diff_y + diff_z * diff_z)
+        errors.append(translational_error / segment_length)
+    return _error_stats(errors)
+
+
 def stats_to_dict(stats: ErrorStats) -> dict:
     def _jsonable(value: float) -> float | None:
         return None if isnan(value) or isinf(value) else value

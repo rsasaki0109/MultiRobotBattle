@@ -44,14 +44,23 @@ ros2 run mrn_eval mrn_eval_offline_ate \
   --max-offset-sec 0.05 \
   --rpe-delta-sec 1.0 \
   --rpe-delta-sec 5.0 \
+  --drift-segment-m 5.0 \
   --output-dir out/offline_ate/robot_1
 ```
 
 Outputs:
 
 - `out/offline_ate/robot_1/metrics.json` — machine-readable summary
-  (alignment counts, ATE rmse/mean/stddev/max, per-delta RPE).
+  (alignment counts, ATE rmse/mean/stddev/max, per-delta RPE, and per-segment
+  drift rate when `--drift-segment-m` is given).
 - `out/offline_ate/robot_1/report.md` — markdown report for PR diff review.
+
+`--drift-segment-m` (repeatable) adds a KITTI-style **drift rate**: the
+translational error over fixed truth-path-distance segments, divided by the
+segment length (dimensionless, metres of drift per metre travelled). It is
+opt-in — the drift section is omitted unless at least one segment length is
+given — and complements the absolute ATE and the time-based RPE with a
+per-distance view useful for the dataset path.
 
 Without `--output-dir` the markdown report is written to stdout, which is
 useful for a quick eyeball check during a bag replay debug loop.
@@ -234,6 +243,32 @@ Exit codes: `0` success, `2` input error (missing file, malformed line),
 > estimate and ground truth use different epochs, align them before
 > conversion — `--max-offset-sec` is an alignment tolerance, not an epoch
 > correction.
+
+## Adding a New Evaluator
+
+The offline metrics are pure functions over the aligned trajectory, which
+makes adding a new evaluator a small, fully unit-testable change. The drift
+rate above is the worked example; the pattern is:
+
+1. **Write a pure function** in `mrn_eval/mrn_eval/offline_ate.py` taking
+   `Sequence[AlignedPair]` (each pair carries the time-aligned `estimated`
+   and `truth` samples) and returning an `ErrorStats` via the shared
+   `_error_stats` helper. `compute_drift_rate` is ~30 lines and depends only
+   on `math` — no ROS, no numpy.
+2. **Unit-test it** in `test_mrn_eval/test_offline_ate.py`: a perfect
+   trajectory gives zero, a constructed error gives the known value, and the
+   empty/invalid inputs are handled. These run in CI without a bag.
+3. **Wire it into the CLI** (`offline_ate_cli.py`): compute it in `main`,
+   add it to the dict in `_build_metrics`, and render a table in
+   `_build_report`. Follow the RPE/drift pattern of keying the result dict so
+   multiple parameterizations (deltas, segment lengths) share one section.
+4. **Keep it opt-in if it needs a parameter.** RPE defaults to `[1.0]`;
+   drift is omitted entirely unless `--drift-segment-m` is passed, so adding
+   it did not change any existing report or break existing tests.
+
+The same shape applies to a streaming/online evaluator, except the input is
+the live `/mrn/eval/summary` stream consumed by `mrn_online_ate` rather than
+aligned CSV pairs.
 
 ## Related Documents
 

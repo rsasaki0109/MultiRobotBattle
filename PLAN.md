@@ -612,7 +612,11 @@ Requirements:
 - reproducible reports
 - CI artifacts for smoke experiments
 - examples for adding new constraint sources
-- examples for adding new evaluators
+- [x] examples for adding new evaluators — the offline drift-rate metric
+  (`compute_drift_rate`) is the worked example, with the extension pattern
+  documented in [`docs/offline_ate.md`](docs/offline_ate.md) → "Adding a New
+  Evaluator" (pure function over `AlignedPair` → `ErrorStats` → CLI wiring,
+  opt-in `--drift-segment-m`, CI-tested without a bag)
 
 Non-requirements:
 

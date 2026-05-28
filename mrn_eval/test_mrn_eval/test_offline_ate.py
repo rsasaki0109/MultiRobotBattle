@@ -9,6 +9,7 @@ from pathlib import Path
 from mrn_eval.offline_ate import (
     TrajectorySample,
     compute_ate,
+    compute_drift_rate,
     compute_rpe,
     load_trajectory_csv,
     time_align,
@@ -145,6 +146,36 @@ class TestComputeRPE(unittest.TestCase):
             compute_rpe((), delta_sec=0.0)
 
 
+class TestComputeDriftRate(unittest.TestCase):
+    def test_perfect_trajectory_gives_zero_drift(self):
+        # straight line, 1 m spacing along x; estimate == truth -> 0 drift.
+        truth = [TrajectorySample(float(i), float(i), 0.0) for i in range(11)]
+        estimated = list(truth)
+        align = time_align(estimated, truth, max_offset_sec=0.001)
+        stats = compute_drift_rate(align.pairs, segment_m=2.0, segment_tolerance_m=0.5)
+        self.assertGreater(stats.count, 0)
+        self.assertAlmostEqual(stats.rmse, 0.0, places=9)
+
+    def test_constant_drift_fraction(self):
+        # Truth moves 1 m/step along x (path length = distance). Estimate adds
+        # 10% extra in y per step -> 0.1 m drift per 1 m travelled = 0.1.
+        truth = [TrajectorySample(float(i), float(i), 0.0) for i in range(11)]
+        estimated = [TrajectorySample(float(i), float(i), 0.1 * i) for i in range(11)]
+        align = time_align(estimated, truth, max_offset_sec=0.001)
+        stats = compute_drift_rate(align.pairs, segment_m=2.0, segment_tolerance_m=0.5)
+        self.assertGreater(stats.count, 0)
+        self.assertAlmostEqual(stats.mean, 0.1, places=6)
+
+    def test_rejects_zero_segment(self):
+        with self.assertRaisesRegex(ValueError, "segment_m must be positive"):
+            compute_drift_rate((), segment_m=0.0)
+
+    def test_empty_pairs_gives_nan(self):
+        stats = compute_drift_rate((), segment_m=1.0)
+        self.assertEqual(stats.count, 0)
+        self.assertTrue(math.isnan(stats.rmse))
+
+
 class TestCli(unittest.TestCase):
     def _write_traj(self, path: Path, samples: list[tuple[float, float, float]]) -> None:
         path.write_text(
@@ -184,6 +215,44 @@ class TestCli(unittest.TestCase):
         self.assertIn("Offline ATE Report", report)
         self.assertIn("Absolute Trajectory Error", report)
         self.assertIn("Relative Pose Error", report)
+        # drift section is opt-in; absent unless --drift-segment-m is given.
+        self.assertNotIn("drift", metrics)
+        self.assertNotIn("Drift Rate", report)
+
+    def test_drift_segment_adds_drift_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            est_path = base / "est.csv"
+            truth_path = base / "truth.csv"
+            # straight x-line truth; estimate drifts in y.
+            self._write_traj(
+                est_path,
+                [(float(i), float(i), 0.1 * i) for i in range(11)],
+            )
+            self._write_traj(
+                truth_path,
+                [(float(i), float(i), 0.0) for i in range(11)],
+            )
+            output_dir = base / "out"
+            rc = offline_main(
+                [
+                    "--estimated",
+                    str(est_path),
+                    "--truth",
+                    str(truth_path),
+                    "--output-dir",
+                    str(output_dir),
+                    "--drift-segment-m",
+                    "2.0",
+                ]
+            )
+            self.assertEqual(rc, 0)
+            metrics = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
+            report = (output_dir / "report.md").read_text(encoding="utf-8")
+        self.assertIn("2m", metrics["drift"])
+        self.assertGreater(metrics["drift"]["2m"]["count"], 0)
+        self.assertAlmostEqual(metrics["drift"]["2m"]["mean"], 0.1, places=6)
+        self.assertIn("Drift Rate", report)
 
     def test_stdout_only_when_no_output_dir(self):
         with tempfile.TemporaryDirectory() as directory:
