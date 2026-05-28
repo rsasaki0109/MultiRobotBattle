@@ -118,6 +118,7 @@ class FixedLagGraphNode(Node):
         self.declare_parameter("max_offset_uncertainty_sec", 0.01)
         self.declare_parameter("clock_status_timeout_sec", 2.0)
         self.declare_parameter("huber_delta", 1.0)
+        self.declare_parameter("backend", "python")  # "python" | "gtsam"
 
         self.agent_ids = [
             str(agent_id)
@@ -139,12 +140,19 @@ class FixedLagGraphNode(Node):
                 self.get_parameter("reject_unknown_clock_offset").value
             ),
         )
-        self.backend = FixedLagBackend(
-            FixedLagBackendConfig(
-                max_constraint_age_sec=self.max_constraint_age_sec,
-                huber_delta=float(self.get_parameter("huber_delta").value),
-            )
+        backend_config = FixedLagBackendConfig(
+            max_constraint_age_sec=self.max_constraint_age_sec,
+            huber_delta=float(self.get_parameter("huber_delta").value),
         )
+        backend_choice = str(self.get_parameter("backend").value).strip().lower()
+        if backend_choice == "gtsam":
+            # Lazy import: GTSAM is optional and absent from CI. Only the
+            # python backend (default) is import-safe everywhere.
+            from gtsam_backend import GtsamBackend
+
+            self.backend = GtsamBackend(backend_config)
+        else:
+            self.backend = FixedLagBackend(backend_config)
 
         self.agent_states = {agent_id: AgentGraphState() for agent_id in self.agent_ids}
         self.constraints: dict[tuple[str, str], StoredConstraint] = {}

@@ -561,15 +561,26 @@ The v0.4 goal:
   `experiments/backend_comparison.yaml`,
   [`docs/experiments.md`](docs/experiments.md) → "Backend Comparison")
 
-Still pending (needs CI dependency / hardware):
+- [x] GTSAM-backed backend: `gtsam_backend.GtsamBackend` is a drop-in for
+  `FixedLagBackend` (same `step()` + diagnostics) using a GTSAM
+  `NonlinearFactorGraph` with robust Huber noise and Levenberg-Marquardt,
+  sharing the gating / prior / estimate helpers so it differs only in the
+  optimizer. Selected via `fixed_lag_graph_node.py -p backend:=gtsam`
+  (GTSAM imported lazily; default path and CI unaffected).
+  `test_gtsam_backend.py` asserts equivalence with the pure reference,
+  skipped wherever GTSAM is absent
+  (`mrn_graph/scripts/gtsam_backend.py`,
+  [`docs/graph_architecture.md`](docs/graph_architecture.md) → "GTSAM backend")
 
-- add `ros-jazzy-gtsam` to the CI image, then provide a GTSAM-backed node as
-  the high-performance backend (Ceres is the fallback if GTSAM packaging
-  regresses CI); the pure-Python `FixedLagBackend` stays the dependency-free
-  reference and smoke baseline regardless
-- run `backend_comparison.yaml` end-to-end in CI once launch-based comparison
-  is added to the smoke budget (the acceptance logic is already CI-tested;
-  the full 3-launch run is currently a local/manual experiment)
+Deliberately deferred (CI-ops budget, not code):
+
+- the default `build_jazzy` image stays lean (no `ros-jazzy-gtsam`); the
+  GTSAM equivalence test runs anywhere GTSAM is installed and would move to a
+  dedicated CI job rather than bloat the smoke job. Ceres remains the
+  documented fallback if a GTSAM CI job proves unstable
+- running `backend_comparison.yaml` as a full 3-launch CI smoke (the
+  acceptance logic is already CI-tested; the launch run stays local/manual
+  until added to the smoke budget)
 - keep dummy backend for smoke tests
 
 Acceptance:

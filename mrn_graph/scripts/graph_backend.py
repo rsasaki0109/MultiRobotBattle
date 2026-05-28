@@ -123,12 +123,13 @@ class FixedLagBackend:
 
         priors: list[PriorFactor] = []
         for agent in agents:
-            if agent.degraded:
-                cov = _diag3(cfg.degraded_position_var, cfg.degraded_yaw_var)
-            else:
-                cov = _diag3(cfg.anchor_position_var, cfg.anchor_yaw_var)
             priors.append(
-                PriorFactor(agent.agent_id, tuple(agent.pose), cov, FactorKind.PRIOR_POSE)
+                PriorFactor(
+                    agent.agent_id,
+                    tuple(agent.pose),
+                    prior_covariance_for_agent(agent, cfg),
+                    FactorKind.PRIOR_POSE,
+                )
             )
 
         for fix in gnss:
@@ -143,70 +144,131 @@ class FixedLagBackend:
                 )
             )
 
-        betweens: list[BetweenFactor] = []
-        accepted = 0
-        rejected = 0
-        stale = 0
-        reasons: dict[str, int] = {}
-        per_agent_accepted: dict[str, int] = {a.agent_id: 0 for a in agents}
-        per_agent_rejected: dict[str, int] = {a.agent_id: 0 for a in agents}
-
-        def _reject(reason: str, agent_id: str | None) -> None:
-            nonlocal rejected
-            rejected += 1
-            reasons[reason] = reasons.get(reason, 0) + 1
-            if agent_id in per_agent_rejected:
-                per_agent_rejected[agent_id] += 1
-
-        for rel in relatives:
-            if rel.from_id == rel.to_id:
-                _reject(REASON_SELF_CONSTRAINT, rel.to_id)
-                continue
-            if rel.from_id not in known or rel.to_id not in known:
-                _reject(REASON_UNKNOWN_AGENT, rel.to_id)
-                continue
-            if rel.age_sec > cfg.max_constraint_age_sec:
-                stale += 1
-                reasons[REASON_STALE] = reasons.get(REASON_STALE, 0) + 1
-                continue
-            if any(not _all_finite(row) for row in rel.covariance) or not _spd_diag(
-                rel.covariance
-            ):
-                _reject(REASON_INVALID_COVARIANCE, rel.to_id)
-                continue
-            betweens.append(
-                BetweenFactor(rel.from_id, rel.to_id, tuple(rel.measured), rel.covariance)
-            )
-            accepted += 1
-            per_agent_accepted[rel.to_id] += 1
+        classification = classify_relatives(agents, relatives, cfg.max_constraint_age_sec)
+        betweens = [
+            BetweenFactor(rel.from_id, rel.to_id, tuple(rel.measured), rel.covariance)
+            for rel in classification.accepted
+        ]
 
         result = gauss_newton(
             initial, priors, betweens, huber_delta=cfg.huber_delta
         )
 
-        estimates: list[CooperativeEstimate] = []
-        for agent in agents:
-            quality = 0.0 if agent.degraded and per_agent_accepted[agent.agent_id] == 0 else cfg.base_quality
-            estimates.append(
-                CooperativeEstimate(
-                    agent_id=agent.agent_id,
-                    pose=result.variables[agent.agent_id],
-                    accepted_constraints=per_agent_accepted[agent.agent_id],
-                    rejected_constraints=per_agent_rejected[agent.agent_id],
-                    quality=quality,
-                    degraded=agent.degraded,
-                )
-            )
-
+        estimates = build_estimates(
+            agents,
+            {name: result.variables[name] for name in result.variables},
+            classification,
+            cfg,
+        )
         diagnostics = GraphDiagnostics(
-            accepted=accepted,
-            rejected=rejected,
-            stale=stale,
+            accepted=classification.accepted_count,
+            rejected=classification.rejected,
+            stale=classification.stale,
             converged=result.converged,
             iterations=result.iterations,
-            rejection_reasons=reasons,
+            rejection_reasons=classification.reasons,
         )
         return estimates, diagnostics
+
+
+def prior_covariance_for_agent(
+    agent: AgentInput, config: FixedLagBackendConfig
+) -> list[list[float]]:
+    """Anchor (tight) covariance for OK agents, loose for degraded ones."""
+    if agent.degraded:
+        return _diag3(config.degraded_position_var, config.degraded_yaw_var)
+    return _diag3(config.anchor_position_var, config.anchor_yaw_var)
+
+
+@dataclass(frozen=True)
+class RelativeClassification:
+    accepted: tuple[RelativeInput, ...]
+    accepted_count: int
+    rejected: int
+    stale: int
+    reasons: dict[str, int]
+    per_agent_accepted: dict[str, int]
+    per_agent_rejected: dict[str, int]
+
+
+def classify_relatives(
+    agents: Sequence[AgentInput],
+    relatives: Sequence[RelativeInput],
+    max_constraint_age_sec: float,
+) -> RelativeClassification:
+    """Gate relative constraints, shared by every backend implementation.
+
+    Keeping this in one place guarantees the Python and GTSAM backends apply
+    identical self / unknown-agent / age / covariance gating and produce the
+    same accepted set, counts, and rejection-reason vocabulary.
+    """
+    known = {a.agent_id for a in agents}
+    accepted: list[RelativeInput] = []
+    rejected = 0
+    stale = 0
+    reasons: dict[str, int] = {}
+    per_agent_accepted: dict[str, int] = {a.agent_id: 0 for a in agents}
+    per_agent_rejected: dict[str, int] = {a.agent_id: 0 for a in agents}
+
+    def _reject(reason: str, agent_id: str | None) -> None:
+        nonlocal rejected
+        rejected += 1
+        reasons[reason] = reasons.get(reason, 0) + 1
+        if agent_id in per_agent_rejected:
+            per_agent_rejected[agent_id] += 1
+
+    for rel in relatives:
+        if rel.from_id == rel.to_id:
+            _reject(REASON_SELF_CONSTRAINT, rel.to_id)
+            continue
+        if rel.from_id not in known or rel.to_id not in known:
+            _reject(REASON_UNKNOWN_AGENT, rel.to_id)
+            continue
+        if rel.age_sec > max_constraint_age_sec:
+            stale += 1
+            reasons[REASON_STALE] = reasons.get(REASON_STALE, 0) + 1
+            continue
+        if any(not _all_finite(row) for row in rel.covariance) or not _spd_diag(
+            rel.covariance
+        ):
+            _reject(REASON_INVALID_COVARIANCE, rel.to_id)
+            continue
+        accepted.append(rel)
+        per_agent_accepted[rel.to_id] += 1
+
+    return RelativeClassification(
+        accepted=tuple(accepted),
+        accepted_count=len(accepted),
+        rejected=rejected,
+        stale=stale,
+        reasons=reasons,
+        per_agent_accepted=per_agent_accepted,
+        per_agent_rejected=per_agent_rejected,
+    )
+
+
+def build_estimates(
+    agents: Sequence[AgentInput],
+    optimized: dict[str, Pose2],
+    classification: RelativeClassification,
+    config: FixedLagBackendConfig,
+) -> list[CooperativeEstimate]:
+    """Assemble per-agent cooperative estimates from an optimized pose set."""
+    estimates: list[CooperativeEstimate] = []
+    for agent in agents:
+        accepted = classification.per_agent_accepted.get(agent.agent_id, 0)
+        quality = 0.0 if agent.degraded and accepted == 0 else config.base_quality
+        estimates.append(
+            CooperativeEstimate(
+                agent_id=agent.agent_id,
+                pose=optimized[agent.agent_id],
+                accepted_constraints=accepted,
+                rejected_constraints=classification.per_agent_rejected.get(agent.agent_id, 0),
+                quality=quality,
+                degraded=agent.degraded,
+            )
+        )
+    return estimates
 
 
 def _all_finite(row) -> bool:

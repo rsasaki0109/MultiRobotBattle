@@ -115,6 +115,31 @@ ros2 launch mrn_demos cooperative_localization.launch.py \
 The default `graph_executable` stays `relative_anchor_graph_node.py`, so the
 CI smoke path is unchanged.
 
+### GTSAM backend
+
+The same node can run a GTSAM-backed optimizer instead of the pure-Python
+one by setting `backend:=gtsam`:
+
+```bash
+ros2 run mrn_graph fixed_lag_graph_node.py --ros-args -p backend:=gtsam
+```
+
+`gtsam_backend.GtsamBackend` is a drop-in for `FixedLagBackend` with the same
+`step()` interface and diagnostics contract; it builds a GTSAM
+`NonlinearFactorGraph` (`PriorFactorPose2`, `BetweenFactorPose2`, robust
+Huber noise, Levenberg-Marquardt) but shares the gating, prior-covariance
+selection, and estimate assembly helpers (`classify_relatives`,
+`prior_covariance_for_agent`, `build_estimates`) with the Python backend, so
+the two differ only in the optimizer. GTSAM is imported lazily — only when
+`backend:=gtsam` is selected — so the default path and CI are unaffected.
+
+Requires `ros-jazzy-gtsam` (verified importable as the `gtsam` Python
+module). `test_gtsam_backend.py` asserts the GTSAM backend agrees with the
+pure-Python reference on the synthetic scenarios; it is skipped wherever
+GTSAM is absent (the default CI image), so the always-green path never
+depends on GTSAM while the equivalence is still checked anywhere GTSAM is
+installed.
+
 ### GTSAM dependency status
 
 GTSAM is the intended high-performance backend. Verified locally:
