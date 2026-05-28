@@ -611,7 +611,13 @@ Requirements:
 - complete frame/time/covariance docs
 - reproducible reports
 - CI artifacts for smoke experiments
-- examples for adding new constraint sources
+- [x] examples for adding new constraint sources — the UWB range-bearing
+  source (`uwb_constraint_source.py`) is the worked example: pure
+  range/bearing → SE(2) relative pose with Jacobian covariance propagation,
+  a `build_uwb_constraint` message builder, and tests asserting the output
+  passes `constraint_gate`. Pattern documented in
+  [`docs/graph_backend_plugin.md`](docs/graph_backend_plugin.md) → "Adding a
+  New Constraint Source"
 - [x] examples for adding new evaluators — the offline drift-rate metric
   (`compute_drift_rate`) is the worked example, with the extension pattern
   documented in [`docs/offline_ate.md`](docs/offline_ate.md) → "Adding a New

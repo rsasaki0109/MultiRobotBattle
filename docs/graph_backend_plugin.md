@@ -221,6 +221,43 @@ The dummy backend remains the smoke baseline. New backends MUST NOT remove
 or rename the dummy backend's parameters; if a new backend takes the same
 name, it MUST also pass the dummy backend's smoke test.
 
+## Adding a New Constraint Source
+
+A constraint source is any producer of `RelativePoseConstraint` messages —
+LiDAR registration, a visual marker, UWB ranging, V2V GNSS. The contract is
+the message itself: a source is "correct" when its output passes
+`constraint_gate.validate_relative_pose_constraint` and uses the documented
+`T_from_to` direction. The worked example is the UWB range-bearing source in
+`mrn_graph/scripts/uwb_constraint_source.py`; the pattern is:
+
+1. **Write the sensor math as a pure function** — for UWB,
+   `range_bearing_to_relative(range, bearing, range_sigma, bearing_sigma)`
+   maps a measurement to an SE(2) relative pose and a 6x6 covariance,
+   propagating the measurement noise through the polar→Cartesian Jacobian so
+   the uncertainty is range-dependent. No ROS, so it is unit-tested directly
+   and its covariance is checked against `validate_pose_covariance`.
+2. **Model what the sensor does *not* observe.** Range-bearing observes
+   position, not relative orientation, so the yaw variance is set large but
+   below the gate cap. Be honest about unobserved dimensions rather than
+   reporting a tight covariance the sensor cannot justify.
+3. **Fill the message correctly** — `build_uwb_constraint(...)` sets
+   `from_agent_id`/`to_agent_id`, `from_frame`/`to_frame`, the packet header
+   (sequence, measurement time, TTL), `source_type`
+   (`RelativePoseConstraint.SOURCE_UWB`), and `confidence`. The `T_from_to`
+   relative pose is expressed in the observer's (`from`) frame.
+4. **Test against the gate.** The example's test asserts the built constraint
+   is accepted by `validate_relative_pose_constraint` and that a degenerate
+   case (zero confidence) is rejected with the expected reason — tying the
+   new source to the same gate every backend trusts. A thin ROS node then
+   calls the builder per measurement and publishes on
+   `/<i>/mrn/relative_constraints` (see `synthetic_world_node` for the
+   publish/packet pattern).
+
+`source_type` already enumerates the expected sources
+(`SOURCE_LIDAR_REGISTRATION`, `SOURCE_VISUAL_MARKER`, `SOURCE_UWB`,
+`SOURCE_V2V_GNSS`); a new source picks or extends that enum through the
+`mrn_msgs` review process.
+
 ## Related Plans
 
 - `PLAN.md` §15.5 — package plan for `mrn_graph`.
