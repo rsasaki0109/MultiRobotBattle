@@ -28,6 +28,7 @@ install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
 install(PROGRAMS
   scripts/dummy_graph_node.py
   scripts/relative_anchor_graph_node.py
+  scripts/fixed_lag_graph_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 install(FILES

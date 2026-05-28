@@ -99,6 +99,22 @@ This backend is what the synthetic-outage acceptance can be validated
 against in CI, and it is the reference the eventual GTSAM backend must
 match.
 
+`fixed_lag_graph_node.py` is the thin rclpy shell over it: it ingests the
+same topics through the same constraint gate and time gate as
+`relative_anchor_graph_node`, converts the agent-state / accepted-constraint
+window into the backend dataclasses, runs `FixedLagBackend.step`, and
+publishes the standard cooperative-pose / cooperative-odom /
+`/mrn/graph/status` / marker topics with `backend_name = fixed_lag_python`.
+It is opt-in and does not change the default:
+
+```bash
+ros2 launch mrn_demos cooperative_localization.launch.py \
+  graph_executable:=fixed_lag_graph_node.py
+```
+
+The default `graph_executable` stays `relative_anchor_graph_node.py`, so the
+CI smoke path is unchanged.
+
 ### GTSAM dependency status
 
 GTSAM is the intended high-performance backend. Verified locally:

@@ -539,25 +539,26 @@ The v0.4 goal:
   [`docs/graph_backend_plugin.md`](docs/graph_backend_plugin.md) →
   "Python Backend Layer")
 
-### 13.2 Backend integration (pending; ROS node shell + CI gtsam)
+### 13.2 Backend integration
 
-The factor families (odometry / GNSS prior / relative pose), robust loss,
-covariance-aware weighting, rejected-factor reporting, and the backend
-decision logic are all implemented and CI-tested above. What remains is the
-thin ROS shell and the solver-packaging decision:
+- [x] `fixed_lag_graph_node.py` rclpy shell: ingests the same topics through
+  the same constraint gate + time gate as `relative_anchor`, converts the
+  agent-state / accepted-constraint window into the `graph_backend.py`
+  dataclasses, runs `FixedLagBackend.step`, and publishes the standard
+  cooperative-pose / cooperative-odom / `/mrn/graph/status` / marker topics
+  (`backend_name = fixed_lag_python`). Opt-in via
+  `graph_executable:=fixed_lag_graph_node.py`; the default stays
+  `relative_anchor` so the CI smoke path is unchanged
+  (`mrn_graph/scripts/fixed_lag_graph_node.py`)
 
-- add a `fixed_lag_graph_node.py` rclpy shell that converts `AgentState` /
-  `RelativePoseConstraint` / GNSS messages to/from the `graph_backend.py`
-  dataclasses, calls `FixedLagBackend.step`, and publishes the standard
-  cooperative-pose / cooperative-odom / `/mrn/graph/status` / markers topics
-  (keep the default `graph_executable` on `relative_anchor` so the CI smoke
-  stays green; expose the new node as an opt-in choice)
+Still pending (needs CI dependency / experiment wiring):
+
 - add `ros-jazzy-gtsam` to the CI image, then provide a GTSAM-backed node as
   the high-performance backend (Ceres is the fallback if GTSAM packaging
   regresses CI); the pure-Python `FixedLagBackend` stays the dependency-free
   reference and smoke baseline regardless
-- compare `local_only`, `relative_anchor`, and the graph backend in the same
-  experiment runner
+- compare `local_only`, `relative_anchor`, and `fixed_lag_python` in the same
+  experiment runner (add a `methods:` entry and an acceptance row)
 - keep dummy backend for smoke tests
 
 Acceptance:
