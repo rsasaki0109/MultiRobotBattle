@@ -213,14 +213,21 @@ The local estimator remains local. This repository provides the cooperative cons
 
 ## Repository Status
 
-This repository is in foundation stage. The first milestone is to lock the message, frame, covariance, time, and replay contracts before adding heavyweight graph backends.
+The message, frame, covariance, time, and replay contracts are locked, and the
+scaffolding for the v0.2–v0.4 milestones is landed and CI-green. The remaining
+work on those milestones is gated on real data (a recorded two-robot bag, an
+outdoor RTK dataset) and CI-ops budget, not on new code. See [PLAN.md](PLAN.md)
+§11–§13 for the per-milestone checklists.
 
 ## Roadmap
 
-- `v0.1.0-alpha`: Jazzy baseline, message contracts, synthetic demo, centralized graph skeleton, network/eval scaffolding
-- `v0.2.0`: real two-robot bags, Nav2 adapter, Zenoh backend experiment
-- `v0.3.0`: Autoware adapter, RTK/GNSS utilities, dataset adapters
-- later: federated graph exchange, shared world model hooks, cooperative perception hooks
+Status: ✅ landed & CI-green · 🟡 scaffolding landed, pending real data / CI-ops · ⬜ planned
+
+- ✅ `v0.1.0-alpha`: Jazzy baseline, message contracts, synthetic demo, centralized graph skeleton, network/eval scaffolding
+- 🟡 `v0.2.0`: bag capture + manifest validation, bag-replay experiment runner, Nav2 correction adapter, Linux-netns netem path, offline ATE/RPE helper — landed; **pending a recorded two-robot bag**
+- 🟡 `v0.3.0`: `mrn_gnss` (WGS84/ENU + fix-quality covariance), RTK/bag/TUM → CSV converters, GNSS quality-transition scenario, Autoware initialpose adapter — landed; **pending an outdoor RTK dataset**
+- 🟡 `v0.4.0`: solver-independent factor core, pure-Python Gauss-Newton fixed-lag backend, GTSAM-backed backend (opt-in), three-way backend comparison — landed; **pending a GTSAM CI job / launch-smoke budget**
+- ⬜ later: federated graph exchange, shared world model hooks, cooperative perception hooks
 
 See [PLAN.md](PLAN.md) for the long-form execution plan.
 See [docs/release_checklist.md](docs/release_checklist.md) for the `v0.1.0-alpha` checklist.
@@ -231,6 +238,7 @@ See [docs/netem_netns.md](docs/netem_netns.md) for the Linux network namespace w
 See [docs/offline_ate.md](docs/offline_ate.md) for the offline ATE/RPE helper that compares an estimated trajectory CSV against a truth CSV — the post-hoc counterpart to `mrn_online_ate` for bags without an in-bag ground truth topic.
 See [docs/gnss.md](docs/gnss.md) for the WGS84 / local-ENU conversion library and the NMEA GGA fix-quality → covariance heuristic in `mrn_gnss` (v0.3.0 scaffolding for outdoor RTK workflows).
 See [docs/autoware_adapter.md](docs/autoware_adapter.md) for the experimental Autoware-side adapter that republishes cooperative poses as Autoware initialpose-style `PoseWithCovarianceStamped` after the same SE(2) safety gates as the Nav2 adapter.
+See [docs/graph_architecture.md](docs/graph_architecture.md) for the cooperative graph backends: the solver-independent factor core, the pure-Python Gauss-Newton fixed-lag reference backend, and the opt-in GTSAM-backed backend (`graph_executable:=fixed_lag_graph_node.py`, `-p backend:=gtsam`).
 
 ## License
 
