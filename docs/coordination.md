@@ -13,7 +13,7 @@ Planned scope, built one module at a time:
    planning on a shared grid. **Landed.**
 2. **Formation** (`mrn_coord.formation`) — decentralized formation control that
    reuses the V2V relative-pose constraints already exchanged by the
-   localization stack. *Planned.*
+   localization stack. **Landed.**
 3. **Coverage** (`mrn_coord.coverage`) — cooperative exploration and task
    allocation (frontier detection + auction/Hungarian assignment). *Planned.*
 
@@ -86,3 +86,52 @@ ros2 run mrn_coord mrn_mapf_demo --solver prioritized
 The demo solves a crossing and a swap/reorder scenario and prints the
 collision-free paths as an ASCII timeline — the runnable counterpart to the
 unit tests.
+
+## Formation — Decentralized Formation Control
+
+This module is the clearest reuse of the localization stack's output: the
+cooperative graph already exchanges relative-pose constraints between agents,
+and a displacement-based formation controller needs exactly that — the relative
+position of each neighbor. Nothing here needs a global frame.
+
+### The control law (`control.py`)
+
+Each agent runs the classic displacement-based consensus law
+
+```
+u_i = gain * sum_{j in N(i)} ( r_ij - r*_ij )
+```
+
+where `r_ij = p_j - p_i` is the **measured** relative position of neighbor `j`
+(what a V2V `RelativePoseConstraint` carries) and `r*_ij` is the **desired**
+relative offset from the `FormationSpec`. The command depends only on relative
+measurements to neighbors, so the controller is fully decentralized.
+`formation_error` is the RMS of `||r_ij - r*_ij||` over the edges — zero exactly
+when the shape is achieved, and invariant to a global translation (only
+relative offsets are observable from relative measurements).
+
+### The shape (`spec.py`)
+
+`FormationSpec` holds per-agent offsets in an abstract formation frame, used
+only through `desired_relative(i, j) = c_j - c_i`. Builders: `line_formation`
+(evenly spaced along an axis) and `polygon_formation` (a regular polygon — an
+equilateral triangle for three agents).
+
+### Behavior
+
+On a connected graph the law drives the agents into the desired shape. With no
+leader the formation centroid is invariant (it converges in place). A `leader`
+agent is commanded zero and moves on its own; the rest anchor their shape to it.
+Note that tracking a constant-velocity leader leaves a **bounded steady-state
+lag** — the expected behavior of a proportional controller following a ramp —
+rather than zero error.
+
+### Try it
+
+```bash
+ros2 run mrn_coord mrn_formation_demo                 # converge to a triangle
+ros2 run mrn_coord mrn_formation_demo --leader 1      # anchor the shape to agent 1
+```
+
+The demo pulls three scattered agents into an equilateral triangle and prints
+the formation error decaying toward zero.

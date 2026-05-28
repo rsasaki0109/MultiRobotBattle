@@ -21,6 +21,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mrn_mapf_demo = mrn_coord.mapf.demo:main",
+            "mrn_formation_demo = mrn_coord.formation.demo:main",
         ],
     },
 )

@@ -223,7 +223,7 @@ The local estimator remains local. This repository provides the cooperative cons
 | `mrn_nav2_adapter` | conservative cooperative-pose to `map->odom` correction broadcaster (experimental) |
 | `mrn_autoware_adapter` | conservative cooperative-pose to Autoware-style `PoseWithCovarianceStamped` publisher (experimental, v0.3.0) |
 | `mrn_gnss` | WGS84 / local-ENU utilities and NMEA GGA fix-quality covariance (v0.3.0 scaffolding) |
-| `mrn_coord` | multi-robot coordination layer: MAPF planning (CBS / prioritized), with formation control and cooperative coverage planned |
+| `mrn_coord` | multi-robot coordination layer: MAPF planning (CBS / prioritized) and decentralized formation control, with cooperative coverage planned |
 
 ## Repository Status
 
@@ -254,7 +254,7 @@ See [docs/gnss.md](docs/gnss.md) for the WGS84 / local-ENU conversion library an
 See [docs/autoware_adapter.md](docs/autoware_adapter.md) for the experimental Autoware-side adapter that republishes cooperative poses as Autoware initialpose-style `PoseWithCovarianceStamped` after the same SE(2) safety gates as the Nav2 adapter.
 See [docs/graph_architecture.md](docs/graph_architecture.md) for the cooperative graph backends: the solver-independent factor core, the pure-Python Gauss-Newton fixed-lag reference backend, and the opt-in GTSAM-backed backend (`graph_executable:=fixed_lag_graph_node.py`, `-p backend:=gtsam`).
 See [docs/qos_profiles.md](docs/qos_profiles.md) → "Communication Backend Interface" for the transport abstraction (`comm_backend.py`): the `CommunicationBackend` protocol, the deterministic `LoopbackBackend` reference backend, the trace-driven `ReplayBackend` (with `RecordingBackend` to capture a trace), and `CommStatus` diagnostics that any transport (a future Zenoh backend included) reports without changing message semantics.
-See [docs/coordination.md](docs/coordination.md) for the `mrn_coord` coordination layer — the "navigation" half of the project. The first module is MAPF (multi-agent path finding): space-time A*, optimal Conflict-Based Search, and prioritized planning over a shared grid (`ros2 run mrn_coord mrn_mapf_demo`). Formation control and cooperative coverage are planned next.
+See [docs/coordination.md](docs/coordination.md) for the `mrn_coord` coordination layer — the "navigation" half of the project. It now has MAPF (multi-agent path finding: space-time A*, optimal Conflict-Based Search, prioritized planning; `ros2 run mrn_coord mrn_mapf_demo`) and decentralized formation control that reuses the V2V relative-pose constraints (displacement-based consensus; `ros2 run mrn_coord mrn_formation_demo`). Cooperative coverage is planned next.
 
 ## License
 

@@ -842,10 +842,13 @@ Current role:
   vertex/edge constraints, conflict detection, optimal Conflict-Based Search,
   and prioritized planning; `mrn_mapf_demo` CLI renders solutions as an ASCII
   timeline
+- [x] decentralized formation control reusing the V2V relative-pose
+  constraints: displacement-based consensus law over relative measurements,
+  `FormationSpec` shape builders, closed-loop simulation, and an
+  `mrn_formation_demo` CLI
 
 Near-term tasks:
 
-- decentralized formation control reusing the V2V relative-pose constraints
 - cooperative coverage / exploration: frontier detection + task allocation
   (auction / Hungarian)
 
