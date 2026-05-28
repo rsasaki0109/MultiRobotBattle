@@ -1,18 +1,23 @@
 # Demo Media
 
-This directory holds the README demo GIF and screenshot.
+This directory holds the README hero GIF and screenshot.
 
-Expected files:
+Files:
 
-- `cooperative_demo.gif` — short loop (≤ 15 s) showing the synthetic 3-robot
-  demo: GNSS outage on robot 2, packet loss, V2V relative constraints, and
-  cooperative recovery. Targeted by the `README.md` Demo section.
-- `cooperative_demo.png` — single frame fallback referenced by the same
-  section for renderers that strip GIFs.
+- `cooperative_demo.gif` — the README hero loop showing the 3-robot story:
+  GNSS outage on robot 2 and cooperative recovery via V2V relative-pose
+  constraints. **This is a synthetic concept animation**, rendered
+  deterministically by `scripts/make_hero_gif.py` from matplotlib — it is not a
+  recording of the live ROS stack. Regenerate it (and the PNG below) with
+  `python3 scripts/make_hero_gif.py`.
+- `cooperative_demo.png` — single representative frame, written by the same
+  script as a fallback for renderers that strip GIFs.
 
-Until those assets are recorded, the README intentionally embeds the missing
-files. Markdown renderers will show the alt text in that case. Do not delete
-the embed — that is how the placeholder shows up as actionable in CI.
+The synthetic loop is intentionally honest about being a concept illustration
+(the README caption says so). A recording of the live demo is a separate,
+higher-fidelity asset: see the capture procedure below and in
+`scripts/make_demo_gif.sh`. When that recording exists it can replace the hero
+GIF, but the synthetic generator stays as the reproducible, no-stack fallback.
 
 ## How to (re)record
 

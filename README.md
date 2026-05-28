@@ -1,5 +1,13 @@
 # multirobot-navigation
 
+<p align="center">
+  <img src="docs/media/cooperative_demo.gif" alt="Cooperative localization: three robots in formation exchange V2V relative-pose constraints; robot 2 loses GNSS and its uncertainty blows up, then cooperative constraints from robots 1 and 3 pull its estimate back" width="760">
+</p>
+
+<p align="center">
+  <em>GNSS outage on robot 2, recovered through V2V relative-pose constraints — a synthetic concept loop, regenerate with <code>scripts/make_hero_gif.py</code>.</em>
+</p>
+
 [![build-jazzy](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml)
 [![docs](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml)
 
@@ -45,13 +53,18 @@ Two or three robots share GNSS, odometry, and V2V relative pose constraints. Und
 
 ## Demo
 
-![cooperative localization demo: GNSS outage, packet loss, V2V relative constraints, cooperative recovery](docs/media/cooperative_demo.gif)
+The animation at the top of this README is a **synthetic concept loop** —
+`scripts/make_hero_gif.py` renders it deterministically from matplotlib, no
+running stack required (`python3 scripts/make_hero_gif.py` regenerates both the
+GIF and a PNG fallback). It illustrates the project's core story: three robots
+in formation, robot 2's GNSS outage, and cooperative recovery via V2V
+relative-pose constraints.
 
-Storyboard: [docs/demo_storyboard.md](docs/demo_storyboard.md).
-Regenerate the GIF: `scripts/make_demo_gif.sh` prints the capture procedure
-and `docs/media/README.md` describes where the file lives. Until the GIF is
-recorded the README intentionally shows broken-image alt text so the gap is
-visible.
+A recording of the **live ROS demo** is the separate, higher-fidelity target:
+`scripts/make_demo_gif.sh` prints the capture procedure, the storyboard lives
+in [docs/demo_storyboard.md](docs/demo_storyboard.md), and
+[docs/media/README.md](docs/media/README.md) describes where the recorded file
+should land.
 
 ## Quick Start
 
