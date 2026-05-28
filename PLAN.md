@@ -828,6 +828,34 @@ Rules:
 - fake algorithm inputs are acceptable
 - fake timestamp/frame/covariance/replay semantics are not acceptable
 
+### 15.10 `mrn_coord`
+
+The coordination / navigation layer — the counterpart to the localization
+stack. Where localization answers *where are we*, this answers *how do we move
+and what do we do together*. Same pattern: pure, ROS-free algorithm cores,
+unit-tested in CI, with thin ROS/CLI wiring on top. Documented in
+[`docs/coordination.md`](docs/coordination.md).
+
+Current role:
+
+- [x] MAPF (multi-agent path finding): `GridWorld`, space-time A* with
+  vertex/edge constraints, conflict detection, optimal Conflict-Based Search,
+  and prioritized planning; `mrn_mapf_demo` CLI renders solutions as an ASCII
+  timeline
+
+Near-term tasks:
+
+- decentralized formation control reusing the V2V relative-pose constraints
+- cooperative coverage / exploration: frontier detection + task allocation
+  (auction / Hungarian)
+
+Later tasks:
+
+- thin ROS node publishing planned paths as `nav_msgs/Path` per agent
+- continuous-space / kinematic extensions beyond the grid model
+- integrate planning with the cooperative-localization estimate as the source
+  of agent positions
+
 ## 16. Message Contract Freeze Plan
 
 The message contracts should not be frozen too early, but they should be stable
