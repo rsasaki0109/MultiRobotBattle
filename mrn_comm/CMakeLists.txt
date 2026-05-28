@@ -14,6 +14,10 @@ target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
 
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
+install(FILES
+  scripts/comm_backend.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME})
 
 if(BUILD_TESTING)
@@ -23,6 +27,9 @@ if(BUILD_TESTING)
   )
   ament_add_pytest_test(test_validate_bag test/test_validate_bag.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  ament_add_pytest_test(test_comm_backend test/test_comm_backend.py
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/scripts"
   )
 endif()
 

@@ -239,6 +239,7 @@ See [docs/offline_ate.md](docs/offline_ate.md) for the offline ATE/RPE helper th
 See [docs/gnss.md](docs/gnss.md) for the WGS84 / local-ENU conversion library and the NMEA GGA fix-quality → covariance heuristic in `mrn_gnss` (v0.3.0 scaffolding for outdoor RTK workflows).
 See [docs/autoware_adapter.md](docs/autoware_adapter.md) for the experimental Autoware-side adapter that republishes cooperative poses as Autoware initialpose-style `PoseWithCovarianceStamped` after the same SE(2) safety gates as the Nav2 adapter.
 See [docs/graph_architecture.md](docs/graph_architecture.md) for the cooperative graph backends: the solver-independent factor core, the pure-Python Gauss-Newton fixed-lag reference backend, and the opt-in GTSAM-backed backend (`graph_executable:=fixed_lag_graph_node.py`, `-p backend:=gtsam`).
+See [docs/qos_profiles.md](docs/qos_profiles.md) → "Communication Backend Interface" for the transport abstraction (`comm_backend.py`): the `CommunicationBackend` protocol, the deterministic `LoopbackBackend` reference backend, the trace-driven `ReplayBackend` (with `RecordingBackend` to capture a trace), and `CommStatus` diagnostics that any transport (a future Zenoh backend included) reports without changing message semantics.
 
 ## License
 

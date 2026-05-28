@@ -605,7 +605,15 @@ Requirements:
 - real bag replay benchmark
 - synthetic benchmark suite
 - graph backend plugin API
-- communication backend abstraction
+- [x] communication backend abstraction — `mrn_comm/scripts/comm_backend.py`
+  defines the `CommunicationBackend` protocol (`name` / `transmit` /
+  `diagnostics`) and a deterministic `LoopbackBackend` reference
+  implementation. `LinkDiagnostics` maps one-to-one onto
+  `mrn_msgs/msg/CommStatus`, and `build_comm_status` wraps it (ROS imported
+  lazily). Backends carry packets and report loss/latency diagnostics without
+  changing message semantics; documented in
+  [`docs/qos_profiles.md`](docs/qos_profiles.md) → "Communication Backend
+  Interface"
 - Nav2 adapter
 - documented Autoware adapter status
 - complete frame/time/covariance docs
@@ -687,9 +695,11 @@ Near-term tasks:
 
 Later tasks:
 
-- communication backend interface
+- [x] communication backend interface — `scripts/comm_backend.py`
+  (`CommunicationBackend` protocol + `LinkDiagnostics` → `CommStatus`)
 - DDS backend config loader
-- loopback backend
+- [x] loopback backend — `LoopbackBackend` with a deterministic, seeded
+  loss/latency model (`scripts/comm_backend.py`)
 - Zenoh backend package
 
 ### 15.4 `mrn_sync`
@@ -1031,7 +1041,7 @@ Initial implementations:
 - future GTSAM/Ceres backend
 - synthetic dataset adapter
 - rosbag/MCAP adapter
-- loopback communication backend
+- [x] loopback communication backend (`mrn_comm/scripts/comm_backend.py`)
 
 Rules:
 
@@ -1128,8 +1138,11 @@ Zenoh should not be required for the MVP.
 Order:
 
 1. plain ROS 2 DDS
-2. loopback backend
-3. rosbag/replay backend
+2. [x] loopback backend (`mrn_comm/scripts/comm_backend.py` — `LoopbackBackend`
+   behind the `CommunicationBackend` protocol)
+3. [x] rosbag/replay backend (`ReplayBackend` replays a recorded
+   `DeliveryRecord` trace; `RecordingBackend` captures one transparently;
+   `trace_to_dicts`/`trace_from_dicts` round-trip it for a bag sidecar)
 4. Zenoh backend experiment
 
 Acceptance for first Zenoh milestone:
