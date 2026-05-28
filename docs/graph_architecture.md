@@ -82,6 +82,40 @@ with `constraint_gate.py` so graph-status reports can attribute a dropped
 factor to the same reasons whether it was gated at ingest or at factor
 construction.
 
+## Reference Batch Backend
+
+`mrn_graph/scripts/pose_graph_solver.py` is a pure-Python Gauss-Newton
+optimizer for a 2D pose graph, built on the factor core above. It is a
+dependency-free reference backend: `PriorFactor` (pose or GNSS-style 2D
+position), `BetweenFactor` (odometry or relative-pose), covariance-weighted
+normal equations, optional per-factor Huber weighting, and a per-factor
+report that reuses the `FactorReason` vocabulary. Jacobians are numerical
+(finite differences with the same body-frame SE(2) retraction used for the
+update), which keeps a reference implementation free of hand-derived
+Jacobian bugs. At least one prior is required to fix the gauge; a graph with
+none reports non-convergence rather than returning a degenerate result.
+
+This backend is what the synthetic-outage acceptance can be validated
+against in CI, and it is the reference the eventual GTSAM backend must
+match.
+
+### GTSAM dependency status
+
+GTSAM is the intended high-performance backend. Verified locally:
+`ros-jazzy-gtsam` (4.x) imports as the `gtsam` Python module and exposes
+`Pose2`, `NonlinearFactorGraph`, `BetweenFactorPose2`,
+`noiseModel.Diagonal` / `noiseModel.Robust`, and
+`LevenbergMarquardtOptimizer` — everything a fixed-lag backend needs.
+
+However, the `build_jazzy` CI image installs only
+`python3-colcon-common-extensions` and `python3-yaml`, so GTSAM is **not**
+present in CI. Wiring a GTSAM-backed node is therefore gated on adding
+`ros-jazzy-gtsam` to the CI image (and keeping the default
+`graph_executable` on `relative_anchor` so the smoke path stays green). The
+pure-Python solver above intentionally lands the backend contract without
+that dependency, satisfying the v0.4 acceptance that "CI still passes
+without requiring large datasets."
+
 ## Phase 2: Federated Graph
 
 Robots keep local graphs and exchange keyframes, marginal covariance, and relative constraints.

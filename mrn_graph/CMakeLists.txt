@@ -33,6 +33,7 @@ install(PROGRAMS
 install(FILES
   scripts/constraint_gate.py
   scripts/factor_graph.py
+  scripts/pose_graph_solver.py
   DESTINATION lib/${PROJECT_NAME}
 )
 install(TARGETS ${PROJECT_NAME} EXPORT export_${PROJECT_NAME})
@@ -43,6 +44,9 @@ if(BUILD_TESTING)
     APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/scripts:${CMAKE_CURRENT_SOURCE_DIR}/../mrn_sync"
   )
   ament_add_pytest_test(test_factor_graph test/test_factor_graph.py
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/scripts"
+  )
+  ament_add_pytest_test(test_pose_graph_solver test/test_pose_graph_solver.py
     APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/scripts"
   )
   ament_add_gtest(test_backend_interface test/test_backend_interface.cpp)

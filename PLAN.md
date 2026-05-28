@@ -516,27 +516,42 @@ The v0.4 goal:
   (`mrn_graph/scripts/factor_graph.py`,
   [`docs/graph_architecture.md`](docs/graph_architecture.md) →
   "Solver-Independent Factor Core")
+- [x] pure-Python Gauss-Newton batch backend on top of the factor core (no
+  GTSAM/numpy): prior factors (pose + GNSS-style 2D position), between
+  factors (odometry + relative-pose), covariance-weighted normal equations,
+  per-factor Huber robust loss, numerical SE(2) Jacobians, and a per-factor
+  report reusing `FactorReason`. This is the CI-green reference backend the
+  GTSAM backend must match
+  (`mrn_graph/scripts/pose_graph_solver.py`,
+  [`docs/graph_architecture.md`](docs/graph_architecture.md) →
+  "Reference Batch Backend")
+- [x] GTSAM dependency verified: `ros-jazzy-gtsam` (4.x) imports with the
+  full SE(2) factor-graph API locally, but is absent from the `build_jazzy`
+  CI image — a GTSAM-backed node is gated on adding it to CI (documented in
+  graph_architecture.md → "GTSAM dependency status")
 
 ### 13.2 Backend (pending; needs solver packaging decision)
 
-Major work:
+The factor families (odometry / GNSS prior / relative pose), robust loss,
+covariance-aware weighting, and rejected-factor reporting are all
+implemented and CI-tested in the pure solver above. What remains is the
+solver-packaging and integration step:
 
 - add `GraphBackend` plugin interface if not already complete
-- implement a batch or fixed-lag backend (wiring `factor_graph.py` into a
-  solver)
-- use odometry factors
-- use GNSS prior factors
-- use relative pose factors
-- support robust loss
-- support covariance-aware weighting
-- publish rejected factors and reasons
-- compare `local_only`, `relative_anchor`, and real graph backend in the same
+- wrap `pose_graph_solver.py` (or GTSAM) behind a fixed-lag graph node and
+  publish cooperative poses + rejected-factor graph status from it
+- add `ros-jazzy-gtsam` to the CI image, then provide a GTSAM-backed node
+  as the high-performance backend (Ceres is the fallback if GTSAM packaging
+  regresses CI)
+- compare `local_only`, `relative_anchor`, and the graph backend in the same
   experiment runner
 
 Backend choice:
 
 - prefer GTSAM for factor graph semantics if dependency handling is acceptable
 - consider Ceres for batch baseline if GTSAM packaging blocks CI
+- the pure-Python solver remains the dependency-free reference and smoke
+  baseline regardless of which solver is wired in
 - keep dummy backend for smoke tests
 
 Acceptance:
