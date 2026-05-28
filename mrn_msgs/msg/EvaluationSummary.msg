@@ -1,0 +1,21 @@
+std_msgs/Header header
+
+string experiment_name
+string method_name
+
+float64 ate_rmse
+float64 rpe_rmse
+float64 heading_rmse
+float64 nees_mean
+float64 nis_mean
+
+float64 localization_availability
+builtin_interfaces/Duration outage_recovery_time
+
+float64 packet_loss_rate
+float64 stale_ratio
+float64 useful_constraint_ratio
+builtin_interfaces/Duration latency_mean
+
+float64 graph_solve_time_ms
+uint32 dropped_factor_count

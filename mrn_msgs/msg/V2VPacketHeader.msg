@@ -1,0 +1,16 @@
+std_msgs/Header header
+
+string sender_agent_id
+string receiver_agent_id
+uint64 sequence_id
+
+builtin_interfaces/Time measurement_time
+builtin_interfaces/Time source_publish_time
+builtin_interfaces/Duration ttl
+
+uint8 RELIABILITY_BEST_EFFORT=0
+uint8 RELIABILITY_IMPORTANT=1
+uint8 RELIABILITY_STATIC=2
+uint8 reliability_class
+
+string frame_convention_version

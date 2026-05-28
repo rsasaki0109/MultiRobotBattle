@@ -1,0 +1,27 @@
+name: docs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  markdown:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required docs
+        run: |
+          test -f README.md
+          test -f docs/interfaces.md
+          test -f docs/frames.md
+          test -f docs/time_sync.md
+          test -f docs/covariance.md
+      - name: Validate bag manifest
+        run: |
+          python3 tools/validate_bag_manifest.py mrn_demos/bags/mrn_demo_3robots_manifest.yaml
+          test "$(python3 tools/validate_bag_manifest.py mrn_demos/bags/mrn_demo_3robots_manifest.yaml --print-topics | wc -l)" -eq 35
+          scripts/record_demo_bag.sh --print-topics | grep -q /mrn/eval/summary
+      - name: Validate QoS profile YAML
+        run: |
+          python3 tools/validate_qos_profiles.py mrn_comm/config/qos_profiles.yaml --print-profiles

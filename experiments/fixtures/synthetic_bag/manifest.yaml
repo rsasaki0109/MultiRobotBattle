@@ -1,0 +1,31 @@
+dataset:
+  name: synthetic_two_robot_smoke
+  version: 0.0.1
+  ros_distro: jazzy
+  storage: mcap
+  description: >-
+    Synthetic placeholder manifest used by the experiments/bag_replay_smoke.yaml
+    scaffolding. Not a real recording: the metadata.yaml in this directory is a
+    handwritten stub that satisfies tools/validate_bag.py so the runner's
+    bag-replay code path can be exercised in CI before a real two-robot bag
+    exists.
+agents:
+  - id: robot_1
+    base_frame: robot_1/base
+    odom_frame: robot_1/odom
+  - id: robot_2
+    base_frame: robot_2/base
+    odom_frame: robot_2/odom
+topics:
+  - name: /robot_1/mrn/agent_state
+    type: mrn_msgs/msg/AgentState
+    required: true
+  - name: /robot_2/mrn/agent_state
+    type: mrn_msgs/msg/AgentState
+    required: true
+  - name: /robot_1/mrn/relative_constraints
+    type: mrn_msgs/msg/RelativePoseConstraint
+    required: true
+  - name: /robot_2/mrn/relative_constraints
+    type: mrn_msgs/msg/RelativePoseConstraint
+    required: true

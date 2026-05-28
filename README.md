@@ -1,0 +1,237 @@
+# multirobot-navigation
+
+[![build-jazzy](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml)
+[![docs](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml)
+
+ROS 2-native cooperative localization and multi-robot navigation infrastructure.
+
+This project is not trying to replace Nav2, Autoware, or Open-RMF. It provides the infrastructure layer that sits around them: cooperative pose and constraint exchange, time and frame validation, network fault injection, rosbag replay, and evaluation for real multi-robot systems.
+
+## Why This Exists
+
+Single-robot navigation is served well by existing stacks. Real multi-robot autonomy still breaks at the boundaries:
+
+- timestamps and clock drift
+- QoS mismatch and stale messages
+- packet loss, latency, and jitter
+- frame convention drift
+- missing or invalid covariance
+- non-replayable experiments
+- weak diagnostics for cooperative constraints
+
+`multirobot-navigation` focuses on those boundaries.
+
+## What It Is
+
+- V2V message contracts for agent state, relative pose constraints, communication status, and clock status
+- cooperative localization graph infrastructure
+- packet loss, latency, jitter, and clock drift experiment support
+- MCAP-first rosbag replay and benchmark workflows
+- RViz and Foxglove visualization assets
+- adapters planned for Nav2, Autoware, Zenoh, and datasets
+
+## What It Is Not
+
+- not a Nav2 replacement
+- not an Autoware replacement
+- not a fleet management dashboard
+- not a perception model zoo
+- not a simulation-only research repository
+- not a distributed SLAM implementation in the MVP
+
+## MVP Goal
+
+Two or three robots share GNSS, odometry, and V2V relative pose constraints. Under packet loss, latency, jitter, and clock drift, the system can replay the experiment from rosbag and report whether cooperative localization improves over local-only localization.
+
+## Demo
+
+![cooperative localization demo: GNSS outage, packet loss, V2V relative constraints, cooperative recovery](docs/media/cooperative_demo.gif)
+
+Storyboard: [docs/demo_storyboard.md](docs/demo_storyboard.md).
+Regenerate the GIF: `scripts/make_demo_gif.sh` prints the capture procedure
+and `docs/media/README.md` describes where the file lives. Until the GIF is
+recorded the README intentionally shows broken-image alt text so the gap is
+visible.
+
+## Quick Start
+
+Build with ROS 2 Jazzy:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Run the synthetic cooperative localization demo:
+
+```bash
+ros2 launch mrn_demos cooperative_localization.launch.py scenario:=gnss_outage_3robots.yaml
+```
+
+The same launch file can spawn the experimental Nav2 correction broadcaster
+for each agent (off by default):
+
+```bash
+ros2 launch mrn_demos cooperative_localization.launch.py \
+  enable_nav2_correction:=true \
+  nav2_correction_agents:=robot_1,robot_2,robot_3
+```
+
+See [docs/nav2_adapter.md](docs/nav2_adapter.md) for the full argument list.
+
+In another terminal:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 launch mrn_viz rviz_graph.launch.py
+```
+
+Generate benchmark artifacts:
+
+```bash
+scripts/run_benchmark.sh 25 out/report.md out/metrics.json
+sed -n '1,80p' out/report.md
+```
+
+Run a replayable experiment YAML:
+
+```bash
+ros2 run mrn_eval mrn_experiment run \
+  experiments/gnss_outage_packet_loss.yaml \
+  --duration 25 \
+  --output-dir out/experiments/gnss_outage_packet_loss
+```
+
+The experiment runner writes `plan.json`, `report.md`, `metrics.json`,
+`acceptance.json`, and `provenance.json`. Acceptance rules live in the YAML so
+CI and local replay use the same pass/fail criteria. If the YAML defines
+multiple `methods`, each method gets its own report under
+`out/experiments/<name>/methods/<method>/`, and the root report includes
+acceptance, method, network, and graph status comparison tables. The same output
+directory also includes `command.txt`, `git_info.txt`, `ros_distro.txt`,
+`dependency_versions.txt`, and `environment.json` for reproducibility.
+
+Run a parameter sweep:
+
+```bash
+ros2 run mrn_eval mrn_experiment run \
+  experiments/clock_drift_sensitivity.yaml \
+  --duration 25 \
+  --output-dir out/experiments/clock_drift_sensitivity
+```
+
+Sweep reports include generated scenario YAMLs per case and graph rejection
+counts, so clock drift above the configured gate shows up as rejected
+constraints instead of a silent localization failure.
+
+For a shorter smoke run, select only the cases needed by the acceptance check:
+
+```bash
+ros2 run mrn_eval mrn_experiment run \
+  experiments/clock_drift_sensitivity.yaml \
+  --duration 10 \
+  --sweep-case clock_drift_ms_50 \
+  --sweep-case clock_drift_ms_100 \
+  --output-dir out/experiments/clock_drift_smoke
+```
+
+Run the QoS profile comparison:
+
+```bash
+ros2 run mrn_eval mrn_experiment run \
+  experiments/qos_best_effort_vs_reliable.yaml \
+  --duration 25 \
+  --output-dir out/experiments/qos_best_effort_vs_reliable
+```
+
+This benchmark generates one best-effort-like case and one
+reliable-constraint-like case, then checks the observed loss and latency in the
+network diagnostics table.
+
+## CI Smoke Artifacts
+
+The Jazzy workflow uploads `jazzy-smoke-artifacts` on every run. Download it
+from the workflow run summary to inspect:
+
+- `out/experiments/clock_drift_smoke/report.md`
+- `out/experiments/clock_drift_smoke/acceptance.json`
+- `out/experiments/qos_smoke/report.md`
+- `out/experiments/qos_smoke/acceptance.json`
+- `out/smoke_report.md`
+- `out/smoke_metrics.json`
+- `out/smoke_launch.log`
+
+Use these files to verify the same pass/fail evidence that CI used: clock drift
+constraint rejection, QoS loss/latency separation, and cooperative localization
+improvement over local-only output.
+
+Typical synthetic result:
+
+| Agent | Method | ATE RMSE [m] | Improvement vs Local [m] |
+| --- | --- | ---: | ---: |
+| robot_2 | local_only | 1.076 | |
+| robot_2 | cooperative | 0.057 | 1.019 |
+
+The cooperative launch publishes online ATE summaries on `/mrn/eval/summary`.
+The current `relative_anchor` backend is a temporary baseline, not a factor graph.
+
+## Architecture
+
+```text
+Application layer
+  Nav2 / Autoware / Open-RMF / custom planners
+        ^
+        | cooperative pose, fleet state, diagnostics
+multirobot-navigation core
+  cooperative localization, constraints, sync, replay, eval
+        ^                         ^
+        | local estimates          | V2V constraints
+Robot i local stack          Robot j local stack
+  GNSS / odom / Nav2          GNSS / odom / Nav2
+```
+
+The local estimator remains local. This repository provides the cooperative constraint layer around it.
+
+## Initial Packages
+
+| Package | Role |
+| --- | --- |
+| `mrn_msgs` | ROS 2 message contracts |
+| `mrn_core` | shared frame, covariance, and time utilities |
+| `mrn_comm` | V2V message layer and QoS profiles |
+| `mrn_sync` | timestamp and clock diagnostics |
+| `mrn_graph` | cooperative localization graph backends |
+| `mrn_netem` | network fault models and CLI |
+| `mrn_eval` | benchmark metrics and reports |
+| `mrn_viz` | RViz and Foxglove visualization assets |
+| `mrn_demos` | launch files, scenarios, and demo assets |
+| `mrn_nav2_adapter` | conservative cooperative-pose to `map->odom` correction broadcaster (experimental) |
+| `mrn_autoware_adapter` | conservative cooperative-pose to Autoware-style `PoseWithCovarianceStamped` publisher (experimental, v0.3.0) |
+| `mrn_gnss` | WGS84 / local-ENU utilities and NMEA GGA fix-quality covariance (v0.3.0 scaffolding) |
+
+## Repository Status
+
+This repository is in foundation stage. The first milestone is to lock the message, frame, covariance, time, and replay contracts before adding heavyweight graph backends.
+
+## Roadmap
+
+- `v0.1.0-alpha`: Jazzy baseline, message contracts, synthetic demo, centralized graph skeleton, network/eval scaffolding
+- `v0.2.0`: real two-robot bags, Nav2 adapter, Zenoh backend experiment
+- `v0.3.0`: Autoware adapter, RTK/GNSS utilities, dataset adapters
+- later: federated graph exchange, shared world model hooks, cooperative perception hooks
+
+See [PLAN.md](PLAN.md) for the long-form execution plan.
+See [docs/release_checklist.md](docs/release_checklist.md) for the `v0.1.0-alpha` checklist.
+See [docs/release_notes_v0.1.0-alpha.md](docs/release_notes_v0.1.0-alpha.md) for alpha release notes and known limitations.
+See [docs/bag_capture.md](docs/bag_capture.md) for the v0.2.0 two-robot bag capture procedure. After recording, `python3 tools/validate_bag.py <bag_dir> --manifest <manifest.yaml>` cross-checks recorded topics and types, then `experiments/bag_replay_smoke.yaml` (see [docs/experiments.md](docs/experiments.md)) feeds the bag through `mrn_experiment run`.
+See [docs/nav2_adapter.md](docs/nav2_adapter.md) for the experimental Nav2 correction adapter.
+See [docs/netem_netns.md](docs/netem_netns.md) for the Linux network namespace wrapper that brings `mrn_netem` profiles onto real veth pairs with `tc netem`.
+See [docs/offline_ate.md](docs/offline_ate.md) for the offline ATE/RPE helper that compares an estimated trajectory CSV against a truth CSV — the post-hoc counterpart to `mrn_online_ate` for bags without an in-bag ground truth topic.
+See [docs/gnss.md](docs/gnss.md) for the WGS84 / local-ENU conversion library and the NMEA GGA fix-quality → covariance heuristic in `mrn_gnss` (v0.3.0 scaffolding for outdoor RTK workflows).
+See [docs/autoware_adapter.md](docs/autoware_adapter.md) for the experimental Autoware-side adapter that republishes cooperative poses as Autoware initialpose-style `PoseWithCovarianceStamped` after the same SE(2) safety gates as the Nav2 adapter.
+
+## License
+
+Apache-2.0.

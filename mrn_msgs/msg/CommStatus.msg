@@ -1,0 +1,16 @@
+std_msgs/Header header
+
+string local_agent_id
+string remote_agent_id
+
+uint64 last_sequence_id
+uint64 received_count
+uint64 lost_count
+float32 loss_rate
+
+builtin_interfaces/Duration latency_mean
+builtin_interfaces/Duration latency_stddev
+builtin_interfaces/Duration max_latency
+
+string qos_profile_name
+string transport_name

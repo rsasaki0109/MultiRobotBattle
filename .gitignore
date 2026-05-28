@@ -1,0 +1,15 @@
+build/
+install/
+log/
+out/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+.coverage
+htmlcov/
+
+*.bag
+*.db3
+*.mcap

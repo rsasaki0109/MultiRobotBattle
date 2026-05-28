@@ -1,0 +1,11 @@
+std_msgs/Header header
+
+string local_agent_id
+string remote_agent_id
+
+builtin_interfaces/Duration estimated_offset
+builtin_interfaces/Duration offset_uncertainty
+builtin_interfaces/Duration round_trip_time
+
+uint64 samples
+float32 quality

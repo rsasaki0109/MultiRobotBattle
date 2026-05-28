@@ -1,0 +1,44 @@
+experiment:
+  name: clock_drift_sensitivity
+  seed: 11
+
+input:
+  scenario: mrn_demos/config/scenarios/gnss_outage_3robots.yaml
+
+methods:
+  - name: coop_graph
+    config: mrn_graph/config/gtsam_fixed_lag.yaml
+    graph_executable: relative_anchor_graph_node.py
+
+network:
+  profile: mrn_netem/config/loss20_delay80.yaml
+
+sweeps:
+  - name: clock_drift_ms
+    parameter: faults.clock_drift_ms
+    values:
+      - 0
+      - 10
+      - 30
+      - 50
+      - 100
+
+metrics:
+  - rejected_constraints
+  - ate
+  - recovery_time
+
+acceptance:
+  graph:
+    - method_run: coop_graph
+      sweep_case: clock_drift_ms_50
+      backend: relative_anchor
+      max_rejected_constraints: 0
+      max_stale_constraints: 0
+    - method_run: coop_graph
+      sweep_case: clock_drift_ms_100
+      backend: relative_anchor
+      min_accepted_constraints: 1
+      min_rejected_constraints: 1
+      min_rejection_reasons:
+        clock_offset_too_large: 1

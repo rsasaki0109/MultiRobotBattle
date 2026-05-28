@@ -1,0 +1,6 @@
+services:
+  demo:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.jazzy
+    command: bash -lc "source /opt/ros/jazzy/setup.bash && source /ws/install/setup.bash && ros2 launch mrn_demos synthetic_3robots.launch.py"

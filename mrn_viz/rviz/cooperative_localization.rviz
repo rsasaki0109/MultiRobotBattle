@@ -1,0 +1,23 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane: XY
+    - Class: rviz_default_plugins/MarkerArray
+      Name: MRN Markers
+      Enabled: true
+      Topic:
+        Value: /mrn/viz/markers
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Graph Markers
+      Enabled: true
+      Topic:
+        Value: /mrn/graph/markers
+  Global Options:
+    Fixed Frame: map

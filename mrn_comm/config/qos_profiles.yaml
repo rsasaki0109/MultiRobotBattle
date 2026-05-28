@@ -1,0 +1,27 @@
+mrn_qos_profiles:
+  agent_state_fast:
+    reliability: best_effort
+    history: keep_last
+    depth: 5
+    durability: volatile
+    lifespan_ms: 300
+
+  relative_constraint:
+    reliability: reliable
+    history: keep_last
+    depth: 20
+    durability: volatile
+    lifespan_ms: 2000
+
+  heartbeat:
+    reliability: best_effort
+    history: keep_last
+    depth: 3
+    deadline_ms: 500
+    liveliness: automatic
+
+  static_agent_info:
+    reliability: reliable
+    durability: transient_local
+    history: keep_last
+    depth: 1

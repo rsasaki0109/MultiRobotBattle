@@ -1,0 +1,6 @@
+backend:
+  name: gtsam_fixed_lag
+  lag_sec: 5.0
+  robust_loss: huber
+  huber_delta: 1.0
+  mahalanobis_gate: 9.21

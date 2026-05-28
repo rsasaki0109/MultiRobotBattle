@@ -1,0 +1,38 @@
+experiment:
+  name: gnss_outage_packet_loss
+  seed: 42
+
+input:
+  scenario: mrn_demos/config/scenarios/gnss_outage_3robots.yaml
+
+methods:
+  - name: local_only
+    config: mrn_graph/config/dummy_backend.yaml
+    graph_executable: dummy_graph_node.py
+  - name: coop_graph
+    config: mrn_graph/config/gtsam_fixed_lag.yaml
+    graph_executable: relative_anchor_graph_node.py
+
+network:
+  profile: mrn_netem/config/loss20_delay80.yaml
+
+metrics:
+  - ate
+  - rpe
+  - nees
+  - latency
+  - bandwidth
+
+acceptance:
+  localization:
+    - agent_id: robot_2
+      method_run: coop_graph
+      method: cooperative
+      min_improvement_vs_local: 0.2
+      max_ate_rmse: 0.3
+      min_availability: 0.95
+  network:
+    method_run: coop_graph
+    min_rows: 3
+    min_observed_loss_rate: 0.1
+    max_mean_latency_sec: 0.2

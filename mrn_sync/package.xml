@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>mrn_sync</name>
+  <version>0.1.0</version>
+  <description>Timestamp and clock diagnostics for cooperative robotics.</description>
+  <maintainer email="maintainers@example.com">multirobot-navigation maintainers</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_pytest</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <depend>mrn_msgs</depend>
+  <depend>rclcpp</depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

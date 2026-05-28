@@ -1,0 +1,42 @@
+rosbag2_bagfile_information:
+  version: 6
+  storage_identifier: mcap
+  duration:
+    nanoseconds: 1000000000
+  starting_time:
+    nanoseconds_since_epoch: 0
+  message_count: 60
+  relative_file_paths:
+    - bag_0.mcap
+  files:
+    - path: bag_0.mcap
+      starting_time:
+        nanoseconds_since_epoch: 0
+      duration:
+        nanoseconds: 1000000000
+      message_count: 60
+  topics_with_message_count:
+    - topic_metadata:
+        name: /robot_1/mrn/agent_state
+        type: mrn_msgs/msg/AgentState
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 20
+    - topic_metadata:
+        name: /robot_2/mrn/agent_state
+        type: mrn_msgs/msg/AgentState
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 20
+    - topic_metadata:
+        name: /robot_1/mrn/relative_constraints
+        type: mrn_msgs/msg/RelativePoseConstraint
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 10
+    - topic_metadata:
+        name: /robot_2/mrn/relative_constraints
+        type: mrn_msgs/msg/RelativePoseConstraint
+        serialization_format: cdr
+        offered_qos_profiles: ""
+      message_count: 10

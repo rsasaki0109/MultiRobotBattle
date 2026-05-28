@@ -1,0 +1,7 @@
+network:
+  packet_loss_percent: 20
+  latency_ms_mean: 80
+  latency_ms_stddev: 20
+  jitter_ms: 15
+  duplicate_percent: 0
+  corrupt_percent: 0
