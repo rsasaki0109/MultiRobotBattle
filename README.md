@@ -31,12 +31,18 @@ Single-robot navigation is served well by existing stacks. Real multi-robot auto
 
 ## What It Is
 
-- V2V message contracts for agent state, relative pose constraints, communication status, and clock status
-- cooperative localization graph infrastructure
-- packet loss, latency, jitter, and clock drift experiment support
-- MCAP-first rosbag replay and benchmark workflows
-- RViz and Foxglove visualization assets
-- adapters planned for Nav2, Autoware, Zenoh, and datasets
+The project has two complementary halves:
+
+- **Localization** — *where are we, together*: V2V message contracts for agent
+  state, relative pose constraints, communication status, and clock status;
+  cooperative localization graph infrastructure; packet loss, latency, jitter,
+  and clock drift experiment support; MCAP-first rosbag replay and benchmark
+  workflows; RViz and Foxglove visualization assets; adapters planned for Nav2,
+  Autoware, Zenoh, and datasets.
+- **Coordination** (`mrn_coord`) — *how do we move, together*: multi-agent path
+  finding (Conflict-Based Search and prioritized planning), decentralized
+  formation control that reuses the V2V relative-pose constraints, and
+  cooperative coverage (frontier detection + greedy/Hungarian task allocation).
 
 ## What It Is Not
 
@@ -65,6 +71,23 @@ A recording of the **live ROS demo** is the separate, higher-fidelity target:
 in [docs/demo_storyboard.md](docs/demo_storyboard.md), and
 [docs/media/README.md](docs/media/README.md) describes where the recorded file
 should land.
+
+### Coordination layer
+
+The other half — *how do we move together* — is the `mrn_coord` coordination
+layer. The animation below is **driven by the real algorithms** (not a hand-drawn
+loop): Conflict-Based Search plans three robots through a one-cell doorway
+without colliding, then the displacement-based consensus controller assembles
+them into a formation. Regenerate it with
+`python3 scripts/make_coordination_gif.py`.
+
+<p align="center">
+  <img src="docs/media/coordination_demo.gif" alt="Three robots funnel through a one-cell doorway collision-free via Conflict-Based Search, then converge into a triangle via decentralized formation control" width="640">
+</p>
+
+See [docs/coordination.md](docs/coordination.md) for the MAPF, formation, and
+coverage modules, each with a runnable CLI demo (`mrn_mapf_demo`,
+`mrn_formation_demo`, `mrn_coverage_demo`).
 
 ## Quick Start
 
