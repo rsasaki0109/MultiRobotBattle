@@ -27,6 +27,9 @@ setup(
             "mrn_formation_demo = mrn_coord.formation.demo:main",
             "mrn_coverage_demo = mrn_coord.coverage.demo:main",
             "mrn_mapf_planner = mrn_coord.mapf.planner_node:main",
+            "mrn_formation_controller = "
+            "mrn_coord.formation.controller_node:main",
+            "mrn_coverage_allocator = mrn_coord.coverage.allocator_node:main",
         ],
     },
 )

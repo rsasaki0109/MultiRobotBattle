@@ -87,9 +87,10 @@ them into a formation. Regenerate it with
 
 See [docs/coordination.md](docs/coordination.md) for the MAPF, formation, and
 coverage modules, each with a runnable CLI demo (`mrn_mapf_demo`,
-`mrn_formation_demo`, `mrn_coverage_demo`). The MAPF planner is also wrapped as
-a thin ROS node — `ros2 launch mrn_coord mapf_planner.launch.py` publishes a
-`nav_msgs/Path` per agent.
+`mrn_formation_demo`, `mrn_coverage_demo`) and a thin ROS node
+(`ros2 launch mrn_coord mapf_planner.launch.py` / `formation_controller.launch.py`
+/ `coverage_allocator.launch.py`) publishing `nav_msgs/Path`,
+`geometry_msgs/Twist`, and `geometry_msgs/PointStamped` goals respectively.
 
 ## Quick Start
 

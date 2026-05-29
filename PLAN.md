@@ -853,10 +853,12 @@ Current role:
 
 Later tasks:
 
-- [x] thin ROS node publishing planned paths as `nav_msgs/Path` per agent
-  (`mrn_mapf_planner` + `mapf_planner.launch.py`; pure parsing/conversion in
-  `ros_conversion.py` is CI-tested, the node is launch-smoke-tested). Formation
-  and coverage nodes remain to do.
+- [x] thin ROS nodes for all three modules, each a shell over the pure core
+  (parsing/conversion CI-tested, nodes launch-smoke-tested):
+  `mrn_mapf_planner` publishes `nav_msgs/Path` per agent;
+  `mrn_formation_controller` subscribes to poses and publishes
+  `geometry_msgs/Twist` per agent; `mrn_coverage_allocator` publishes a
+  `geometry_msgs/PointStamped` frontier goal per robot. Launch files for each.
 - continuous-space / kinematic extensions beyond the grid model
 - integrate planning with the cooperative-localization estimate as the source
   of agent positions

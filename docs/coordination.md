@@ -164,6 +164,19 @@ ros2 run mrn_coord mrn_formation_demo --leader 1      # anchor the shape to agen
 The demo pulls three scattered agents into an equilateral triangle and prints
 the formation error decaying toward zero.
 
+### ROS node
+
+`mrn_formation_controller` wraps the control law: it subscribes to each agent's
+pose on `formation/pose/<id>` (`geometry_msgs/PoseStamped`) and, on a timer,
+publishes a `geometry_msgs/Twist` velocity command on `formation/cmd_vel/<id>`
+computed from the relative positions of its neighbors. The spec offsets and
+edge list come from parameters; the control law is the same pure
+`mrn_coord.formation.control` used in the tests.
+
+```bash
+ros2 launch mrn_coord formation_controller.launch.py   # waits for pose inputs
+```
+
 ## Coverage — Cooperative Exploration & Task Allocation
 
 Given a partially-explored map and a team of robots, decide *who explores
@@ -205,3 +218,20 @@ ros2 run mrn_coord mrn_coverage_demo --method greedy
 The demo builds a small map with two unknown pockets, detects and clusters the
 frontiers, allocates them to two robots by travel cost, and prints the map with
 each robot (`R`) and its assigned frontier target (`F`).
+
+### ROS node
+
+`mrn_coverage_allocator` wraps the allocator: it reads the occupancy grid (text
+rows) and robot cells from parameters, detects and clusters frontiers, allocates
+them, and publishes each robot's assigned frontier as a
+`geometry_msgs/PointStamped` goal on `coverage/goal/<id>` (latched). Frontier
+detection, clustering, and allocation are the same pure coverage core used in
+the tests.
+
+```bash
+ros2 launch mrn_coord coverage_allocator.launch.py     # publishes goals
+ros2 topic echo /coverage/goal/a_1
+```
+
+All three coordination modules now have both a CLI demo and a thin ROS node;
+agent ids are sanitized into valid topic tokens (e.g. `1` → `a_1`).
