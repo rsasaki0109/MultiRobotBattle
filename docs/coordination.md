@@ -1,5 +1,13 @@
 # Coordination Layer (`mrn_coord`)
 
+<p align="center">
+  <img src="media/coordination_demo.gif" alt="Three robots funnel through a one-cell doorway without colliding (Conflict-Based Search), then converge into a triangle (formation control)" width="640">
+</p>
+
+<p align="center">
+  <em>Driven by the real algorithms: CBS plans the collision-free doorway crossing, then the consensus controller assembles the formation. Regenerate with <code>python3 scripts/make_coordination_gif.py</code>.</em>
+</p>
+
 `mrn_coord` is the **coordination / navigation** half of the project — the
 counterpart to the cooperative-localization stack. Where localization answers
 *where are we*, coordination answers *how do we move and what do we do
