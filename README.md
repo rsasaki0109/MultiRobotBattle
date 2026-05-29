@@ -91,6 +91,9 @@ coverage modules, each with a runnable CLI demo (`mrn_mapf_demo`,
 (`ros2 launch mrn_coord mapf_planner.launch.py` / `formation_controller.launch.py`
 / `coverage_allocator.launch.py`) publishing `nav_msgs/Path`,
 `geometry_msgs/Twist`, and `geometry_msgs/PointStamped` goals respectively.
+`ros2 launch mrn_coord formation_closed_loop.launch.py use_rviz:=true` closes
+the loop in ROS with a kinematic agent simulator so the robots converge into a
+formation live in RViz.
 
 ## Quick Start
 

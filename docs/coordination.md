@@ -235,3 +235,25 @@ ros2 topic echo /coverage/goal/a_1
 
 All three coordination modules now have both a CLI demo and a thin ROS node;
 agent ids are sanitized into valid topic tokens (e.g. `1` → `a_1`).
+
+## Running the loop in ROS
+
+The nodes above publish and subscribe, but to actually *move* something you need
+a plant. `mrn_agent_sim` is a minimal single-integrator simulator: it publishes
+each agent's pose on `formation/pose/<id>`, integrates the `formation/cmd_vel/<id>`
+commands it receives, and publishes a `visualization_msgs/MarkerArray` on
+`coordination/markers` for RViz. The integration step is the pure, CI-tested
+`mrn_coord.kinematics.euler_step`.
+
+Run it with the formation controller to close the loop entirely inside ROS:
+
+```bash
+ros2 launch mrn_coord formation_closed_loop.launch.py             # headless
+ros2 launch mrn_coord formation_closed_loop.launch.py use_rviz:=true
+```
+
+The sim publishes poses, the controller answers with velocity commands, the sim
+integrates them, and the three agents converge into the commanded triangle —
+verified end-to-end (the converged relative offsets match the spec). This is the
+stand-in plant; in a real system the poses would come from the cooperative
+localization estimate instead of `mrn_agent_sim`.

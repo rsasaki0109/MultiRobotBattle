@@ -853,6 +853,10 @@ Current role:
 
 Later tasks:
 
+- [x] closed-loop ROS demo: `mrn_agent_sim` (single-integrator plant publishing
+  poses + RViz markers, integrating cmd_vel) plus `formation_closed_loop.launch.py`
+  drive the formation controller to convergence entirely inside ROS, verified
+  end-to-end; RViz config included
 - [x] thin ROS nodes for all three modules, each a shell over the pure core
   (parsing/conversion CI-tested, nodes launch-smoke-tested):
   `mrn_mapf_planner` publishes `nav_msgs/Path` per agent;
