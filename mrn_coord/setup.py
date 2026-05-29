@@ -1,3 +1,5 @@
+from glob import glob
+
 from setuptools import find_packages, setup
 
 package_name = "mrn_coord"
@@ -9,6 +11,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
+        ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -23,6 +26,7 @@ setup(
             "mrn_mapf_demo = mrn_coord.mapf.demo:main",
             "mrn_formation_demo = mrn_coord.formation.demo:main",
             "mrn_coverage_demo = mrn_coord.coverage.demo:main",
+            "mrn_mapf_planner = mrn_coord.mapf.planner_node:main",
         ],
     },
 )

@@ -95,6 +95,26 @@ The demo solves a crossing and a swap/reorder scenario and prints the
 collision-free paths as an ASCII timeline — the runnable counterpart to the
 unit tests.
 
+### ROS node
+
+`mrn_mapf_planner` is a thin ROS wrapper around the MAPF core. It reads a
+scenario (grid size, obstacles, per-agent start/goal) from parameters, solves it
+once with CBS or prioritized planning, and publishes one `nav_msgs/Path` per
+agent on `mapf/path/<id>` with a latched (transient-local) QoS so RViz and late
+subscribers receive it. The node holds no algorithm logic — planning and
+grid-to-world conversion live in the pure, CI-tested
+`mrn_coord.mapf.ros_conversion`. In a live system the agent start cells would
+come from the cooperative-localization estimate; as parameters they keep the
+node self-contained and launch-smoke-testable.
+
+```bash
+ros2 launch mrn_coord mapf_planner.launch.py   # the doorway scenario, 3 agents
+ros2 topic echo /mapf/path/a_1                  # ids are sanitized to valid tokens
+```
+
+(Agent ids that would form an invalid ROS topic token — e.g. the digit `"1"` —
+are prefixed, so agent `1` publishes on `mapf/path/a_1`.)
+
 ## Formation — Decentralized Formation Control
 
 This module is the clearest reuse of the localization stack's output: the
