@@ -93,7 +93,9 @@ coverage modules, each with a runnable CLI demo (`mrn_mapf_demo`,
 `geometry_msgs/Twist`, and `geometry_msgs/PointStamped` goals respectively.
 `ros2 launch mrn_coord formation_closed_loop.launch.py use_rviz:=true` closes
 the loop in ROS with a kinematic agent simulator so the robots converge into a
-formation live in RViz.
+formation live in RViz. The two halves meet at `mrn_pose_bridge`:
+`ros2 launch mrn_coord estimate_to_formation.launch.py` feeds the synthetic
+world's per-agent localization estimate into the formation controller.
 
 ## Quick Start
 

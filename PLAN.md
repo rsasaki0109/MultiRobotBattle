@@ -864,8 +864,12 @@ Later tasks:
   `geometry_msgs/Twist` per agent; `mrn_coverage_allocator` publishes a
   `geometry_msgs/PointStamped` frontier goal per robot. Launch files for each.
 - continuous-space / kinematic extensions beyond the grid model
-- integrate planning with the cooperative-localization estimate as the source
-  of agent positions
+- [x] bridge the cooperative-localization estimate into the coordination layer:
+  `mrn_pose_bridge` republishes per-agent `AgentState`/`CooperativePose` as
+  `geometry_msgs/PoseStamped` on `formation/pose/<id>`. `estimate_to_formation.launch.py`
+  wires the synthetic world -> bridge -> formation controller end-to-end
+  (one-way: estimate -> coordination). Feeding MAPF starts / coverage cells
+  from the estimate remains.
 
 ## 16. Message Contract Freeze Plan
 
