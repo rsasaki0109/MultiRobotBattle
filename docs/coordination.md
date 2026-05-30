@@ -115,6 +115,24 @@ ros2 topic echo /mapf/path/a_1                  # ids are sanitized to valid tok
 (Agent ids that would form an invalid ROS topic token — e.g. the digit `"1"` —
 are prefixed, so agent `1` publishes on `mapf/path/a_1`.)
 
+### Path follower (closing planning → world)
+
+A MAPF plan is a path; `pure_pursuit` (in `path_follower.py`, pure and
+CI-tested) turns a path plus the robot's current pose into a unicycle command
+`(v, omega)` — the non-holonomic-compatible controller the simulator wants.
+`mrn_path_follower` wraps it: per agent it subscribes to a `nav_msgs/Path` and a
+`geometry_msgs/PoseStamped` and publishes `geometry_msgs/Twist`.
+
+Paired with `mrn_sim_world` (pose in, `cmd_vel` out), it closes planning →
+world. The launch `mapf_through_sim.launch.py` (in `mrn_sim`) wires planner →
+follower → world on matching agent ids and grid; verified end-to-end, all three
+robots track their CBS paths through the doorway and arrive within ~0.3 m of
+their goals:
+
+```bash
+ros2 launch mrn_sim mapf_through_sim.launch.py use_rviz:=true
+```
+
 ## Formation — Decentralized Formation Control
 
 This module is the clearest reuse of the localization stack's output: the

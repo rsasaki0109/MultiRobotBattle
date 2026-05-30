@@ -841,7 +841,8 @@ Current role:
 - [x] MAPF (multi-agent path finding): `GridWorld`, space-time A* with
   vertex/edge constraints, conflict detection, optimal Conflict-Based Search,
   and prioritized planning; `mrn_mapf_demo` CLI renders solutions as an ASCII
-  timeline
+  timeline. A `pure_pursuit` path follower (`mrn_path_follower`) tracks the
+  planned paths with a unicycle, closing planning -> world through `mrn_sim`
 - [x] decentralized formation control reusing the V2V relative-pose
   constraints: displacement-based consensus law over relative measurements,
   `FormationSpec` shape builders, closed-loop simulation, and an
@@ -902,10 +903,10 @@ Current role:
   within ~0.3 m of truth (`status = OK`), verified by an isolated-domain run.
   Also stamps the emitted `AgentState` (header + TTL) so freshness gates accept it
 
-Near-term tasks:
-
-- a unicycle path-follower so a MAPF plan can be driven through this world
-  (the formation controller is holonomic; this world is unicycle)
+- [x] a unicycle path-follower so a MAPF plan can be driven through this world:
+  `mrn_coord` `pure_pursuit` (pure) + `mrn_path_follower` node; the
+  `mapf_through_sim.launch.py` closed loop (planner -> follower -> world) drives
+  all three robots along their CBS paths to within ~0.3 m of their goals
 
 Later tasks:
 

@@ -24,6 +24,7 @@ from .conflicts import (
     detect_first_conflict,
 )
 from .grid import Cell, GridWorld, manhattan
+from .path_follower import pure_pursuit
 from .prioritized import prioritized_planning
 from .solution import Solution, makespan, pad_paths, render_ascii, sum_of_costs
 from .space_time_astar import plan_path
@@ -39,6 +40,7 @@ __all__ = [
     "detect_first_conflict",
     "cbs",
     "prioritized_planning",
+    "pure_pursuit",
     "Solution",
     "sum_of_costs",
     "makespan",
