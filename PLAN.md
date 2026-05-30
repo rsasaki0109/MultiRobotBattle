@@ -871,6 +871,39 @@ Later tasks:
   (one-way: estimate -> coordination). Feeding MAPF starts / coverage cells
   from the estimate remains.
 
+### 15.11 `mrn_sim`
+
+The simulation foundation — a deterministic 2D *true world model* both halves
+plug into (localization consumes its noisy sensor measurements; coordination's
+commands drive its robots). Same pattern: pure, ROS-free cores, unit-tested in
+CI. Documented in [`docs/simulation.md`](docs/simulation.md).
+
+Current role:
+
+- [x] 2D world core: unicycle kinematics, `World`/`Obstacle` with a
+  collision-aware `step`, and geometric sensor models (range/bearing,
+  body-frame relative pose, GNSS) with a reproducible Gaussian-noise helper;
+  `scripts/make_sim_gif.py` renders a real-simulator demo GIF
+
+- [x] `mrn_sim_world` ROS node + `sim_world.launch.py` (+ RViz config):
+  integrates per-robot `Twist` commands and publishes `AgentState` (truth +
+  reproducible GNSS noise), ground truth, and an RViz `MarkerArray`
+  (robots / obstacles / in-range V2V links); `proximity.py` is the CI-tested
+  pure helper, the node is launch-smoke-tested
+
+Near-term tasks:
+
+- a unicycle path-follower so a MAPF plan can be driven through this world
+  (the formation controller is holonomic; this world is unicycle)
+- emit `mrn_msgs/RelativePoseConstraint` for in-range pairs (V2V), feeding the
+  cooperative-localization graph directly
+
+Later tasks:
+
+- swarm-scale runs (tens to hundreds of agents) for emergent behavior
+- an optional Gazebo (`gz sim`) adapter for full 3D physics, kept out of the
+  pure / CI core
+
 ## 16. Message Contract Freeze Plan
 
 The message contracts should not be frozen too early, but they should be stable
