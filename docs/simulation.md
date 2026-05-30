@@ -87,9 +87,33 @@ a coordination loop *through this world* therefore wants a unicycle-aware
 controller (e.g. a path follower for the MAPF planner) — the next step below.
 The holonomic loop is already demonstrated with `mrn_coord`'s `mrn_agent_sim`.
 
+## Closing the loop with localization
+
+`sim_localization.launch.py` runs the world together with the `mrn_graph`
+relative-anchor graph server — the simulation → cooperative-localization path in
+one command:
+
+```bash
+ros2 launch mrn_sim sim_localization.launch.py
+ros2 topic echo /robot_2/mrn/cooperative_pose
+```
+
+The three robots start in a close triangle (all within V2V range) and
+**robot 2 has a simulated GNSS outage** (`degraded_agents: ["robot_2"]`, a large
+position sigma and `STATUS_DEGRADED`). The graph ingests the sim's `AgentState`
+and `RelativePoseConstraint` through its gates and publishes
+`/<id>/mrn/cooperative_pose`. Verified end-to-end: robot 2's degraded estimate
+(off by ~1 m) is pulled back to within ~0.3 m of truth using the V2V constraints
+from its two healthy neighbors, with `status = OK` — cooperative localization
+rescuing a GNSS-denied robot, driven entirely by the simulator.
+
+(The agent-state messages are stamped with a TTL so downstream freshness gates
+accept them — a simulator must emit valid, non-expired messages.)
+
 ## Roadmap
 
-This is the world core plus its ROS node. Planned next:
+This is the world core, its ROS node, and the localization integration. Planned
+next:
 
 - a unicycle path-follower so a MAPF plan can be driven through this world,
   closing world → localization → planning → world in ROS;

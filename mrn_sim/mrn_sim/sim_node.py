@@ -24,6 +24,7 @@ import math
 import random
 
 import rclpy
+from builtin_interfaces.msg import Duration
 from geometry_msgs.msg import PoseStamped, Twist
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -78,6 +79,9 @@ class SimWorldNode(Node):
         self.declare_parameter("publish_constraints", True)
         self.declare_parameter("v2v_xy_sigma", 0.1)
         self.declare_parameter("v2v_yaw_sigma", 0.05)
+        self.declare_parameter("state_ttl_sec", 0.3)
+        self.declare_parameter("degraded_agents", [""])
+        self.declare_parameter("degraded_gnss_sigma", 1.2)
 
         agent_ids = [str(a) for a in self._param("agent_ids")]
         poses = [str(p) for p in self._param("initial_poses")]
@@ -100,6 +104,10 @@ class SimWorldNode(Node):
         self._publish_constraints = bool(self._param("publish_constraints"))
         self._v2v_xy_sigma = float(self._param("v2v_xy_sigma"))
         self._v2v_yaw_sigma = float(self._param("v2v_yaw_sigma"))
+        ttl = float(self._param("state_ttl_sec"))
+        self._ttl = Duration(sec=int(ttl), nanosec=int(round((ttl - int(ttl)) * 1e9)))
+        self._degraded = {str(a) for a in self._param("degraded_agents") if str(a)}
+        self._degraded_sigma = float(self._param("degraded_gnss_sigma"))
         self._seq = 0
 
         cmd_tmpl = str(self._param("cmd_vel_topic_template"))
@@ -145,16 +153,26 @@ class SimWorldNode(Node):
             gt.pose.orientation.z = math.sin(0.5 * theta)
             gt.pose.orientation.w = math.cos(0.5 * theta)
             self._truth_pubs[a].publish(gt)
-            # agent state estimate (truth + GNSS-like noise)
+            # agent state estimate (truth + GNSS-like noise); a degraded agent
+            # gets a much larger position error and a DEGRADED status, simulating
+            # a GNSS outage that cooperative localization should rescue.
+            degraded = a in self._degraded
+            sigma = self._degraded_sigma if degraded else self._gnss_sigma
             est = AgentState()
+            est.packet.header.stamp = stamp
+            est.packet.header.frame_id = self._frame_id
+            est.packet.sender_agent_id = a
+            est.packet.measurement_time = stamp
+            est.packet.source_publish_time = stamp
+            est.packet.ttl = self._ttl
             est.agent_id = a
             est.map_frame = self._frame_id
-            est.pose.pose.position.x = add_gaussian_noise(x, self._gnss_sigma, self._rng)
-            est.pose.pose.position.y = add_gaussian_noise(y, self._gnss_sigma, self._rng)
+            est.pose.pose.position.x = add_gaussian_noise(x, sigma, self._rng)
+            est.pose.pose.position.y = add_gaussian_noise(y, sigma, self._rng)
             est.pose.pose.orientation.z = math.sin(0.5 * theta)
             est.pose.pose.orientation.w = math.cos(0.5 * theta)
-            est.status = AgentState.STATUS_OK
-            est.quality = 0.9
+            est.status = AgentState.STATUS_DEGRADED if degraded else AgentState.STATUS_OK
+            est.quality = 0.45 if degraded else 0.9
             self._agent_pubs[a].publish(est)
         if self._publish_constraints:
             self._publish_v2v_constraints(stamp)

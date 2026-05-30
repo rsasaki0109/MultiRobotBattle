@@ -896,6 +896,11 @@ Current role:
   directly: `relative_pose_observation` (pure, covariance from sigmas) +
   `v2v.build_relative_constraint`, `source_type=SOURCE_FAKE_GROUND_TRUTH`,
   verified to pass `constraint_gate` in the tests
+- [x] end-to-end sim -> localization: `sim_localization.launch.py` feeds the
+  sim's `AgentState` + V2V constraints into the relative-anchor graph; with
+  `robot_2` GNSS-degraded, cooperative localization pulls its estimate back to
+  within ~0.3 m of truth (`status = OK`), verified by an isolated-domain run.
+  Also stamps the emitted `AgentState` (header + TTL) so freshness gates accept it
 
 Near-term tasks:
 
