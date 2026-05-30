@@ -54,6 +54,33 @@ From here the localization and coordination stacks attach exactly as they do to
 `mrn_sim` — e.g. run the relative-anchor graph on the bridged `AgentState`, or a
 path follower publishing `cmd_vel`.
 
+## Multi-robot swarm
+
+`swarm.launch.py` spawns `num_robots` differential-drive vehicles on a circle
+(each with a unique name → unique `/model/<name>/{pose,cmd_vel}` topics),
+bridges every robot's pose and `cmd_vel`, and runs `mrn_gz_swarm_controller`.
+The controller subscribes to all poses, runs the Boids
+`mrn_coord.flocking.flock_velocities` over their positions, and converts each
+desired holonomic velocity into a differential-drive command with
+`velocity_to_unicycle` — so the same swarm rules that drive the 2D demo flock a
+Gazebo multi-robot world.
+
+```bash
+ros2 launch mrn_gazebo swarm.launch.py num_robots:=8          # GUI
+ros2 launch mrn_gazebo swarm.launch.py num_robots:=6 headless:=true
+```
+
+**Verification status (honest):** the controller's math
+(`flock_velocities`, `velocity_to_unicycle`) is unit-tested in CI; spawning a
+vehicle and driving it via `cmd_vel` (and the single-robot pose→`AgentState`
+adapter) are verified end-to-end headless. The *full N-robot flocking run* is
+provided and runs on a normal machine (with the GUI or a healthy DDS), but was
+**not cleanly verified in the CI-less sandbox** used during development: DDS
+discovery across the many gz/bridge/spawn/controller processes there is
+unreliable (only a subset of pose topics get discovered), which degrades the
+flock. Disabling shared-memory transport (`FASTDDS_BUILTIN_TRANSPORTS=UDPv4`)
+helps but did not fully resolve it in that environment.
+
 ## Scope
 
 This is a working seam, not a full benchmark. Multi-robot spawning, sensors

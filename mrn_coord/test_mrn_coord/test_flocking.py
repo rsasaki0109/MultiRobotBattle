@@ -3,7 +3,7 @@
 import math
 import unittest
 
-from mrn_coord.flocking import flock_velocities
+from mrn_coord.flocking import flock_velocities, velocity_to_unicycle
 
 
 class TestFlocking(unittest.TestCase):
@@ -49,6 +49,32 @@ class TestFlocking(unittest.TestCase):
         out = flock_velocities([(0.0, 0.0)], [(1.0, 1.0)], inertia=0.5)
         self.assertAlmostEqual(out[0][0], 0.5)
         self.assertAlmostEqual(out[0][1], 0.5)
+
+
+class TestVelocityToUnicycle(unittest.TestCase):
+    def test_aligned_drives_forward(self):
+        v, omega = velocity_to_unicycle(0.0, 1.5, 0.0, max_v=2.0)
+        self.assertGreater(v, 0.0)
+        self.assertAlmostEqual(omega, 0.0, places=6)
+
+    def test_desired_left_turns_left_no_forward(self):
+        # desired +y while facing +x -> heading error +pi/2: turn left, v ~ 0
+        v, omega = velocity_to_unicycle(0.0, 0.0, 1.0)
+        self.assertGreater(omega, 0.0)
+        self.assertAlmostEqual(v, 0.0, places=6)
+
+    def test_desired_behind_no_forward(self):
+        v, omega = velocity_to_unicycle(0.0, -1.0, 0.0)
+        self.assertAlmostEqual(v, 0.0, places=6)
+        self.assertNotEqual(omega, 0.0)
+
+    def test_zero_desired_is_stop(self):
+        self.assertEqual(velocity_to_unicycle(1.0, 0.0, 0.0), (0.0, 0.0))
+
+    def test_clamps(self):
+        v, omega = velocity_to_unicycle(0.0, 100.0, 0.0, max_v=1.5, max_omega=2.5)
+        self.assertLessEqual(v, 1.5 + 1e-9)
+        self.assertLessEqual(abs(omega), 2.5 + 1e-9)
 
 
 if __name__ == "__main__":

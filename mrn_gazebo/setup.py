@@ -25,6 +25,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mrn_gz_pose_adapter = mrn_gazebo.gz_pose_adapter_node:main",
+            "mrn_gz_swarm_controller = mrn_gazebo.swarm_controller_node:main",
         ],
     },
 )

@@ -924,6 +924,11 @@ Later tasks:
   `ros_gz_bridge` config, and `mrn_gz_pose_adapter` republishing the bridged
   model pose as `AgentState`. Verified headless end-to-end (Gazebo pose →
   bridge → adapter → `/<id>/mrn/agent_state`). Documented in `docs/gazebo.md`
+- [x] Gazebo multi-robot swarm: `swarm.launch.py` spawns N differential-drive
+  vehicles and `mrn_gz_swarm_controller` flocks them (Boids ->
+  `velocity_to_unicycle` -> diff-drive). The math is unit-tested and spawn +
+  single-robot drive are verified; the full N-robot run targets a real machine
+  (DDS discovery was unreliable in the CI-less sandbox — see docs/gazebo.md)
 
 ## 16. Message Contract Freeze Plan
 

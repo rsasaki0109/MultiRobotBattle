@@ -19,6 +19,36 @@ import math
 Vec2 = tuple[float, float]
 
 
+def _normalize_angle(angle: float) -> float:
+    a = math.fmod(angle, 2.0 * math.pi)
+    if a <= -math.pi:
+        a += 2.0 * math.pi
+    elif a > math.pi:
+        a -= 2.0 * math.pi
+    return a
+
+
+def velocity_to_unicycle(
+    yaw: float, vx: float, vy: float, *,
+    max_v: float = 1.5, max_omega: float = 2.5, k_omega: float = 3.0,
+) -> Vec2:
+    """Convert a desired holonomic velocity into a unicycle ``(v, omega)``.
+
+    Drives forward in proportion to how well the body x-axis already faces the
+    desired direction (``v = speed * max(0, cos(heading_error))``) and turns
+    toward it (``omega = k_omega * heading_error``, clamped). A near-zero desired
+    velocity yields a zero command. This is what lets a holonomic controller
+    (e.g. Boids) steer a differential-drive robot.
+    """
+    speed = math.hypot(vx, vy)
+    if speed < 1e-6:
+        return (0.0, 0.0)
+    err = _normalize_angle(math.atan2(vy, vx) - yaw)
+    v = min(max_v, speed) * max(0.0, math.cos(err))
+    omega = max(-max_omega, min(max_omega, k_omega * err))
+    return (v, omega)
+
+
 def _clamp_speed(vx: float, vy: float, max_speed: float) -> Vec2:
     speed = math.hypot(vx, vy)
     if max_speed > 0.0 and speed > max_speed and speed > 0.0:
