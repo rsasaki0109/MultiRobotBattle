@@ -254,6 +254,21 @@ ros2 topic echo /coverage/goal/a_1
 All three coordination modules now have both a CLI demo and a thin ROS node;
 agent ids are sanitized into valid topic tokens (e.g. `1` → `a_1`).
 
+### Driving to the goals (closing coverage → world)
+
+`mrn_goal_follower` drives robots to their allocated frontiers: per agent it
+subscribes to a `geometry_msgs/PointStamped` goal (`coverage/goal/<id>`) and the
+robot's pose and steers there with the same pure-pursuit core (a single-point
+path). Paired with `mrn_sim_world`, `mapf_through_sim`'s sibling
+`coverage_through_sim.launch.py` (in `mrn_sim`) runs allocator → follower →
+world; verified end-to-end, each robot drives to within ~0.3 m of its assigned
+frontier. (This executes one allocation; iterative re-mapping as frontiers are
+reached is a larger loop left for later.)
+
+```bash
+ros2 launch mrn_sim coverage_through_sim.launch.py use_rviz:=true
+```
+
 ## Running the loop in ROS
 
 The nodes above publish and subscribe, but to actually *move* something you need

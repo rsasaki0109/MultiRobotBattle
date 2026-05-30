@@ -72,6 +72,10 @@ class TestNodeImports(unittest.TestCase):
         from mrn_coord.coverage import allocator_node
         self.assertTrue(hasattr(allocator_node, "CoverageAllocatorNode"))
 
+    def test_goal_follower_imports(self):
+        from mrn_coord.coverage import goal_follower_node
+        self.assertTrue(hasattr(goal_follower_node, "GoalFollowerNode"))
+
 
 if __name__ == "__main__":
     unittest.main()

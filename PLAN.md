@@ -909,6 +909,10 @@ Current role:
   `mrn_coord` `pure_pursuit` (pure) + `mrn_path_follower` node; the
   `mapf_through_sim.launch.py` closed loop (planner -> follower -> world) drives
   all three robots along their CBS paths to within ~0.3 m of their goals
+- [x] coverage executed in the world: `mrn_goal_follower` drives each robot to
+  its allocated frontier; `coverage_through_sim.launch.py` (allocator ->
+  follower -> world) reaches the frontiers to within ~0.3 m (one allocation;
+  iterative re-mapping is future work)
 
 Later tasks:
 

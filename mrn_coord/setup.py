@@ -32,6 +32,7 @@ setup(
             "mrn_formation_controller = "
             "mrn_coord.formation.controller_node:main",
             "mrn_coverage_allocator = mrn_coord.coverage.allocator_node:main",
+            "mrn_goal_follower = mrn_coord.coverage.goal_follower_node:main",
             "mrn_agent_sim = mrn_coord.agent_sim_node:main",
             "mrn_pose_bridge = mrn_coord.pose_bridge_node:main",
         ],

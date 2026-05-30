@@ -52,6 +52,16 @@ class TestPurePursuit(unittest.TestCase):
         self.assertTrue(reached)
         self.assertEqual((v, omega), (0.0, 0.0))
 
+    def test_single_point_goal_drives_toward_it(self):
+        # a one-point path (a goal point) is followed like any other path
+        v, omega, reached = pure_pursuit((0.0, 0.0, 0.0), [(5.0, 0.0)])
+        self.assertFalse(reached)
+        self.assertGreater(v, 0.0)
+        self.assertAlmostEqual(omega, 0.0, places=6)
+        # and reports reached once on top of it
+        _, _, reached2 = pure_pursuit((5.1, 0.0, 0.0), [(5.0, 0.0)], goal_tolerance=0.3)
+        self.assertTrue(reached2)
+
 
 @unittest.skipUnless(
     importlib.util.find_spec("rclpy") is not None, "rclpy not available"
