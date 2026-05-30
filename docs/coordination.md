@@ -296,3 +296,20 @@ and the formation controller. The controller then publishes
 expected non-zero formation corrections). The coupling is one-way (estimate →
 coordination); acting those commands back on a real plant is a separate
 concern.
+
+## Swarm flocking
+
+Beyond small-team coordination, `mrn_coord.flocking` scales to a swarm.
+`flock_velocities` is a pure, reactive Boids step — each agent steers from only
+its local neighbors via the three classic rules (separation, alignment,
+cohesion) — and runs over tens to hundreds of agents.
+
+<p align="center">
+  <img src="media/swarm_demo.gif" alt="Seventy agents flock in a bounded box under separation, alignment, and cohesion" width="640">
+</p>
+
+The animation above is driven by the real `flock_velocities` rules (70 agents,
+seeded, deterministic; regenerate with `python3 scripts/make_swarm_gif.py`). It
+shows the same simulation foundation that runs a handful of robots scaling up to
+emergent swarm behavior — separation keeps them apart, alignment turns them into
+a coherent flow, cohesion holds the group together.

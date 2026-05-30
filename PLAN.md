@@ -851,6 +851,8 @@ Current role:
   detection and clustering, BFS travel cost, and task allocation by greedy
   auction or optimal Hungarian assignment (cross-checked against brute force);
   `mrn_coverage_demo` CLI
+- [x] swarm flocking: `flocking.flock_velocities` (pure Boids — separation /
+  alignment / cohesion) scaling to tens-hundreds of agents; demo GIF
 
 Later tasks:
 
@@ -910,7 +912,9 @@ Current role:
 
 Later tasks:
 
-- swarm-scale runs (tens to hundreds of agents) for emergent behavior
+- [x] swarm-scale runs (tens to hundreds of agents) for emergent behavior:
+  `mrn_coord.flocking.flock_velocities` (pure Boids) drives a 70-agent flock in
+  `scripts/make_swarm_gif.py`
 - an optional Gazebo (`gz sim`) adapter for full 3D physics, kept out of the
   pure / CI core
 
