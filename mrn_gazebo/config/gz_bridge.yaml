@@ -1,0 +1,14 @@
+# ros_gz_bridge parameter_bridge config for the multirobot world.
+# Bridges robot_1's pose (gz -> ROS) and cmd_vel (ROS -> gz). Duplicate each
+# pair (with the model name) for more robots.
+- ros_topic_name: "/model/robot_1/pose"
+  gz_topic_name: "/model/robot_1/pose"
+  ros_type_name: "geometry_msgs/msg/PoseStamped"
+  gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/model/robot_1/cmd_vel"
+  gz_topic_name: "/model/robot_1/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ

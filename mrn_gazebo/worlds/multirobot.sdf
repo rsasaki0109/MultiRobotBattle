@@ -1,0 +1,100 @@
+<?xml version="1.0" ?>
+<!--
+  Minimal Gazebo (gz sim, Harmonic) world for the multirobot-navigation adapter.
+  A ground plane, a couple of obstacles, and one differential-drive vehicle that
+  publishes its pose. The vehicle block can be duplicated (with unique names /
+  topics) for more robots; the adapter and bridge are already multi-robot.
+
+  Optional: requires Gazebo. Not exercised in CI.
+-->
+<sdf version="1.8">
+  <world name="multirobot">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>40 40</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>40 40</size></plane></geometry>
+          <material><ambient>0.1 0.12 0.16 1</ambient><diffuse>0.12 0.14 0.18 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obstacle_a">
+      <static>true</static>
+      <pose>6 4 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><cylinder><radius>1.0</radius><length>1</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>1.0</radius><length>1</length></cylinder></geometry>
+          <material><ambient>0.3 0.34 0.4 1</ambient><diffuse>0.3 0.34 0.4 1</diffuse></material></visual>
+      </link>
+    </model>
+
+    <model name="robot_1">
+      <pose>1 1 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>2.0</mass>
+          <inertia><ixx>0.05</ixx><iyy>0.05</iyy><izz>0.08</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+        </inertial>
+        <collision name="collision"><geometry><box><size>0.5 0.3 0.2</size></box></geometry></collision>
+        <visual name="visual"><geometry><box><size>0.5 0.3 0.2</size></box></geometry>
+          <material><ambient>0.22 0.74 0.93 1</ambient><diffuse>0.22 0.74 0.93 1</diffuse></material></visual>
+      </link>
+      <link name="left_wheel">
+        <pose>0 0.18 0 -1.5707 0 0</pose>
+        <inertial><mass>0.2</mass>
+          <inertia><ixx>0.001</ixx><iyy>0.001</iyy><izz>0.001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+        </inertial>
+        <collision name="collision"><geometry><cylinder><radius>0.1</radius><length>0.05</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.1</radius><length>0.05</length></cylinder></geometry></visual>
+      </link>
+      <link name="right_wheel">
+        <pose>0 -0.18 0 -1.5707 0 0</pose>
+        <inertial><mass>0.2</mass>
+          <inertia><ixx>0.001</ixx><iyy>0.001</iyy><izz>0.001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+        </inertial>
+        <collision name="collision"><geometry><cylinder><radius>0.1</radius><length>0.05</length></cylinder></geometry></collision>
+        <visual name="visual"><geometry><cylinder><radius>0.1</radius><length>0.05</length></cylinder></geometry></visual>
+      </link>
+      <joint name="left_wheel_joint" type="revolute">
+        <parent>base</parent><child>left_wheel</child>
+        <axis><xyz>0 1 0</xyz></axis>
+      </joint>
+      <joint name="right_wheel_joint" type="revolute">
+        <parent>base</parent><child>right_wheel</child>
+        <axis><xyz>0 1 0</xyz></axis>
+      </joint>
+      <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+        <left_joint>left_wheel_joint</left_joint>
+        <right_joint>right_wheel_joint</right_joint>
+        <wheel_separation>0.36</wheel_separation>
+        <wheel_radius>0.1</wheel_radius>
+        <topic>/model/robot_1/cmd_vel</topic>
+      </plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose>
+        <publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg>
+        <static_publisher>false</static_publisher>
+      </plugin>
+    </model>
+  </world>
+</sdf>

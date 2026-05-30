@@ -1,0 +1,63 @@
+# Gazebo Adapter (`mrn_gazebo`) — optional
+
+`mrn_gazebo` is the 3D, physics-backed counterpart to [`mrn_sim`](simulation.md):
+it lets the rest of the stack treat a **Gazebo (`gz sim`) world as the plant**.
+Where `mrn_sim` is a deterministic in-house 2D world, this runs the robots in
+Gazebo physics — at the cost of an external dependency.
+
+> **Optional and not run in CI.** It requires Gazebo (`gz sim`, tested with
+> Harmonic / Sim 8) and `ros_gz` (`ros_gz_sim`, `ros_gz_bridge`). The pure
+> message builder is unit-tested; the world, bridge, and launch are exercised
+> manually. The core localization/coordination packages do not depend on it.
+
+## How it fits
+
+```
+Gazebo (gz sim)                ros_gz_bridge              mrn_gazebo            localization
+ model physics + DiffDrive  ─▶  /model/<id>/pose      ─▶  GzPoseAdapter   ─▶  /<id>/mrn/agent_state
+ /model/<id>/cmd_vel        ◀─  (Twist ROS->gz)       ◀─  (controllers)        cooperative_pose ...
+```
+
+The adapter (`mrn_gz_pose_adapter`) subscribes to the bridged model pose and
+republishes it as `mrn_msgs/AgentState` — exactly the contract `mrn_sim` emits —
+so everything downstream (the cooperative-localization graph, the coordination
+nodes) works unchanged. This is the same seam as `mrn_pose_bridge`, just sourced
+from Gazebo. The emitted `AgentState` is stamped with a TTL so freshness gates
+accept it.
+
+## Pieces
+
+- `worlds/multirobot.sdf` — a ground plane, an obstacle, and one differential-
+  drive vehicle (`robot_1`) with a `PosePublisher` (publishes `/model/robot_1/pose`)
+  and a `DiffDrive` plugin (subscribes `/model/robot_1/cmd_vel`). Validated with
+  `gz sdf -k` and loads headless. Duplicate the `robot_1` model block (unique
+  name/topics) for more robots.
+- `config/gz_bridge.yaml` — `ros_gz_bridge` config bridging the pose (gz→ROS)
+  and `cmd_vel` (ROS→gz). Add a pair per robot.
+- `mrn_gazebo/gz_agent_state.py` — pure `build_agent_state` (CI-tested).
+- `mrn_gazebo/gz_pose_adapter_node.py` — the thin adapter node.
+- `launch/gz_world.launch.py` — gz server + bridge + adapter.
+
+## Run it
+
+```bash
+# headless server (no GUI):
+ros2 launch mrn_gazebo gz_world.launch.py gz_args:="-r -s /path/to/multirobot.sdf"
+# or with the GUI (default gz_args runs the world):
+ros2 launch mrn_gazebo gz_world.launch.py
+
+# the adapter now publishes /robot_1/mrn/agent_state; drive the robot with:
+ros2 topic pub /model/robot_1/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.5}}"
+```
+
+From here the localization and coordination stacks attach exactly as they do to
+`mrn_sim` — e.g. run the relative-anchor graph on the bridged `AgentState`, or a
+path follower publishing `cmd_vel`.
+
+## Scope
+
+This is a working seam, not a full benchmark. Multi-robot spawning, sensors
+(LiDAR/IMU), and a faithful obstacle layout matching the localization grids are
+natural extensions; the contract (`AgentState` in, `cmd_vel` out) is already the
+same as the in-house simulator, so they slot in without touching the other
+layers.

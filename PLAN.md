@@ -919,8 +919,11 @@ Later tasks:
 - [x] swarm-scale runs (tens to hundreds of agents) for emergent behavior:
   `mrn_coord.flocking.flock_velocities` (pure Boids) drives a 70-agent flock in
   `scripts/make_swarm_gif.py`
-- an optional Gazebo (`gz sim`) adapter for full 3D physics, kept out of the
-  pure / CI core
+- [x] an optional Gazebo (`gz sim`) adapter for full 3D physics, kept out of the
+  pure / CI core: `mrn_gazebo` — a validated diff-drive SDF world, a
+  `ros_gz_bridge` config, and `mrn_gz_pose_adapter` republishing the bridged
+  model pose as `AgentState`. Verified headless end-to-end (Gazebo pose →
+  bridge → adapter → `/<id>/mrn/agent_state`). Documented in `docs/gazebo.md`
 
 ## 16. Message Contract Freeze Plan
 
