@@ -29,9 +29,10 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from visualization_msgs.msg import Marker, MarkerArray
 
-from mrn_msgs.msg import AgentState
-from mrn_sim.proximity import undirected_in_range
-from mrn_sim.sensors import add_gaussian_noise
+from mrn_msgs.msg import AgentState, RelativePoseConstraint
+from mrn_sim.proximity import in_range_pairs, undirected_in_range
+from mrn_sim.sensors import add_gaussian_noise, relative_pose_observation
+from mrn_sim.v2v import build_relative_constraint
 from mrn_sim.world import Obstacle, Robot, World, step
 
 _PALETTE = [
@@ -74,6 +75,9 @@ class SimWorldNode(Node):
         self.declare_parameter("max_speed", 2.0)
         self.declare_parameter("frame_id", "map")
         self.declare_parameter("cmd_vel_topic_template", "/{token}/cmd_vel")
+        self.declare_parameter("publish_constraints", True)
+        self.declare_parameter("v2v_xy_sigma", 0.1)
+        self.declare_parameter("v2v_yaw_sigma", 0.05)
 
         agent_ids = [str(a) for a in self._param("agent_ids")]
         poses = [str(p) for p in self._param("initial_poses")]
@@ -93,16 +97,23 @@ class SimWorldNode(Node):
         self._dt = 1.0 / max(float(self._param("rate_hz")), 1e-3)
         self._rng = random.Random(0)
         self._cmd = {a: (0.0, 0.0) for a in agent_ids}
+        self._publish_constraints = bool(self._param("publish_constraints"))
+        self._v2v_xy_sigma = float(self._param("v2v_xy_sigma"))
+        self._v2v_yaw_sigma = float(self._param("v2v_yaw_sigma"))
+        self._seq = 0
 
         cmd_tmpl = str(self._param("cmd_vel_topic_template"))
         self._agent_pubs = {}
         self._truth_pubs = {}
+        self._constraint_pubs = {}
         for a in agent_ids:
             token = _safe_token(a)
             self._agent_pubs[a] = self.create_publisher(
                 AgentState, f"/{token}/mrn/agent_state", 10)
             self._truth_pubs[a] = self.create_publisher(
                 PoseStamped, f"/{token}/ground_truth/pose", 10)
+            self._constraint_pubs[a] = self.create_publisher(
+                RelativePoseConstraint, f"/{token}/mrn/relative_constraints", 10)
             self.create_subscription(
                 Twist, cmd_tmpl.format(id=a, token=token), self._make_cmd_cb(a), 10
             )
@@ -145,7 +156,25 @@ class SimWorldNode(Node):
             est.status = AgentState.STATUS_OK
             est.quality = 0.9
             self._agent_pubs[a].publish(est)
+        if self._publish_constraints:
+            self._publish_v2v_constraints(stamp)
         self._publish_markers(stamp)
+
+    def _publish_v2v_constraints(self, stamp) -> None:
+        stamp_sec = stamp.sec + stamp.nanosec * 1e-9
+        for src, dst in in_range_pairs(self._world, self._sense_radius):
+            x, y, yaw, cov = relative_pose_observation(
+                self._world.robots[src].pose, self._world.robots[dst].pose,
+                self._v2v_xy_sigma, self._v2v_yaw_sigma, self._rng,
+            )
+            self._seq += 1
+            msg = build_relative_constraint(
+                from_agent_id=src, to_agent_id=dst,
+                from_frame=f"{src}/base_link", to_frame=f"{dst}/base_link",
+                x=x, y=y, yaw=yaw, covariance=cov,
+                stamp_sec=stamp_sec, sequence_id=self._seq, confidence=0.9,
+            )
+            self._constraint_pubs[src].publish(msg)
 
     def _publish_markers(self, stamp) -> None:
         arr = MarkerArray()

@@ -891,12 +891,16 @@ Current role:
   (robots / obstacles / in-range V2V links); `proximity.py` is the CI-tested
   pure helper, the node is launch-smoke-tested
 
+- [x] emit `mrn_msgs/RelativePoseConstraint` for in-range pairs (V2V) on
+  `/<id>/mrn/relative_constraints`, feeding the cooperative-localization graph
+  directly: `relative_pose_observation` (pure, covariance from sigmas) +
+  `v2v.build_relative_constraint`, `source_type=SOURCE_FAKE_GROUND_TRUTH`,
+  verified to pass `constraint_gate` in the tests
+
 Near-term tasks:
 
 - a unicycle path-follower so a MAPF plan can be driven through this world
   (the formation controller is holonomic; this world is unicycle)
-- emit `mrn_msgs/RelativePoseConstraint` for in-range pairs (V2V), feeding the
-  cooperative-localization graph directly
 
 Later tasks:
 

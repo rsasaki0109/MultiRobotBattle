@@ -67,10 +67,19 @@ ros2 launch mrn_sim sim_world.launch.py use_rviz:=true  # watch it in RViz
 ros2 topic pub /robot_1/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 1.0}}"
 ```
 
-Because it *emits* the localization messages and *accepts* velocity commands,
-it is the plant that closes the loop. The world/proximity/sensor math is the
-pure, CI-tested core; this node is the thin shell (agent ids are sanitized into
-valid topic tokens).
+It also emits **V2V constraints**: for each in-range directed pair it publishes
+a `mrn_msgs/RelativePoseConstraint` on `/<id>/mrn/relative_constraints`, built
+from the noisy relative-pose observation (`relative_pose_observation`) with a
+covariance from the configured sigmas and `source_type = SOURCE_FAKE_GROUND_TRUTH`
+(honest: derived from the sim's truth, not a real sensor). These feed the
+cooperative-localization graph directly, and are verified to pass
+`constraint_gate` — the project's "a constraint source is correct iff its output
+passes the gate" rule — in the test suite.
+
+Because it *emits* the localization messages (estimate + V2V constraints) and
+*accepts* velocity commands, it is the plant that closes the loop. The
+world/proximity/sensor math is the pure, CI-tested core; this node is the thin
+shell (agent ids are sanitized into valid topic tokens).
 
 Note the velocity contract: `mrn_sim` is a **unicycle** (`v`, `omega`), whereas
 the existing formation controller emits a **holonomic** velocity vector. Closing
@@ -84,8 +93,6 @@ This is the world core plus its ROS node. Planned next:
 
 - a unicycle path-follower so a MAPF plan can be driven through this world,
   closing world → localization → planning → world in ROS;
-- emitting `mrn_msgs/RelativePoseConstraint` for in-range pairs (V2V), feeding
-  the cooperative-localization graph directly;
 - swarm-scale runs (tens to hundreds of agents) for emergent behaviors;
 - an optional Gazebo (`gz sim`) adapter for full 3D physics, kept out of the
   pure/CI core.

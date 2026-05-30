@@ -51,6 +51,42 @@ def gnss_observation(pose: Pose) -> tuple:
     return (pose[0], pose[1])
 
 
+# Diagonal indices into a row-major 6x6 covariance.
+_XX, _YY, _ZZ, _RR, _PP, _YAW = 0, 7, 14, 21, 28, 35
+
+
+def relative_pose_observation(
+    observer: Pose,
+    target: Pose,
+    xy_sigma: float = 0.1,
+    yaw_sigma: float = 0.05,
+    rng=None,
+) -> tuple:
+    """A noisy V2V relative-pose measurement with covariance.
+
+    Returns ``(x, y, yaw, covariance)`` where the pose is ``target`` in the
+    observer's body frame (see :func:`relative_pose_body`) and ``covariance`` is
+    a row-major 6x6 list. When ``rng`` (a ``random.Random``) is given, zero-mean
+    Gaussian noise is added to each measured component; the covariance always
+    reflects the configured sigmas. The off-SE(2) axes (z, roll, pitch) get a
+    finite placeholder variance so the covariance is valid.
+    """
+    x, y, yaw = relative_pose_body(observer, target)
+    if rng is not None:
+        x = add_gaussian_noise(x, xy_sigma, rng)
+        y = add_gaussian_noise(y, xy_sigma, rng)
+        yaw = normalize_angle(add_gaussian_noise(yaw, yaw_sigma, rng))
+
+    covariance = [0.0] * 36
+    covariance[_XX] = xy_sigma * xy_sigma
+    covariance[_YY] = xy_sigma * xy_sigma
+    covariance[_ZZ] = 1.0
+    covariance[_RR] = 1.0
+    covariance[_PP] = 1.0
+    covariance[_YAW] = yaw_sigma * yaw_sigma
+    return (x, y, yaw, covariance)
+
+
 def add_gaussian_noise(value: float, sigma: float, rng) -> float:
     """Add reproducible zero-mean Gaussian noise using ``rng`` (a Random)."""
     if sigma <= 0.0:

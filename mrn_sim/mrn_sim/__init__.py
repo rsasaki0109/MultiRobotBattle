@@ -22,6 +22,7 @@ from .sensors import (
     gnss_observation,
     range_bearing,
     relative_pose_body,
+    relative_pose_observation,
 )
 from .world import Obstacle, Robot, World, step
 
@@ -34,6 +35,7 @@ __all__ = [
     "step",
     "range_bearing",
     "relative_pose_body",
+    "relative_pose_observation",
     "gnss_observation",
     "add_gaussian_noise",
     "in_range_pairs",
