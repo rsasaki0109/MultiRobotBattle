@@ -11,9 +11,9 @@
 [![build-jazzy](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml)
 [![docs](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml)
 
-ROS 2-native cooperative localization and multi-robot navigation infrastructure.
+ROS 2-native multi-robot infrastructure: a simulation → cooperative-localization → coordination stack.
 
-This project is not trying to replace Nav2, Autoware, or Open-RMF. It provides the infrastructure layer that sits around them: cooperative pose and constraint exchange, time and frame validation, network fault injection, rosbag replay, and evaluation for real multi-robot systems.
+This project is not trying to replace Nav2, Autoware, or Open-RMF. It provides the infrastructure layer that sits around them: a deterministic multi-robot world, cooperative pose and constraint exchange, time and frame validation, network fault injection, rosbag replay, evaluation, and the coordination (planning / formation / coverage / swarm) that moves the robots.
 
 ## Why This Exists
 
@@ -31,18 +31,48 @@ Single-robot navigation is served well by existing stacks. Real multi-robot auto
 
 ## What It Is
 
-The project has two complementary halves:
+A full simulation → localization → coordination stack for multi-robot systems,
+in three layers that share one set of message contracts:
 
-- **Localization** — *where are we, together*: V2V message contracts for agent
-  state, relative pose constraints, communication status, and clock status;
-  cooperative localization graph infrastructure; packet loss, latency, jitter,
-  and clock drift experiment support; MCAP-first rosbag replay and benchmark
-  workflows; RViz and Foxglove visualization assets; adapters planned for Nav2,
-  Autoware, Zenoh, and datasets.
+- **Simulation** (`mrn_sim`) — *the world*: a deterministic 2D true-world model
+  (unicycle kinematics, obstacles, collision) with sensor models that emit the
+  localization messages (`AgentState`, V2V `RelativePoseConstraint`, ground
+  truth) and that accepts `cmd_vel` — so the same world closes the whole loop.
+- **Localization** — *where are we, together*: V2V message contracts; the
+  cooperative localization graph (factor core, Gauss–Newton / GTSAM backends);
+  packet loss, latency, jitter, and clock-drift experiment support; MCAP-first
+  rosbag replay and benchmarks; RViz/Foxglove assets; Nav2 & Autoware adapters.
 - **Coordination** (`mrn_coord`) — *how do we move, together*: multi-agent path
-  finding (Conflict-Based Search and prioritized planning), decentralized
-  formation control that reuses the V2V relative-pose constraints, and
-  cooperative coverage (frontier detection + greedy/Hungarian task allocation).
+  finding (Conflict-Based Search / prioritized planning, with a pure-pursuit
+  follower), decentralized formation control reusing the V2V relative-pose
+  constraints, cooperative coverage (frontier + greedy/Hungarian allocation),
+  and swarm flocking (Boids) that scales to tens of agents.
+
+Every layer is a pure, ROS-free algorithm core unit-tested in CI, with thin
+ROS/CLI wiring on top.
+
+## Architecture
+
+```
+            ┌──────────────── mrn_sim — the world ────────────────┐
+            │  unicycle kinematics · obstacles · collision         │
+   cmd_vel ─▶  sensor models ─▶ AgentState · RelativePoseConstraint │
+            │                    · ground truth                     │
+            └───────┬───────────────────────────────────┬──────────┘
+                    │ V2V constraints + agent state      │ poses
+        🛰️ Localization (mrn_graph)                       │
+                    │ cooperative_pose  (rescues a GNSS-denied robot)
+        🧭 Coordination (mrn_coord)                        │
+                    │ MAPF → Path ─▶[pure pursuit]─▶ cmd_vel ───────┘   (planning → world)
+                    │ formation → cmd_vel  ·  coverage → goals  ·  flocking
+```
+
+The layers connect only through message contracts (`AgentState`,
+`RelativePoseConstraint`, `nav_msgs/Path`, `PoseStamped`), so each is testable
+and replaceable in isolation. `ros2 launch mrn_sim sim_localization.launch.py`
+runs sim → localization (a GNSS-denied robot rescued by its neighbors); `ros2
+launch mrn_sim mapf_through_sim.launch.py` runs planning → world (robots drive
+their planned paths through the simulator).
 
 ## What It Is Not
 
@@ -96,6 +126,18 @@ the loop in ROS with a kinematic agent simulator so the robots converge into a
 formation live in RViz. The two halves meet at `mrn_pose_bridge`:
 `ros2 launch mrn_coord estimate_to_formation.launch.py` feeds the synthetic
 world's per-agent localization estimate into the formation controller.
+
+### Simulation & swarm
+
+The `mrn_sim` 2D true-world model (left) and `mrn_coord` swarm flocking (right)
+— the same foundation from a handful of robots up to a swarm. Both animations
+are driven by the real algorithms; regenerate with `scripts/make_sim_gif.py` and
+`scripts/make_swarm_gif.py`.
+
+<p align="center">
+  <img src="docs/media/sim_demo.gif" alt="Robots roam a 2D world with obstacles, exchanging V2V links" width="420">
+  <img src="docs/media/swarm_demo.gif" alt="Seventy agents flock via separation, alignment, and cohesion" width="420">
+</p>
 
 ## Quick Start
 
@@ -221,7 +263,7 @@ Typical synthetic result:
 The cooperative launch publishes online ATE summaries on `/mrn/eval/summary`.
 The current `relative_anchor` backend is a temporary baseline, not a factor graph.
 
-## Architecture
+## Where It Sits in the Stack
 
 ```text
 Application layer
