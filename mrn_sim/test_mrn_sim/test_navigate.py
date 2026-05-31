@@ -66,5 +66,39 @@ class TestNavigate(unittest.TestCase):
         self.assertGreater(clr, -1e-6)
 
 
+    def test_reciprocal_multirobot_navigation(self):
+        # parallel lanes plus one robot going the other way that must weave
+        # between them: they reach their goals while never colliding. (Reactive
+        # avoidance is collision-free but not deadlock-free, so the scenario
+        # avoids a symmetric all-cross chokepoint.)
+        from mrn_sim.navigate import navigate_step, plan_world_path
+
+        starts = {"1": (1.5, 3.0), "2": (1.5, 7.0), "3": (18.5, 5.0)}
+        goals = {"1": (18.5, 3.0), "2": (18.5, 7.0), "3": (1.5, 5.0)}
+        robots = {a: Robot(a, (p[0], p[1], 0.0), 0.25) for a, p in starts.items()}
+        world = World(20.0, 10.0, robots, [])
+        paths = {a: plan_world_path(world, starts[a], goals[a], cell_size=0.5,
+                                    inflation=0.35) for a in starts}
+        for a in starts:
+            self.assertIsNotNone(paths[a])
+
+        min_pair = float("inf")
+        all_reached = False
+        for _ in range(500):
+            world, reached = navigate_step(world, paths, dt=0.1, w_mutual=1.6,
+                                           mutual_radius=1.6)
+            ps = [r.pose for r in world.robots.values()]
+            for i in range(len(ps)):
+                for j in range(i + 1, len(ps)):
+                    dd = math.hypot(ps[i][0] - ps[j][0], ps[i][1] - ps[j][1])
+                    min_pair = min(min_pair, dd)
+            if all(reached.values()):
+                all_reached = True
+                break
+        self.assertTrue(all_reached)
+        # never came within two robot radii of each other
+        self.assertGreater(min_pair, 0.5)
+
+
 if __name__ == "__main__":
     unittest.main()

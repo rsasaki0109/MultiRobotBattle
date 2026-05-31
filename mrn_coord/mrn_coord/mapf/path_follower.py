@@ -36,9 +36,10 @@ def _closest_index(pose: Pose, path) -> int:
     return best_i
 
 
-def _target_point(pose: Pose, path, lookahead: float):
+def carrot_point(pose: Pose, path, lookahead: float):
     """The carrot: the first path point at least ``lookahead`` ahead of the
-    closest point, or the goal if none is far enough."""
+    closest point, or the goal if none is far enough. Public so a vector-field
+    navigator (carrot pull + avoidance terms) can reuse the same lookahead."""
     start = _closest_index(pose, path)
     px, py = pose[0], pose[1]
     for i in range(start, len(path)):
@@ -46,6 +47,10 @@ def _target_point(pose: Pose, path, lookahead: float):
         if math.hypot(x - px, y - py) >= lookahead:
             return (x, y)
     return path[-1]
+
+
+# Backward-compatible alias used internally.
+_target_point = carrot_point
 
 
 def pure_pursuit(

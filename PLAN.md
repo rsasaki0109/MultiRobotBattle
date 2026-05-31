@@ -907,7 +907,10 @@ Current role:
 - [x] point-to-point navigation (`mrn_sim.navigate`): discretize obstacles into
   an inflated occupancy grid, plan with the MAPF grid A* (`plan_world_path`),
   follow with pure pursuit to the goal. Verified deterministically (reaches the
-  goal, never enters an obstacle); `scripts/make_nav_gif.py`
+  goal, never enters an obstacle); `scripts/make_nav_gif.py`. `navigate_step`
+  adds reciprocal collision avoidance (`mutual_avoidance` + `carrot_point`) so
+  multiple navigators sidestep each other — verified collision-free (min
+  inter-robot distance > 2 radii); `scripts/make_recip_nav_gif.py`
 
 - [x] a unicycle path-follower so a MAPF plan can be driven through this world:
   `mrn_coord` `pure_pursuit` (pure) + `mrn_path_follower` node; the

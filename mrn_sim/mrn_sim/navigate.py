@@ -15,10 +15,16 @@ from __future__ import annotations
 
 import math
 
+from mrn_coord.flocking import (
+    mutual_avoidance,
+    obstacle_avoidance,
+    velocity_to_unicycle,
+)
 from mrn_coord.mapf.grid import GridWorld
+from mrn_coord.mapf.path_follower import carrot_point
 from mrn_coord.mapf.space_time_astar import plan_path
 
-from .world import World
+from .world import World, step
 
 
 def world_to_cell(xy, cell_size: float) -> tuple:
@@ -71,3 +77,60 @@ def plan_world_path(
     points = [cell_to_world(c, cell_size) for c in cells]
     points.append((float(goal[0]), float(goal[1])))   # finish at the exact goal
     return points
+
+
+def navigate_step(
+    world: World,
+    paths: dict,
+    *,
+    dt: float = 0.1,
+    lookahead: float = 0.9,
+    max_speed: float = 1.6,
+    goal_tolerance: float = 0.3,
+    w_obstacle: float = 1.2,
+    obstacle_influence: float = 1.5,
+    obstacle_strength: float = 2.0,
+    w_mutual: float = 1.5,
+    mutual_radius: float = 1.4,
+    max_v: float = 1.6,
+    max_omega: float = 3.0,
+):
+    """Advance multi-robot navigation one step with reciprocal avoidance.
+
+    Each robot is pulled toward the carrot on its own ``paths[id]`` while being
+    pushed away from obstacles and from the *other robots* (so independent
+    navigators don't collide). The combined velocity is realized as a unicycle
+    command through the collision-aware ``step``. ``paths`` maps robot id to a
+    world-waypoint list (or ``None``). Returns ``(new_world, reached)`` where
+    ``reached`` maps id -> bool. Deterministic.
+    """
+    ids = list(world.robots)
+    positions = [(world.robots[a].pose[0], world.robots[a].pose[1]) for a in ids]
+    obstacles = [(o.x, o.y, o.radius) for o in world.obstacles]
+    obs = obstacle_avoidance(positions, obstacles,
+                             influence=obstacle_influence, strength=obstacle_strength)
+    mut = mutual_avoidance(positions, radius=mutual_radius)
+
+    reached = {}
+    commands = {}
+    for i, a in enumerate(ids):
+        pose = world.robots[a].pose
+        path = paths.get(a)
+        if not path:
+            reached[a] = True
+            commands[a] = (0.0, 0.0)
+            continue
+        gx, gy = path[-1]
+        if math.hypot(gx - pose[0], gy - pose[1]) <= goal_tolerance:
+            reached[a] = True
+            commands[a] = (0.0, 0.0)
+            continue
+        reached[a] = False
+        cx, cy = carrot_point(pose, path, lookahead)
+        dx, dy = cx - pose[0], cy - pose[1]
+        d = math.hypot(dx, dy) or 1.0
+        vx = dx / d * max_speed + w_obstacle * obs[i][0] + w_mutual * mut[i][0]
+        vy = dy / d * max_speed + w_obstacle * obs[i][1] + w_mutual * mut[i][1]
+        commands[a] = velocity_to_unicycle(pose[2], vx, vy, max_v=max_v, max_omega=max_omega)
+
+    return step(world, commands, dt), reached

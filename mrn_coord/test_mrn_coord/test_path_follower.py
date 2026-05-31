@@ -52,6 +52,15 @@ class TestPurePursuit(unittest.TestCase):
         self.assertTrue(reached)
         self.assertEqual((v, omega), (0.0, 0.0))
 
+    def test_carrot_point(self):
+        from mrn_coord.mapf.path_follower import carrot_point
+        path = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)]
+        # from the start, the carrot is the first point >= lookahead ahead
+        self.assertEqual(carrot_point((0.0, 0.0, 0.0), path, 1.0), (1.0, 0.0))
+        self.assertEqual(carrot_point((0.0, 0.0, 0.0), path, 2.5), (3.0, 0.0))
+        # near the end, carrot is the goal
+        self.assertEqual(carrot_point((2.9, 0.0, 0.0), path, 1.0), (3.0, 0.0))
+
     def test_single_point_goal_drives_toward_it(self):
         # a one-point path (a goal point) is followed like any other path
         v, omega, reached = pure_pursuit((0.0, 0.0, 0.0), [(5.0, 0.0)])

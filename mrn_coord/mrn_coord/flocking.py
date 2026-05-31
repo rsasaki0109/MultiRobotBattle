@@ -63,6 +63,37 @@ def goal_seek(positions, goal, *, gain: float = 1.0, max_speed: float = 2.0) -> 
     return out
 
 
+def mutual_avoidance(
+    positions, *, radius: float = 1.5, strength: float = 2.0, max_accel: float = 6.0
+) -> list:
+    """Per-agent repulsion from the *other agents* within ``radius``.
+
+    The reciprocal collision-avoidance term for multi-robot navigation: each
+    robot is pushed away from peers that get too close (``strength / dist**2``),
+    clamped to ``max_accel``. Like :func:`obstacle_avoidance` but the obstacles
+    are the other robots. Returns ``(ax, ay)`` per agent.
+    """
+    n = len(positions)
+    out = []
+    for i in range(n):
+        px, py = positions[i]
+        ax = ay = 0.0
+        for j in range(n):
+            if j == i:
+                continue
+            dx, dy = px - positions[j][0], py - positions[j][1]
+            d = math.hypot(dx, dy)
+            if 0.0 < d < radius:
+                w = strength / (max(d, 0.2) ** 2)
+                ax += (dx / d) * w
+                ay += (dy / d) * w
+        mag = math.hypot(ax, ay)
+        if mag > max_accel and mag > 0.0:
+            ax, ay = ax / mag * max_accel, ay / mag * max_accel
+        out.append((ax, ay))
+    return out
+
+
 def leader_follow(positions, leader_index, *, gain: float = 1.0, max_speed: float = 2.0) -> list:
     """Per-agent velocity steering followers toward the leader's position.
 

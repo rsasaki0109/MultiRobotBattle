@@ -7,6 +7,7 @@ from mrn_coord.flocking import (
     flock_velocities,
     goal_seek,
     leader_follow,
+    mutual_avoidance,
     obstacle_avoidance,
     predator_evasion,
     velocity_to_unicycle,
@@ -161,6 +162,23 @@ class TestLeaderFollow(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(leader_follow([], 0), [])
+
+
+class TestMutualAvoidance(unittest.TestCase):
+    def test_two_close_robots_push_apart(self):
+        out = mutual_avoidance([(0.0, 0.0), (0.5, 0.0)], radius=1.5)
+        self.assertLess(out[0][0], 0.0)        # agent 0 pushed -x
+        self.assertGreater(out[1][0], 0.0)     # agent 1 pushed +x
+
+    def test_zero_when_far(self):
+        out = mutual_avoidance([(0.0, 0.0), (10.0, 0.0)], radius=1.5)
+        self.assertEqual(out[0], (0.0, 0.0))
+        self.assertEqual(out[1], (0.0, 0.0))
+
+    def test_clamped(self):
+        out = mutual_avoidance([(0.0, 0.0), (0.05, 0.0)], radius=1.5,
+                               strength=20.0, max_accel=6.0)
+        self.assertLessEqual(math.hypot(*out[0]), 6.0 + 1e-9)
 
 
 if __name__ == "__main__":

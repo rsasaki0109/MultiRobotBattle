@@ -165,6 +165,14 @@ pursuit to the goal (`scripts/make_nav_gif.py`):
   <img src="docs/media/nav_demo.gif" alt="Four robots planning A* paths around obstacles and following them to their goals" width="640">
 </p>
 
+…with **reciprocal collision avoidance** for multiple robots — independent
+navigators heading to crossing goals sidestep each other (and the obstacles),
+verified collision-free (`scripts/make_recip_nav_gif.py`):
+
+<p align="center">
+  <img src="docs/media/recip_nav_demo.gif" alt="Robots navigating to crossing goals while avoiding each other and the obstacles" width="640">
+</p>
+
 ## Quick Start
 
 Build with ROS 2 Jazzy:

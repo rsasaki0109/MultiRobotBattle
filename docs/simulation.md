@@ -166,6 +166,21 @@ navigating to its own goal.
   <img src="media/nav_demo.gif" alt="Four robots planning A* paths around obstacles and following them to their goals" width="640">
 </p>
 
+`navigate_step` adds **reciprocal collision avoidance** for multi-robot
+navigation: each robot is pulled toward the carrot on its own path (public
+`carrot_point`) while being pushed away from obstacles *and from the other
+robots* (`mutual_avoidance`), the combined velocity realized as a unicycle
+command. So independent navigators heading to crossing goals sidestep one
+another instead of passing through — verified deterministically (all reach their
+goals and never come within two robot radii). Reactive avoidance is collision-
+free but not deadlock-free, so a symmetric all-cross chokepoint can still stall;
+`scripts/make_recip_nav_gif.py` shows lanes plus counter-flow robots weaving past
+each other and the obstacles.
+
+<p align="center">
+  <img src="media/recip_nav_demo.gif" alt="Robots navigating to crossing goals while avoiding each other and the obstacles" width="640">
+</p>
+
 ## Roadmap
 
 This is the world core, its ROS node, the localization integration, and a
