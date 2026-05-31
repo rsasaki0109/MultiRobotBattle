@@ -51,9 +51,14 @@ simulator emits them; that repo consumes them.
   inter-robot distance, collisions); a scenario library (`mrn_sim/scenarios/`),
   a baseline `navigate_policy`, and a `mrn_sim_bench` CLI. External
   planners/controllers plug in as a `policy(world) -> commands` callable.
-- Standard MAPF benchmarks (movingai) with comparable solve-rate / runtime.
+- [x] standard MAPF benchmarks (MovingAI `.map`/`.scen` loader +
+  `run_mapf_benchmark` + `mrn_mapf_bench` CLI; bundled example, CBS /
+  prioritized). Drop in downloaded benchmark sets to compare solve-rate /
+  makespan.
 - A scenario-driven CI benchmark gate (expected-metrics regression like the
   localization repo's).
+- Solve-rate / runtime comparison tables on full MovingAI sets (the loader is
+  ready; needs the downloaded data).
 - Continuous-space / kinematic planning beyond the grid; deadlock resolution
   for reciprocal avoidance (priorities / ORCA).
 - Real-robot bring-up (separate effort; the localization repo is rosbag-first).

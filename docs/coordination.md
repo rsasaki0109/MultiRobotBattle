@@ -95,6 +95,25 @@ The demo solves a crossing and a swap/reorder scenario and prints the
 collision-free paths as an ASCII timeline — the runnable counterpart to the
 unit tests.
 
+### MovingAI benchmarks
+
+`movingai.py` loads the standard
+[MovingAI MAPF benchmark format](https://movingai.com/benchmarks/mapf.html)
+(`.map` / `.scen`) so the solvers can be evaluated on the maps and scenarios the
+MAPF community uses — drop in any downloaded pair. `load_map` →
+`GridWorld`, `load_scen` → start/goal tasks, and `run_mapf_benchmark(grid,
+tasks, solver=...)` reports solved / makespan / sum-of-costs. A tiny example is
+bundled (`mrn_coord/benchmarks/example.{map,scen}`).
+
+```bash
+ros2 run mrn_coord mrn_mapf_bench                       # bundled example (CBS)
+ros2 run mrn_coord mrn_mapf_bench my.map my.scen -n 8   # first 8 agents
+ros2 run mrn_coord mrn_mapf_bench --solver prioritized
+```
+
+CBS is optimal but scales to small teams; use the prioritized solver (fast,
+incomplete) for many agents.
+
 ### ROS node
 
 `mrn_mapf_planner` is a thin ROS wrapper around the MAPF core. It reads a

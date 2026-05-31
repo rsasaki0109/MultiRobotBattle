@@ -46,7 +46,10 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
 - **Benchmark environment** (`mrn_sim.benchmark`) — plug your own multi-robot
   policy into a `Scenario` and get comparable metrics (success, makespan, path
   length, clearance, inter-robot distance, collisions). `ros2 run mrn_sim
-  mrn_sim_bench crossing` runs a bundled scenario with a baseline policy.
+  mrn_sim_bench crossing` runs a bundled scenario with a baseline policy. MAPF
+  also loads the standard **MovingAI** `.map`/`.scen` format
+  (`ros2 run mrn_coord mrn_mapf_bench`), so the planners can be evaluated on the
+  community benchmark suite.
 
 ## Architecture
 
