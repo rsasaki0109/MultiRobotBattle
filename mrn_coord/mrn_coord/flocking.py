@@ -63,6 +63,26 @@ def goal_seek(positions, goal, *, gain: float = 1.0, max_speed: float = 2.0) -> 
     return out
 
 
+def leader_follow(positions, leader_index, *, gain: float = 1.0, max_speed: float = 2.0) -> list:
+    """Per-agent velocity steering followers toward the leader's position.
+
+    Every non-leader gets ``gain * (leader_pos - position)`` clamped to
+    ``max_speed``; the leader itself gets ``(0, 0)`` (it is driven by the other
+    terms — migration, wander, etc.). Turns a flock into a led group.
+    ``leader_index`` indexes into ``positions``.
+    """
+    if not positions:
+        return []
+    lx, ly = positions[leader_index]
+    out = []
+    for i, (px, py) in enumerate(positions):
+        if i == leader_index:
+            out.append((0.0, 0.0))
+        else:
+            out.append(_clamp_speed(gain * (lx - px), gain * (ly - py), max_speed))
+    return out
+
+
 def obstacle_avoidance(
     positions,
     obstacles,

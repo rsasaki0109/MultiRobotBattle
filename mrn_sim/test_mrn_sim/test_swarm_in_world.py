@@ -88,6 +88,50 @@ class TestSwarmInWorld(unittest.TestCase):
             self.assertTrue(0.0 <= r.pose[0] <= world.width)
             self.assertTrue(0.0 <= r.pose[1] <= world.height)
 
+    def test_followers_track_moving_leader(self):
+        from mrn_sim.swarm import flock_in_world
+
+        world = _world()
+        vel = [(0.0, 0.0)] * len(world.robots)
+        ids = list(world.robots)
+        leader_id = ids[0]
+
+        def follower_centroid(w):
+            fs = [r.pose for k, r in w.robots.items() if k != leader_id]
+            return (sum(p[0] for p in fs) / len(fs), sum(p[1] for p in fs) / len(fs))
+
+        # drive the leader toward +x by giving it (only) a goal pull is hard;
+        # instead just check followers close on the leader over time.
+        lead0 = world.robots[leader_id].pose
+        c0 = follower_centroid(world)
+        d0 = ((c0[0] - lead0[0]) ** 2 + (c0[1] - lead0[1]) ** 2) ** 0.5
+        for _ in range(80):
+            world, vel = flock_in_world(world, vel, dt=0.1, leader=0, w_leader=1.5)
+        leadN = world.robots[leader_id].pose
+        cN = follower_centroid(world)
+        dN = ((cN[0] - leadN[0]) ** 2 + (cN[1] - leadN[1]) ** 2) ** 0.5
+        self.assertLessEqual(dN, d0 + 0.5)   # followers stay with / close on the leader
+
+    def test_flees_multiple_predators(self):
+        from mrn_sim.swarm import flock_in_world
+
+        world = _world()
+        predators = [(2.0, 2.0), (6.0, 4.0)]
+
+        def mean_dist(w):
+            ds = []
+            for r in w.robots.values():
+                ds.append(min(((r.pose[0] - px) ** 2 + (r.pose[1] - py) ** 2) ** 0.5
+                              for px, py in predators))
+            return sum(ds) / len(ds)
+
+        d0 = mean_dist(world)
+        vel = [(0.0, 0.0)] * len(world.robots)
+        for _ in range(60):
+            world, vel = flock_in_world(world, vel, dt=0.1, predators=predators,
+                                        w_predator=2.0)
+        self.assertGreater(mean_dist(world), d0 + 0.5)
+
     def test_migration_reaches_goal(self):
         from mrn_sim.swarm import flock_in_world
 

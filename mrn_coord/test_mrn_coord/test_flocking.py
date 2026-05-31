@@ -6,6 +6,7 @@ import unittest
 from mrn_coord.flocking import (
     flock_velocities,
     goal_seek,
+    leader_follow,
     obstacle_avoidance,
     predator_evasion,
     velocity_to_unicycle,
@@ -148,6 +149,18 @@ class TestPredatorEvasion(unittest.TestCase):
         out = predator_evasion([(0.05, 0.0)], (0.0, 0.0),
                                strength=20.0, max_accel=8.0)
         self.assertLessEqual(math.hypot(*out[0]), 8.0 + 1e-9)
+
+
+class TestLeaderFollow(unittest.TestCase):
+    def test_followers_steer_to_leader(self):
+        # leader at index 0; follower to its left -> steers +x toward it
+        out = leader_follow([(5.0, 0.0), (0.0, 0.0)], 0, max_speed=2.0)
+        self.assertEqual(out[0], (0.0, 0.0))       # leader gets zero
+        self.assertGreater(out[1][0], 0.0)         # follower moves +x toward leader
+        self.assertLessEqual(math.hypot(*out[1]), 2.0 + 1e-9)
+
+    def test_empty(self):
+        self.assertEqual(leader_follow([], 0), [])
 
 
 if __name__ == "__main__":
