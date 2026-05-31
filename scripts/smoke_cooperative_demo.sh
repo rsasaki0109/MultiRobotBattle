@@ -32,7 +32,10 @@ LAUNCH_PID=$!
 
 sleep 3
 
-if ! timeout 20s ros2 topic echo /mrn/eval/summary --once --no-arr >"${SUMMARY_SAMPLE}"; then
+# Pass the explicit message type: without it `ros2 topic echo` fails immediately
+# with "Could not determine the type" if the publisher is not yet discovered
+# (a startup race), instead of waiting for a message within the timeout.
+if ! timeout 20s ros2 topic echo /mrn/eval/summary mrn_msgs/msg/EvaluationSummary --once --no-arr >"${SUMMARY_SAMPLE}"; then
   echo "Timed out waiting for /mrn/eval/summary" >&2
   echo "--- launch log ---" >&2
   sed -n '1,160p' "${LAUNCH_LOG}" >&2 || true
