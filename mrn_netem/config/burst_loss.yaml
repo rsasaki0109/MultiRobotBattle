@@ -1,6 +1,0 @@
-network:
-  model: burst
-  good_to_bad_probability: 0.05
-  bad_to_good_probability: 0.30
-  loss_percent_when_good: 2
-  loss_percent_when_bad: 60

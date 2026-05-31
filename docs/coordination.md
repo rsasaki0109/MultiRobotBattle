@@ -291,26 +291,15 @@ verified end-to-end (the converged relative offsets match the spec). This is the
 stand-in plant; in a real system the poses would come from the cooperative
 localization estimate instead of `mrn_agent_sim`.
 
-## Connecting to localization
+## Connecting to a localization estimate
 
-The two halves of the project meet at `mrn_pose_bridge`. The localization stack
-publishes a per-agent estimate as `mrn_msgs/AgentState` (the V2V agent state) or
-`mrn_msgs/CooperativePose` (the fused estimate); the coordination nodes consume
-a plain `geometry_msgs/PoseStamped` on `formation/pose/<id>`. The bridge
-subscribes to the former and republishes the latter, so the coordination layer
-acts on the live estimate rather than a simulated plant.
-
-```bash
-ros2 launch mrn_coord estimate_to_formation.launch.py
-```
-
-This runs the synthetic world (publishing `AgentState` per agent), the bridge,
-and the formation controller. The controller then publishes
-`formation/cmd_vel/<id>` computed from where localization thinks the agents are
-— verified end-to-end (with the agents spread out, the controller emits the
-expected non-zero formation corrections). The coupling is one-way (estimate →
-coordination); acting those commands back on a real plant is a separate
-concern.
+The coordination nodes act on a plain `geometry_msgs/PoseStamped` per agent
+(e.g. `formation/pose/<id>`). `mrn_pose_bridge` adapts a localization estimate —
+`mrn_msgs/AgentState` or `CooperativePose` — into that, so the coordination
+layer can run on a live cooperative-localization estimate (from the companion
+[`multirobot-localization`](https://github.com/rsasaki0109/multirobot-localization)
+repo, or from `mrn_sim_world`, both of which publish `AgentState`) instead of a
+simulated plant. The coupling is one-way (estimate → coordination).
 
 ## Swarm flocking
 

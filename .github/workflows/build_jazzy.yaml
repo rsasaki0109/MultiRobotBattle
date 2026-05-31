@@ -24,31 +24,6 @@ jobs:
           . /opt/ros/jazzy/setup.sh
           colcon test --event-handlers console_direct+
           colcon test-result --verbose
-      - name: Experiment plan
-        run: |
-          . /opt/ros/jazzy/setup.sh
-          . install/setup.sh
-          ros2 run mrn_eval mrn_experiment plan experiments/gnss_outage_packet_loss.yaml --duration 20
-      - name: Clock drift sweep smoke
-        run: |
-          . /opt/ros/jazzy/setup.sh
-          . install/setup.sh
-          ros2 run mrn_eval mrn_experiment run experiments/clock_drift_sensitivity.yaml \
-            --duration 10 \
-            --sweep-case clock_drift_ms_50 \
-            --sweep-case clock_drift_ms_100 \
-            --output-dir out/experiments/clock_drift_smoke \
-            --ros-domain-id 130
-          sed -n '1,140p' out/experiments/clock_drift_smoke/report.md
-      - name: QoS sweep smoke
-        run: |
-          . /opt/ros/jazzy/setup.sh
-          . install/setup.sh
-          ros2 run mrn_eval mrn_experiment run experiments/qos_best_effort_vs_reliable.yaml \
-            --duration 10 \
-            --output-dir out/experiments/qos_smoke \
-            --ros-domain-id 150
-          sed -n '1,140p' out/experiments/qos_smoke/report.md
       - name: Coordination demos
         run: |
           . /opt/ros/jazzy/setup.sh
@@ -61,22 +36,3 @@ jobs:
           ros2 run mrn_coord mrn_formation_demo
           ros2 run mrn_coord mrn_coverage_demo
           ros2 run mrn_coord mrn_coverage_demo --method greedy
-      - name: Smoke demo
-        run: |
-          . /opt/ros/jazzy/setup.sh
-          . install/setup.sh
-          scripts/smoke_cooperative_demo.sh 20 out/smoke_report.md
-          sed -n '1,120p' out/smoke_report.md
-      - name: Upload smoke artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jazzy-smoke-artifacts
-          if-no-files-found: warn
-          path: |
-            out/experiments/clock_drift_smoke/**
-            out/experiments/qos_smoke/**
-            out/smoke_report.md
-            out/smoke_metrics.json
-            out/smoke_launch.log
-            out/smoke_summary.yaml

@@ -6,8 +6,9 @@ gz), and runs the adapter that republishes the model pose as the
 `mrn_msgs/AgentState` the localization stack consumes.
 
     ros2 launch mrn_gazebo gz_world.launch.py
-    # then e.g. feed cooperative localization just like mrn_sim:
-    #   ros2 run mrn_graph relative_anchor_graph_node.py ...
+
+The emitted `/<id>/mrn/agent_state` is the contract a cooperative-localization
+consumer (the separate `multirobot-localization` repo) would ingest.
 """
 
 import os

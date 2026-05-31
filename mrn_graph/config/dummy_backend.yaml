@@ -1,3 +1,0 @@
-backend:
-  name: dummy
-  publish_local_pose_as_cooperative_pose: true

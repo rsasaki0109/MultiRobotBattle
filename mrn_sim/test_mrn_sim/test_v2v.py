@@ -1,15 +1,13 @@
 """Tests for the sim V2V relative-pose observation and constraint emission.
 
 The pure observation (geometry + covariance) is tested directly. The
-constraint-builder is additionally checked against ``constraint_gate`` from
-mrn_graph when it (and mrn_msgs) are importable, honoring the project rule that
-a constraint source is correct iff its output passes the gate.
+constraint-builder is checked to populate a well-formed
+``mrn_msgs/RelativePoseConstraint`` (the message the localization repo,
+multirobot-localization, consumes — see that repo for gate/estimator checks).
 """
 
 import importlib.util
 import math
-import os
-import sys
 import unittest
 
 from mrn_sim import relative_pose_observation
@@ -52,22 +50,11 @@ class TestRelativePoseObservation(unittest.TestCase):
         self.assertNotAlmostEqual(a[0], 2.0)   # noise moved it off the true value
 
 
-def _gate_available():
-    if importlib.util.find_spec("mrn_msgs") is None:
-        return False
-    repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    for sub in ("mrn_graph/scripts", "mrn_sync"):
-        p = os.path.join(repo, sub)
-        if p not in sys.path:
-            sys.path.insert(0, p)
-    return importlib.util.find_spec("constraint_gate") is not None
-
-
-@unittest.skipUnless(_gate_available(), "mrn_msgs / constraint_gate not available")
-class TestConstraintPassesGate(unittest.TestCase):
-    def test_built_constraint_is_accepted(self):
-        from constraint_gate import validate_relative_pose_constraint
-
+@unittest.skipUnless(
+    importlib.util.find_spec("mrn_msgs") is not None, "mrn_msgs not available"
+)
+class TestBuildConstraint(unittest.TestCase):
+    def test_built_constraint_fields(self):
         from mrn_sim.v2v import build_relative_constraint
 
         x, y, yaw, cov = relative_pose_observation(
@@ -79,26 +66,13 @@ class TestConstraintPassesGate(unittest.TestCase):
             x=x, y=y, yaw=yaw, covariance=cov, stamp_sec=5.0,
             sequence_id=1, confidence=0.9,
         )
-        result = validate_relative_pose_constraint(
-            msg, known_agent_ids=["robot_1", "robot_2"]
-        )
-        self.assertTrue(result.accepted, getattr(result, "reason", ""))
-
-    def test_low_confidence_rejected(self):
-        from constraint_gate import validate_relative_pose_constraint
-
-        from mrn_sim.v2v import build_relative_constraint
-
-        x, y, yaw, cov = relative_pose_observation((0.0, 0.0, 0.0), (3.0, 0.0, 0.0))
-        msg = build_relative_constraint(
-            from_agent_id="robot_1", to_agent_id="robot_2",
-            from_frame="robot_1/base_link", to_frame="robot_2/base_link",
-            x=x, y=y, yaw=yaw, covariance=cov, stamp_sec=5.0, confidence=0.0,
-        )
-        result = validate_relative_pose_constraint(
-            msg, known_agent_ids=["robot_1", "robot_2"]
-        )
-        self.assertFalse(result.accepted)
+        self.assertEqual(msg.from_agent_id, "robot_1")
+        self.assertEqual(msg.to_agent_id, "robot_2")
+        self.assertAlmostEqual(msg.relative_pose.pose.position.x, x)
+        self.assertAlmostEqual(msg.relative_pose.pose.position.y, y)
+        self.assertEqual(len(msg.relative_pose.covariance), 36)
+        self.assertAlmostEqual(msg.confidence, 0.9, places=6)
+        self.assertEqual(msg.packet.ttl.sec, 0)   # finite TTL set
 
 
 if __name__ == "__main__":

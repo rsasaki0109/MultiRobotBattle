@@ -20,10 +20,10 @@ Gazebo (gz sim)                ros_gz_bridge              mrn_gazebo            
 
 The adapter (`mrn_gz_pose_adapter`) subscribes to the bridged model pose and
 republishes it as `mrn_msgs/AgentState` — exactly the contract `mrn_sim` emits —
-so everything downstream (the cooperative-localization graph, the coordination
-nodes) works unchanged. This is the same seam as `mrn_pose_bridge`, just sourced
-from Gazebo. The emitted `AgentState` is stamped with a TTL so freshness gates
-accept it.
+so everything downstream (the coordination nodes, or a cooperative-localization
+consumer such as the companion `multirobot-localization` repo) works unchanged.
+This is the same seam as `mrn_pose_bridge`, just sourced from Gazebo. The emitted
+`AgentState` is stamped with a TTL so freshness gates accept it.
 
 ## Pieces
 
