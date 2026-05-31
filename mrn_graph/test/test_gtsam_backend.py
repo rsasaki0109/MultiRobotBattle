@@ -11,7 +11,15 @@ import math
 
 import pytest
 
-pytest.importorskip("gtsam")
+# Skip (don't error) where GTSAM is absent — but keep the tests *collected* so
+# pytest exits 0 instead of 5 ("no tests collected"), which ament_cmake_pytest
+# would treat as a failure. A module-level importorskip would abort collection
+# entirely; a skipif marker leaves the tests collected-but-skipped.
+try:
+    import gtsam  # noqa: F401
+    _HAVE_GTSAM = True
+except ImportError:
+    _HAVE_GTSAM = False
 
 from graph_backend import (  # noqa: E402
     AgentInput,
@@ -19,7 +27,11 @@ from graph_backend import (  # noqa: E402
     GnssInput,
     RelativeInput,
 )
-from gtsam_backend import GtsamBackend  # noqa: E402
+
+if _HAVE_GTSAM:
+    from gtsam_backend import GtsamBackend  # noqa: E402
+
+pytestmark = pytest.mark.skipif(not _HAVE_GTSAM, reason="gtsam not available")
 
 
 def _d3(pos, yaw):
