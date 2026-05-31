@@ -925,7 +925,10 @@ Later tasks:
   With `goal_seek` migration the flock travels to a goal around the obstacles
   (verified: the flock centroid closes most of the distance), and with
   `predator_evasion` the flock flees a pursuer (verified: mean distance from the
-  predator grows while staying in bounds); `scripts/make_predator_gif.py`
+  predator grows while staying in bounds); `scripts/make_predator_gif.py`.
+  `leader_follow` (followers track a leader) and multi-predator evasion compose
+  into a multi-phase swarm mission (regroup -> migrate via waypoints -> evade ->
+  reach goal), verified deterministically and shown in `make_mission_gif.py`
 - [x] an optional Gazebo (`gz sim`) adapter for full 3D physics, kept out of the
   pure / CI core: `mrn_gazebo` — a validated diff-drive SDF world, a
   `ros_gz_bridge` config, and `mrn_gz_pose_adapter` republishing the bridged

@@ -139,6 +139,17 @@ predator grows while it stays in bounds).
   <img src="media/predator_demo.gif" alt="A flock of robots fleeing a pursuing predator while avoiding obstacles" width="640">
 </p>
 
+The terms compose into a small **mission** (`scripts/make_mission_gif.py`):
+scattered robots regroup, migrate through a sequence of waypoints across the
+obstacle field, scatter when a predator lunges in, then recover and reach the
+final goal. A `leader` index (followers steer to that robot) and multiple
+`predators` are also supported. The mission is verified deterministically — the
+flock centroid completes the waypoints and reaches the final goal.
+
+<p align="center">
+  <img src="media/mission_demo.gif" alt="A swarm carrying out a multi-phase mission: regroup, migrate via waypoints, evade a predator, reach the goal" width="640">
+</p>
+
 ## Roadmap
 
 This is the world core, its ROS node, the localization integration, and a

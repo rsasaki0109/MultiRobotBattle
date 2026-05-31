@@ -132,6 +132,42 @@ class TestSwarmInWorld(unittest.TestCase):
                                         w_predator=2.0)
         self.assertGreater(mean_dist(world), d0 + 0.5)
 
+    def test_multiphase_mission_reaches_final_goal(self):
+        # regroup -> migrate through waypoints -> survive a predator window ->
+        # reach the final goal, all via flock_in_world. Deterministic.
+        from mrn_sim.swarm import flock_in_world
+
+        world = _world()
+        waypoints = [(10.0, 10.0), (18.0, 11.0)]
+        vel = [(0.0, 0.0)] * len(world.robots)
+        wp = 0
+
+        def centroid(w):
+            xs = [r.pose[0] for r in w.robots.values()]
+            ys = [r.pose[1] for r in w.robots.values()]
+            return (sum(xs) / len(xs), sum(ys) / len(ys))
+
+        for k in range(220):
+            c = centroid(world)
+            goal = waypoints[wp]
+            if ((c[0] - goal[0]) ** 2 + (c[1] - goal[1]) ** 2 < 1.6 ** 2
+                    and wp < len(waypoints) - 1):
+                wp += 1
+                goal = waypoints[wp]
+            predator = (c[0], c[1] - 4.0) if 40 <= k < 70 else None
+            active_goal = goal if k >= 10 else None
+            world, vel = flock_in_world(
+                world, vel, dt=0.1, goal=active_goal, w_goal=1.0,
+                predator=predator, w_predator=2.2)
+
+        c = centroid(world)
+        final = waypoints[-1]
+        dist = ((c[0] - final[0]) ** 2 + (c[1] - final[1]) ** 2) ** 0.5
+        self.assertLess(dist, 2.0)   # the flock completed the mission
+        for r in world.robots.values():
+            self.assertTrue(0.0 <= r.pose[0] <= world.width)
+            self.assertTrue(0.0 <= r.pose[1] <= world.height)
+
     def test_migration_reaches_goal(self):
         from mrn_sim.swarm import flock_in_world
 

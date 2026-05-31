@@ -149,6 +149,14 @@ Gazebo swarm (`scripts/make_swarm_sim_gif.py`, `make_predator_gif.py`):
   <img src="docs/media/predator_demo.gif" alt="A flock fleeing a pursuing predator while avoiding obstacles" width="410">
 </p>
 
+These terms compose into a multi-phase **mission** — regroup → migrate via
+waypoints → evade a predator → reach the goal (`scripts/make_mission_gif.py`;
+verified deterministically that the flock completes it):
+
+<p align="center">
+  <img src="docs/media/mission_demo.gif" alt="A swarm carrying out a multi-phase mission across the obstacle field" width="640">
+</p>
+
 ## Quick Start
 
 Build with ROS 2 Jazzy:
