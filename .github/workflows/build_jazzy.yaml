@@ -49,6 +49,18 @@ jobs:
             --output-dir out/experiments/qos_smoke \
             --ros-domain-id 150
           sed -n '1,140p' out/experiments/qos_smoke/report.md
+      - name: Coordination demos
+        run: |
+          . /opt/ros/jazzy/setup.sh
+          . install/setup.sh
+          # The mrn_coord CLI demos are pure (no ROS daemon): exercise the MAPF
+          # planner, the formation controller, and the frontier allocator
+          # end-to-end on every push.
+          ros2 run mrn_coord mrn_mapf_demo
+          ros2 run mrn_coord mrn_mapf_demo --solver prioritized
+          ros2 run mrn_coord mrn_formation_demo
+          ros2 run mrn_coord mrn_coverage_demo
+          ros2 run mrn_coord mrn_coverage_demo --method greedy
       - name: Smoke demo
         run: |
           . /opt/ros/jazzy/setup.sh

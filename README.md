@@ -262,6 +262,11 @@ Use these files to verify the same pass/fail evidence that CI used: clock drift
 constraint rejection, QoS loss/latency separation, and cooperative localization
 improvement over local-only output.
 
+Beyond the unit tests (every package's pure cores run under `colcon test`), CI
+also exercises the coordination layer end-to-end on each push by running the
+`mrn_coord` CLI demos (MAPF / formation / coverage), so a regression in the
+planning, control, or allocation algorithms fails the build.
+
 Typical synthetic result:
 
 | Agent | Method | ATE RMSE [m] | Improvement vs Local [m] |
