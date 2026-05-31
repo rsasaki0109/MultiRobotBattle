@@ -49,6 +49,20 @@ def velocity_to_unicycle(
     return (v, omega)
 
 
+def goal_seek(positions, goal, *, gain: float = 1.0, max_speed: float = 2.0) -> list:
+    """Per-agent migration velocity toward a shared ``goal`` point.
+
+    Each agent gets ``gain * (goal - position)`` clamped to ``max_speed`` — a
+    directed pull that turns aimless flocking into migration. Near the goal the
+    pull shrinks to zero. ``goal`` is an ``(x, y)`` tuple.
+    """
+    gx, gy = goal
+    out = []
+    for (px, py) in positions:
+        out.append(_clamp_speed(gain * (gx - px), gain * (gy - py), max_speed))
+    return out
+
+
 def obstacle_avoidance(
     positions,
     obstacles,

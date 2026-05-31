@@ -21,6 +21,7 @@ import math
 
 from mrn_coord.flocking import (
     flock_velocities,
+    goal_seek,
     obstacle_avoidance,
     velocity_to_unicycle,
 )
@@ -51,13 +52,16 @@ def flock_in_world(
     w_obstacle: float = 1.0,
     obstacle_influence: float = 2.0,
     obstacle_strength: float = 2.0,
+    goal=None,
+    w_goal: float = 0.8,
     max_v: float = 1.8,
     max_omega: float = 2.5,
 ):
     """Advance the swarm one step; return ``(new_world, new_velocities)``.
 
     ``velocities`` is the Boids velocity state, one ``(vx, vy)`` per robot in
-    ``world.robots`` insertion order. Deterministic given the inputs.
+    ``world.robots`` insertion order. If ``goal`` (an ``(x, y)``) is given, a
+    migration term steers the flock toward it. Deterministic given the inputs.
     """
     ids = list(world.robots)
     positions = [(world.robots[a].pose[0], world.robots[a].pose[1]) for a in ids]
@@ -69,12 +73,14 @@ def flock_in_world(
     obs = obstacle_avoidance(
         positions, [(o.x, o.y, o.radius) for o in world.obstacles],
         influence=obstacle_influence, strength=obstacle_strength)
+    mig = (goal_seek(positions, goal, max_speed=max_speed)
+           if goal is not None else [(0.0, 0.0)] * len(ids))
 
     new_vel = []
     commands = {}
     for i, a in enumerate(ids):
-        vx = vel[i][0] + w_obstacle * obs[i][0]
-        vy = vel[i][1] + w_obstacle * obs[i][1]
+        vx = vel[i][0] + w_obstacle * obs[i][0] + w_goal * mig[i][0]
+        vy = vel[i][1] + w_obstacle * obs[i][1] + w_goal * mig[i][1]
         vx, vy = _wall_turn(positions[i][0], positions[i][1], vx, vy,
                             world.width, world.height)
         # re-clamp to max_speed

@@ -123,8 +123,11 @@ accept them — a simulator must emit valid, non-expired messages.)
 twin of the Gazebo swarm** — the same control loop (Boids → unicycle command →
 world step), but pure and deterministic, so CI can assert end-to-end properties:
 the run is reproducible, every robot stays in bounds and never enters an
-obstacle, and the flock actually moves. `scripts/make_swarm_sim_gif.py` renders
-it (above); regenerate with `python3 scripts/make_swarm_sim_gif.py`.
+obstacle, and the flock actually moves. Pass a `goal` (the `goal_seek` migration
+term) and the flock travels there as a group, flowing around the obstacles —
+verified by the flock centroid closing most of the distance to the goal.
+`scripts/make_swarm_sim_gif.py` renders the migrating flock (above); regenerate
+with `python3 scripts/make_swarm_sim_gif.py`.
 
 ## Roadmap
 

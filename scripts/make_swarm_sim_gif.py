@@ -58,18 +58,19 @@ def _build_frames(steps):
                  Obstacle(18.0, 11.0, 1.5)]
     world = World(W, H, robots, obstacles)
     vel = [(1.2, 0.0)] * N
+    goal = (W - 2.5, H - 2.5)        # migrate across the obstacle field
     frames = [world]
     for _ in range(steps):
         world, vel = flock_in_world(
             world, vel, dt=DT, perception=4.5, separation=1.5, max_speed=2.2,
             w_obstacle=1.2, obstacle_influence=2.2, obstacle_strength=2.5,
-            max_v=2.2, max_omega=3.0)
+            goal=goal, w_goal=0.9, max_v=2.2, max_omega=3.0)
         frames.append(world)
-    return frames, obstacles
+    return frames, obstacles, goal
 
 
 def render(output: str, steps: int = 150, fps: int = 20) -> None:
-    frames, obstacles = _build_frames(steps)
+    frames, obstacles, goal = _build_frames(steps)
     ids = list(frames[0].robots)
     fig, ax = plt.subplots(figsize=(7.8, 5.0), dpi=100)
     fig.patch.set_facecolor(BG)
@@ -88,6 +89,9 @@ def render(output: str, steps: int = 150, fps: int = 20) -> None:
         for o in obstacles:
             ax.add_patch(Circle((o.x, o.y), o.radius, facecolor=WALL,
                                 edgecolor=WALL_EDGE, lw=1.4, zorder=1))
+        # migration goal
+        ax.scatter([goal[0]], [goal[1]], marker="*", s=320, color="#fbbf24",
+                   edgecolor=BG, linewidth=0.8, zorder=4)
 
         lo = max(0, i - trail)
         xs, ys, us, vs, cols = [], [], [], [], []
@@ -104,10 +108,10 @@ def render(output: str, steps: int = 150, fps: int = 20) -> None:
         ax.quiver(xs, ys, us, vs, color=cols, scale=20, width=0.005,
                   headwidth=4, zorder=5)
 
-        ax.text(0.3, H - 0.35, f"Swarm in the world — {N} robots avoiding obstacles",
+        ax.text(0.3, H - 0.35, f"Swarm migration — {N} robots flock to the goal",
                 color=INK, fontsize=11.5, weight="bold", va="top", zorder=7)
         ax.text(0.3, H - 0.9,
-                "Boids + obstacle avoidance -> unicycle (mrn_sim + mrn_coord)",
+                "Boids + obstacle avoidance + migration -> unicycle (mrn_sim + mrn_coord)",
                 color=MUTED, fontsize=8.5, va="top", zorder=7)
         return ()
 

@@ -5,6 +5,7 @@ import unittest
 
 from mrn_coord.flocking import (
     flock_velocities,
+    goal_seek,
     obstacle_avoidance,
     velocity_to_unicycle,
 )
@@ -107,6 +108,23 @@ class TestObstacleAvoidance(unittest.TestCase):
         self.assertGreater(out[0][0], 0.0)
         self.assertGreater(out[0][1], 0.0)
         self.assertAlmostEqual(out[0][0], out[0][1], places=6)
+
+
+class TestGoalSeek(unittest.TestCase):
+    def test_points_toward_goal(self):
+        out = goal_seek([(0.0, 0.0)], (5.0, 0.0), gain=1.0, max_speed=2.0)
+        self.assertGreater(out[0][0], 0.0)         # +x toward goal
+        self.assertAlmostEqual(out[0][1], 0.0, places=6)
+        self.assertLessEqual(math.hypot(*out[0]), 2.0 + 1e-9)   # clamped
+
+    def test_zero_at_goal(self):
+        out = goal_seek([(3.0, 4.0)], (3.0, 4.0))
+        self.assertEqual(out[0], (0.0, 0.0))
+
+    def test_per_agent(self):
+        out = goal_seek([(0.0, 0.0), (10.0, 0.0)], (5.0, 0.0), max_speed=9.0)
+        self.assertGreater(out[0][0], 0.0)         # left agent moves +x
+        self.assertLess(out[1][0], 0.0)            # right agent moves -x
 
 
 if __name__ == "__main__":

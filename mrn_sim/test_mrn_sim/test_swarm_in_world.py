@@ -65,6 +65,32 @@ class TestSwarmInWorld(unittest.TestCase):
                 moved += 1
         self.assertGreaterEqual(moved, 6)   # most of the 8 robots moved
 
+    def test_migration_reaches_goal(self):
+        from mrn_sim.swarm import flock_in_world
+
+        world = _world()
+        goal = (18.0, 11.0)
+
+        def centroid(w):
+            xs = [r.pose[0] for r in w.robots.values()]
+            ys = [r.pose[1] for r in w.robots.values()]
+            return (sum(xs) / len(xs), sum(ys) / len(ys))
+
+        start_c = centroid(world)
+        d0 = ((start_c[0] - goal[0]) ** 2 + (start_c[1] - goal[1]) ** 2) ** 0.5
+        vel = [(0.0, 0.0)] * len(world.robots)
+        for _ in range(300):
+            world, vel = flock_in_world(world, vel, dt=0.1, goal=goal, w_goal=1.0)
+        end_c = centroid(world)
+        dN = ((end_c[0] - goal[0]) ** 2 + (end_c[1] - goal[1]) ** 2) ** 0.5
+        # the flock migrated most of the way to the goal, around the obstacles
+        self.assertLess(dN, d0 * 0.4)
+        # still obstacle-clear at the end
+        for r in world.robots.values():
+            for o in world.obstacles:
+                clr = ((r.pose[0] - o.x) ** 2 + (r.pose[1] - o.y) ** 2) ** 0.5 - o.radius - r.radius
+                self.assertGreater(clr, -1e-6)
+
 
 if __name__ == "__main__":
     unittest.main()
