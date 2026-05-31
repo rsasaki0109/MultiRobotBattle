@@ -173,6 +173,14 @@ verified collision-free (`scripts/make_recip_nav_gif.py`):
   <img src="docs/media/recip_nav_demo.gif" alt="Robots navigating to crossing goals while avoiding each other and the obstacles" width="640">
 </p>
 
+…and **replans around dynamic obstacles** — when a moving obstacle cuts off the
+path, the robot detects it (`path_blocked`) and routes around it to the goal
+(`scripts/make_replan_gif.py`):
+
+<p align="center">
+  <img src="docs/media/replan_demo.gif" alt="A robot replanning around a moving obstacle to reach its goal" width="640">
+</p>
+
 ## Quick Start
 
 Build with ROS 2 Jazzy:

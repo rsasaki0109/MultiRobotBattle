@@ -79,6 +79,21 @@ def plan_world_path(
     return points
 
 
+def path_blocked(obstacles, path, *, clearance: float = 0.35, from_index: int = 0) -> bool:
+    """True if any waypoint (from ``from_index`` on) is inside an obstacle.
+
+    ``obstacles`` is a list of ``(x, y, radius)``. A waypoint is "blocked" if it
+    lies within ``radius + clearance`` of an obstacle — used to detect that a
+    previously-valid path has been invalidated by a *moved* obstacle, so the
+    robot should replan. Pure.
+    """
+    for (wx, wy) in path[from_index:]:
+        for (ox, oy, r) in obstacles:
+            if math.hypot(wx - ox, wy - oy) <= r + clearance:
+                return True
+    return False
+
+
 def navigate_step(
     world: World,
     paths: dict,

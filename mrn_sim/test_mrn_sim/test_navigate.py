@@ -100,5 +100,52 @@ class TestNavigate(unittest.TestCase):
         self.assertGreater(min_pair, 0.5)
 
 
+    def test_path_blocked(self):
+        from mrn_sim.navigate import path_blocked
+        path = [(0.0, 0.0), (5.0, 0.0), (10.0, 0.0)]
+        self.assertTrue(path_blocked([(5.0, 0.0, 1.0)], path, clearance=0.3))
+        self.assertFalse(path_blocked([(5.0, 5.0, 1.0)], path, clearance=0.3))
+
+    def test_replans_around_moving_obstacle(self):
+        # a robot heads straight for its goal; an obstacle slides onto the path
+        # midway, the robot detects the block and replans around it, still
+        # reaching the goal and never entering the obstacle.
+        from mrn_coord.mapf.path_follower import pure_pursuit
+        from mrn_sim.navigate import path_blocked, plan_world_path
+        from mrn_sim.world import step
+
+        goal = (18.0, 4.0)
+        world = World(20.0, 9.0, {"r": Robot("r", (1.0, 4.0, 0.0), 0.25)}, [])
+        path = plan_world_path(world, (1.0, 4.0), goal, cell_size=0.5)
+        replans = 0
+        reached = False
+        for k in range(500):
+            # the obstacle slides down onto the path at (10, 4) and settles there
+            # before the robot arrives, so the robot replans around it.
+            oy = max(4.0, 9.5 - 0.22 * k)
+            obstacles = [Obstacle(10.0, oy, 1.2)]
+            world = World(20.0, 9.0, world.robots, obstacles)
+            obs_t = [(o.x, o.y, o.radius) for o in obstacles]
+            if path is None or path_blocked(obs_t, path, clearance=0.4):
+                pose = world.robots["r"].pose
+                new_path = plan_world_path(world, (pose[0], pose[1]), goal,
+                                           cell_size=0.5, inflation=0.45)
+                if new_path is not None:
+                    path = new_path        # else keep following the old one
+                replans += 1
+            pose = world.robots["r"].pose
+            v, omega, done = pure_pursuit(pose, path, lookahead=0.9, v_nominal=1.4,
+                                          goal_tolerance=0.3)
+            if done:
+                reached = True
+                break
+            world = step(world, {"r": (v, omega)}, 0.1)
+            # never inside the obstacle
+            x, y, _ = world.robots["r"].pose
+            self.assertGreater(math.hypot(x - 10.0, oy - y) - 1.2 - 0.25, -0.05)
+        self.assertTrue(reached)
+        self.assertGreaterEqual(replans, 1)   # it had to replan around the obstacle
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -181,6 +181,18 @@ each other and the obstacles.
   <img src="media/recip_nav_demo.gif" alt="Robots navigating to crossing goals while avoiding each other and the obstacles" width="640">
 </p>
 
+Navigation also handles **dynamic obstacles by replanning**: `path_blocked`
+checks whether a moving obstacle has invalidated the current path, and if so the
+robot replans from its current pose against the obstacles' current positions
+(`plan_world_path`). `scripts/make_replan_gif.py` shows a robot whose straight
+path is cut off by a sliding obstacle — it detects the block and routes around
+it to the goal (verified: it reaches the goal, replans at least once, and never
+enters the obstacle).
+
+<p align="center">
+  <img src="media/replan_demo.gif" alt="A robot replanning its path around a moving obstacle to reach its goal" width="640">
+</p>
+
 ## Roadmap
 
 This is the world core, its ROS node, the localization integration, and a

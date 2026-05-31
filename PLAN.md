@@ -910,7 +910,10 @@ Current role:
   goal, never enters an obstacle); `scripts/make_nav_gif.py`. `navigate_step`
   adds reciprocal collision avoidance (`mutual_avoidance` + `carrot_point`) so
   multiple navigators sidestep each other — verified collision-free (min
-  inter-robot distance > 2 radii); `scripts/make_recip_nav_gif.py`
+  inter-robot distance > 2 radii); `scripts/make_recip_nav_gif.py`. `path_blocked`
+  detects when a moving obstacle invalidates a path and the robot replans around
+  it (verified: reaches the goal, replans, stays obstacle-clear);
+  `scripts/make_replan_gif.py`
 
 - [x] a unicycle path-follower so a MAPF plan can be driven through this world:
   `mrn_coord` `pure_pursuit` (pure) + `mrn_path_follower` node; the
