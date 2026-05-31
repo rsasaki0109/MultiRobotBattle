@@ -139,6 +139,14 @@ are driven by the real algorithms; regenerate with `scripts/make_sim_gif.py` and
   <img src="docs/media/swarm_demo.gif" alt="Seventy agents flock via separation, alignment, and cohesion" width="420">
 </p>
 
+And a flock driven *through* the collision-aware world (Boids + obstacle
+avoidance → unicycle via `mrn_sim.swarm.flock_in_world`) — the deterministic,
+CI-verified twin of the Gazebo swarm (`scripts/make_swarm_sim_gif.py`):
+
+<p align="center">
+  <img src="docs/media/swarm_sim_demo.gif" alt="A flock of differential-drive robots flowing around obstacles in a bounded world" width="620">
+</p>
+
 ## Quick Start
 
 Build with ROS 2 Jazzy:

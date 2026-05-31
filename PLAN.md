@@ -918,7 +918,10 @@ Later tasks:
 
 - [x] swarm-scale runs (tens to hundreds of agents) for emergent behavior:
   `mrn_coord.flocking.flock_velocities` (pure Boids) drives a 70-agent flock in
-  `scripts/make_swarm_gif.py`
+  `scripts/make_swarm_gif.py`; `obstacle_avoidance` + `mrn_sim.swarm.flock_in_world`
+  flock a unicycle swarm *through* the collision-aware world (Boids ->
+  velocity_to_unicycle -> world.step), deterministically verified in CI
+  (in-bounds, obstacle-clear, moving) — the testable twin of the Gazebo swarm
 - [x] an optional Gazebo (`gz sim`) adapter for full 3D physics, kept out of the
   pure / CI core: `mrn_gazebo` — a validated diff-drive SDF world, a
   `ros_gz_bridge` config, and `mrn_gz_pose_adapter` republishing the bridged

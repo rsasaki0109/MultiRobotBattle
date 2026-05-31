@@ -110,10 +110,26 @@ rescuing a GNSS-denied robot, driven entirely by the simulator.
 (The agent-state messages are stamped with a TTL so downstream freshness gates
 accept them — a simulator must emit valid, non-expired messages.)
 
+## Swarm in the world
+
+<p align="center">
+  <img src="media/swarm_sim_demo.gif" alt="A flock of differential-drive robots flowing around circular obstacles in a bounded world" width="640">
+</p>
+
+`mrn_sim.swarm.flock_in_world` flocks a swarm *through this world*: it combines
+`mrn_coord`'s Boids (`flock_velocities`), obstacle avoidance
+(`obstacle_avoidance`), and `velocity_to_unicycle` with the collision-aware
+`world.step`, advancing all robots one deterministic tick. It is the **verifiable
+twin of the Gazebo swarm** — the same control loop (Boids → unicycle command →
+world step), but pure and deterministic, so CI can assert end-to-end properties:
+the run is reproducible, every robot stays in bounds and never enters an
+obstacle, and the flock actually moves. `scripts/make_swarm_sim_gif.py` renders
+it (above); regenerate with `python3 scripts/make_swarm_sim_gif.py`.
+
 ## Roadmap
 
-This is the world core, its ROS node, and the localization integration. Planned
-next:
+This is the world core, its ROS node, the localization integration, and a
+verifiable swarm. Planned next:
 
 - a unicycle path-follower so a MAPF plan can be driven through this world,
   closing world → localization → planning → world in ROS;

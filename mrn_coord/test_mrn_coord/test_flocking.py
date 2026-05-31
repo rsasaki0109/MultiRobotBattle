@@ -3,7 +3,11 @@
 import math
 import unittest
 
-from mrn_coord.flocking import flock_velocities, velocity_to_unicycle
+from mrn_coord.flocking import (
+    flock_velocities,
+    obstacle_avoidance,
+    velocity_to_unicycle,
+)
 
 
 class TestFlocking(unittest.TestCase):
@@ -75,6 +79,34 @@ class TestVelocityToUnicycle(unittest.TestCase):
         v, omega = velocity_to_unicycle(0.0, 100.0, 0.0, max_v=1.5, max_omega=2.5)
         self.assertLessEqual(v, 1.5 + 1e-9)
         self.assertLessEqual(abs(omega), 2.5 + 1e-9)
+
+
+class TestObstacleAvoidance(unittest.TestCase):
+    def test_repels_away_from_obstacle(self):
+        # agent to the +x side of an obstacle at origin -> pushed further +x
+        out = obstacle_avoidance([(2.0, 0.0)], [(0.0, 0.0, 1.0)], influence=2.0)
+        self.assertGreater(out[0][0], 0.0)
+        self.assertAlmostEqual(out[0][1], 0.0, places=6)
+
+    def test_zero_when_far(self):
+        out = obstacle_avoidance([(20.0, 0.0)], [(0.0, 0.0, 1.0)], influence=2.0)
+        self.assertEqual(out[0], (0.0, 0.0))
+
+    def test_closer_is_stronger(self):
+        near = obstacle_avoidance([(1.3, 0.0)], [(0.0, 0.0, 1.0)], influence=3.0)
+        far = obstacle_avoidance([(2.5, 0.0)], [(0.0, 0.0, 1.0)], influence=3.0)
+        self.assertGreater(near[0][0], far[0][0])
+
+    def test_clamped(self):
+        out = obstacle_avoidance([(1.01, 0.0)], [(0.0, 0.0, 1.0)],
+                                 influence=3.0, strength=10.0, max_accel=6.0)
+        self.assertLessEqual(math.hypot(*out[0]), 6.0 + 1e-9)
+
+    def test_direction_diagonal(self):
+        out = obstacle_avoidance([(1.0, 1.0)], [(0.0, 0.0, 0.5)], influence=3.0)
+        self.assertGreater(out[0][0], 0.0)
+        self.assertGreater(out[0][1], 0.0)
+        self.assertAlmostEqual(out[0][0], out[0][1], places=6)
 
 
 if __name__ == "__main__":

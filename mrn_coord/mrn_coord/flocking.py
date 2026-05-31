@@ -49,6 +49,43 @@ def velocity_to_unicycle(
     return (v, omega)
 
 
+def obstacle_avoidance(
+    positions,
+    obstacles,
+    *,
+    influence: float = 2.0,
+    strength: float = 2.0,
+    max_accel: float = 6.0,
+) -> list:
+    """Repulsion from circular obstacles, per agent.
+
+    ``obstacles`` is a list of ``(x, y, radius)``. For each agent, every
+    obstacle whose surface is within ``influence`` contributes an outward push
+    that grows as the clearance shrinks (``strength / clearance**2``), clamped
+    per agent to ``max_accel``. Returns a list of ``(ax, ay)`` to add to the
+    flocking velocity. Pure — takes plain tuples, not world objects.
+    """
+    out = []
+    for (px, py) in positions:
+        ax = ay = 0.0
+        for (ox, oy, r) in obstacles:
+            dx, dy = px - ox, py - oy
+            d = math.hypot(dx, dy)
+            clearance = d - r
+            if clearance < influence:
+                w = strength / (max(clearance, 0.2) ** 2)
+                if d > 1e-9:
+                    ax += (dx / d) * w
+                    ay += (dy / d) * w
+                else:
+                    ax += w  # exactly at center: push +x arbitrarily
+        mag = math.hypot(ax, ay)
+        if mag > max_accel and mag > 0.0:
+            ax, ay = ax / mag * max_accel, ay / mag * max_accel
+        out.append((ax, ay))
+    return out
+
+
 def _clamp_speed(vx: float, vy: float, max_speed: float) -> Vec2:
     speed = math.hypot(vx, vy)
     if max_speed > 0.0 and speed > max_speed and speed > 0.0:
