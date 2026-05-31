@@ -13,6 +13,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
         ("share/" + package_name + "/rviz", glob("rviz/*.rviz")),
+        ("share/" + package_name + "/scenarios", glob("scenarios/*.yaml")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -25,6 +26,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mrn_sim_world = mrn_sim.sim_node:main",
+            "mrn_sim_bench = mrn_sim.bench_cli:main",
         ],
     },
 )

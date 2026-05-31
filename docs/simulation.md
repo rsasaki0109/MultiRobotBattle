@@ -12,11 +12,43 @@
 model** with real robot states, kinematics, obstacles, and sensor models. Like
 the rest of the project it is pure and ROS-free at the core, unit-tested in CI.
 
-The point of a true world model is that **both halves of the project plug into
-the same world**: the localization stack consumes the (noisy) sensor
-measurements it emits, and the coordination layer's velocity commands drive the
-robots — so one deterministic world can close the whole loop
-(world → sensors → localization → coordination → commands → world).
+The point of a true world model is that it is a **plug-in test-bed**: the
+coordination layer's velocity commands drive the robots, and the (noisy) sensor
+messages it emits are exactly what a cooperative-localization consumer ingests.
+
+## Benchmark environment (`benchmark.py`)
+
+The most reusable face of `mrn_sim`: a small environment others can plug their
+own multi-robot algorithm into and get comparable numbers.
+
+- **`Scenario`** — a declarative spec (world size, obstacles, robots, goals),
+  built in Python or loaded from YAML (`load_scenario`). A library lives in
+  `mrn_sim/scenarios/` (`around_obstacle`, `crossing`, `doorway`).
+- **a policy** — any callable `policy(world) -> {robot_id: (v, omega)}` (your
+  planner/controller). Nothing else about it is assumed.
+- **`run_scenario(scenario, policy)`** — runs the closed loop on the
+  collision-aware world and returns a `BenchmarkResult` with standard,
+  reproducible metrics: success, makespan, path length, min obstacle clearance,
+  **min inter-robot distance** (collision-freeness), and a collision count.
+
+```bash
+ros2 run mrn_sim mrn_sim_bench crossing      # built-in scenario + default policy
+ros2 run mrn_sim mrn_sim_bench path/to/your_scenario.yaml
+```
+
+```python
+from mrn_sim.benchmark import Scenario, run_scenario
+def my_policy(world):
+    return {rid: (1.0, 0.0) for rid in world.robots}   # your algorithm here
+result = run_scenario(Scenario.from_dict(spec), my_policy)
+print(result.as_dict())
+```
+
+The built-in `navigate_policy` (A* + pursuit + reciprocal avoidance) is a
+turnkey baseline; on the bundled scenarios it solves all goals collision-free
+(e.g. `crossing`: 3/3 reached, min inter-robot distance ≈ 1.4 m, 0 collisions).
+Because it is pure and deterministic, a benchmark result is reproducible and
+CI-checkable.
 
 ## Kinematics (`kinematics.py`)
 

@@ -1,0 +1,10 @@
+name: around_obstacle
+width: 14.0
+height: 8.0
+robot_radius: 0.25
+robots:
+  r1: [1.0, 4.0, 0.0]
+obstacles:
+  - [7.0, 4.0, 1.5]
+goals:
+  r1: [13.0, 4.0]

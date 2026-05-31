@@ -45,12 +45,15 @@ simulator emits them; that repo consumes them.
 
 ## Next ideas
 
-- Make `mrn_sim` a reusable benchmark environment: a scenario format (YAML) and
-  a `run(scenario, policy) -> metrics` runner with standard metrics
-  (success rate, makespan, path length, min-clearance, collisions), plus a
-  scenario library, so external planners/controllers can be plugged in and
-  compared.
+- [x] reusable benchmark environment (`mrn_sim.benchmark`): `Scenario`
+  (YAML/dict) + `run_scenario(scenario, policy) -> BenchmarkResult` with
+  standard metrics (success, makespan, path length, min clearance, min
+  inter-robot distance, collisions); a scenario library (`mrn_sim/scenarios/`),
+  a baseline `navigate_policy`, and a `mrn_sim_bench` CLI. External
+  planners/controllers plug in as a `policy(world) -> commands` callable.
 - Standard MAPF benchmarks (movingai) with comparable solve-rate / runtime.
+- A scenario-driven CI benchmark gate (expected-metrics regression like the
+  localization repo's).
 - Continuous-space / kinematic planning beyond the grid; deadlock resolution
   for reciprocal avoidance (priorities / ORCA).
 - Real-robot bring-up (separate effort; the localization repo is rosbag-first).
