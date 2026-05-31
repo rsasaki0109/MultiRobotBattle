@@ -50,6 +50,25 @@ turnkey baseline; on the bundled scenarios it solves all goals collision-free
 Because it is pure and deterministic, a benchmark result is reproducible and
 CI-checkable.
 
+### Regression gate
+
+`scripts/benchmark_gate.py` makes that reproducibility a guarded contract. It
+runs the bundled scenarios (with `navigate_policy`) and the MovingAI example
+(CBS / prioritized), then compares every metric against the checked-in
+expectations in `benchmarks/expected_metrics/` — discrete metrics (success,
+collisions, goals reached, makespan steps, sum-of-costs) exactly, floats within
+a small tolerance.
+
+```bash
+python3 scripts/benchmark_gate.py            # check — exits non-zero on a regression
+python3 scripts/benchmark_gate.py --update   # rewrite the expectations after an intended change
+```
+
+CI runs the gate on every push, so a change that drops a goal, introduces a
+collision, or worsens a makespan / sum-of-costs fails the build. When a change
+*intentionally* moves the numbers, regenerate with `--update` and commit the
+new expectations alongside it.
+
 ## Kinematics (`kinematics.py`)
 
 A pose is `(x, y, theta)`. `unicycle_step(pose, v, omega, dt)` advances a

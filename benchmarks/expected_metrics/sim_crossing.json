@@ -1,0 +1,12 @@
+{
+  "collisions": 0,
+  "goals_reached": 3,
+  "goals_total": 3,
+  "makespan_sec": 18.5,
+  "min_obstacle_clearance": 0.875,
+  "min_robot_distance": 1.389,
+  "scenario": "crossing",
+  "steps": 185,
+  "success": true,
+  "total_path_length": 55.346
+}

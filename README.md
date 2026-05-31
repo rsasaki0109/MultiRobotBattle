@@ -147,8 +147,12 @@ and [docs/gazebo.md](docs/gazebo.md).
 ## Continuous Integration
 
 Every push builds the workspace and runs `colcon test` over all packages (the
-pure algorithm cores), then exercises the coordination CLI demos end-to-end, so
-a regression in planning, control, or allocation fails the build.
+pure algorithm cores), then exercises the coordination CLI demos end-to-end. A
+final **benchmark gate** (`scripts/benchmark_gate.py`) runs the bundled
+scenarios and the MovingAI MAPF example and compares their metrics against
+checked-in expectations in `benchmarks/expected_metrics/`, so a regression that
+drops a goal, introduces a collision, or worsens a makespan / sum-of-costs fails
+the build — the benchmarks are a guarded contract, not decoration.
 
 ## License
 

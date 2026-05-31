@@ -36,3 +36,12 @@ jobs:
           ros2 run mrn_coord mrn_formation_demo
           ros2 run mrn_coord mrn_coverage_demo
           ros2 run mrn_coord mrn_coverage_demo --method greedy
+      - name: Benchmark gate
+        run: |
+          . /opt/ros/jazzy/setup.sh
+          . install/setup.sh
+          # Run the bundled scenarios + MovingAI example and compare their
+          # metrics against benchmarks/expected_metrics/. A change that degrades
+          # navigation, multi-robot avoidance, or MAPF (fewer goals reached, a
+          # new collision, a worse makespan/sum-of-costs) fails the build.
+          python3 scripts/benchmark_gate.py
