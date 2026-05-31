@@ -106,6 +106,15 @@ multi-robot avoidance and replanning around a moving obstacle:
   <img src="docs/media/replan_demo.gif" alt="A robot replanning around a moving obstacle" width="270">
 </p>
 
+**ORCA** — Optimal Reciprocal Collision Avoidance: two crowds walk straight at
+each other and pass through, collision-free, each picking the velocity closest
+to its goal that stays provably safe (`mrn_coord.orca`, regenerate with
+`scripts/make_orca_gif.py`):
+
+<p align="center">
+  <img src="docs/media/orca_demo.gif" alt="Two crowds of agents walk into each other and pass through collision-free via ORCA reciprocal avoidance" width="560">
+</p>
+
 ## Packages
 
 | Package | Role |

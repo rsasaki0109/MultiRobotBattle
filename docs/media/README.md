@@ -14,6 +14,7 @@ algorithms** — regenerate any of them with the matching script:
 | `nav_demo.gif` | `make_nav_gif.py` | point-to-point A* + pure-pursuit navigation |
 | `recip_nav_demo.gif` | `make_recip_nav_gif.py` | multi-robot navigation with reciprocal avoidance |
 | `replan_demo.gif` | `make_replan_gif.py` | replanning around a moving obstacle |
+| `orca_demo.gif` | `make_orca_gif.py` | ORCA reciprocal avoidance: two crowds pass through each other |
 
 ```bash
 python3 scripts/make_<name>_gif.py     # writes docs/media/<name>_demo.gif
