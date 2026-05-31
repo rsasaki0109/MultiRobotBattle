@@ -65,6 +65,29 @@ class TestSwarmInWorld(unittest.TestCase):
                 moved += 1
         self.assertGreaterEqual(moved, 6)   # most of the 8 robots moved
 
+    def test_flees_predator(self):
+        from mrn_sim.swarm import flock_in_world
+
+        world = _world()
+        predator = (4.0, 3.0)   # planted in the middle of the flock
+
+        def mean_dist(w):
+            ds = [((r.pose[0] - predator[0]) ** 2 + (r.pose[1] - predator[1]) ** 2) ** 0.5
+                  for r in w.robots.values()]
+            return sum(ds) / len(ds)
+
+        d0 = mean_dist(world)
+        vel = [(0.0, 0.0)] * len(world.robots)
+        for _ in range(60):
+            world, vel = flock_in_world(world, vel, dt=0.1, predator=predator,
+                                        w_predator=2.0)
+        dN = mean_dist(world)
+        self.assertGreater(dN, d0 + 1.0)   # the flock fled the predator
+        # still in bounds and obstacle-clear
+        for r in world.robots.values():
+            self.assertTrue(0.0 <= r.pose[0] <= world.width)
+            self.assertTrue(0.0 <= r.pose[1] <= world.height)
+
     def test_migration_reaches_goal(self):
         from mrn_sim.swarm import flock_in_world
 

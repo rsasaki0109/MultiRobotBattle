@@ -923,7 +923,9 @@ Later tasks:
   velocity_to_unicycle -> world.step), deterministically verified in CI
   (in-bounds, obstacle-clear, moving) — the testable twin of the Gazebo swarm.
   With `goal_seek` migration the flock travels to a goal around the obstacles
-  (verified: the flock centroid closes most of the distance)
+  (verified: the flock centroid closes most of the distance), and with
+  `predator_evasion` the flock flees a pursuer (verified: mean distance from the
+  predator grows while staying in bounds); `scripts/make_predator_gif.py`
 - [x] an optional Gazebo (`gz sim`) adapter for full 3D physics, kept out of the
   pure / CI core: `mrn_gazebo` — a validated diff-drive SDF world, a
   `ros_gz_bridge` config, and `mrn_gz_pose_adapter` republishing the bridged

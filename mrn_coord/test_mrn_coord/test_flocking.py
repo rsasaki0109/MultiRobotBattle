@@ -7,6 +7,7 @@ from mrn_coord.flocking import (
     flock_velocities,
     goal_seek,
     obstacle_avoidance,
+    predator_evasion,
     velocity_to_unicycle,
 )
 
@@ -125,6 +126,28 @@ class TestGoalSeek(unittest.TestCase):
         out = goal_seek([(0.0, 0.0), (10.0, 0.0)], (5.0, 0.0), max_speed=9.0)
         self.assertGreater(out[0][0], 0.0)         # left agent moves +x
         self.assertLess(out[1][0], 0.0)            # right agent moves -x
+
+
+class TestPredatorEvasion(unittest.TestCase):
+    def test_flees_away_from_predator(self):
+        # agent to the +x side of the predator -> pushed further +x
+        out = predator_evasion([(2.0, 0.0)], (0.0, 0.0), influence=6.0)
+        self.assertGreater(out[0][0], 0.0)
+        self.assertAlmostEqual(out[0][1], 0.0, places=6)
+
+    def test_zero_when_far(self):
+        out = predator_evasion([(20.0, 0.0)], (0.0, 0.0), influence=6.0)
+        self.assertEqual(out[0], (0.0, 0.0))
+
+    def test_closer_is_stronger(self):
+        near = predator_evasion([(1.0, 0.0)], (0.0, 0.0), influence=8.0)
+        far = predator_evasion([(4.0, 0.0)], (0.0, 0.0), influence=8.0)
+        self.assertGreater(near[0][0], far[0][0])
+
+    def test_clamped(self):
+        out = predator_evasion([(0.05, 0.0)], (0.0, 0.0),
+                               strength=20.0, max_accel=8.0)
+        self.assertLessEqual(math.hypot(*out[0]), 8.0 + 1e-9)
 
 
 if __name__ == "__main__":

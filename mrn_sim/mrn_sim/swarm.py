@@ -23,6 +23,7 @@ from mrn_coord.flocking import (
     flock_velocities,
     goal_seek,
     obstacle_avoidance,
+    predator_evasion,
     velocity_to_unicycle,
 )
 
@@ -54,6 +55,9 @@ def flock_in_world(
     obstacle_strength: float = 2.0,
     goal=None,
     w_goal: float = 0.8,
+    predator=None,
+    w_predator: float = 1.5,
+    predator_influence: float = 6.0,
     max_v: float = 1.8,
     max_omega: float = 2.5,
 ):
@@ -61,7 +65,8 @@ def flock_in_world(
 
     ``velocities`` is the Boids velocity state, one ``(vx, vy)`` per robot in
     ``world.robots`` insertion order. If ``goal`` (an ``(x, y)``) is given, a
-    migration term steers the flock toward it. Deterministic given the inputs.
+    migration term steers the flock toward it; if ``predator`` (an ``(x, y)``)
+    is given, the flock flees it. Deterministic given the inputs.
     """
     ids = list(world.robots)
     positions = [(world.robots[a].pose[0], world.robots[a].pose[1]) for a in ids]
@@ -75,12 +80,16 @@ def flock_in_world(
         influence=obstacle_influence, strength=obstacle_strength)
     mig = (goal_seek(positions, goal, max_speed=max_speed)
            if goal is not None else [(0.0, 0.0)] * len(ids))
+    flee = (predator_evasion(positions, predator, influence=predator_influence)
+            if predator is not None else [(0.0, 0.0)] * len(ids))
 
     new_vel = []
     commands = {}
     for i, a in enumerate(ids):
-        vx = vel[i][0] + w_obstacle * obs[i][0] + w_goal * mig[i][0]
-        vy = vel[i][1] + w_obstacle * obs[i][1] + w_goal * mig[i][1]
+        vx = (vel[i][0] + w_obstacle * obs[i][0] + w_goal * mig[i][0]
+              + w_predator * flee[i][0])
+        vy = (vel[i][1] + w_obstacle * obs[i][1] + w_goal * mig[i][1]
+              + w_predator * flee[i][1])
         vx, vy = _wall_turn(positions[i][0], positions[i][1], vx, vy,
                             world.width, world.height)
         # re-clamp to max_speed

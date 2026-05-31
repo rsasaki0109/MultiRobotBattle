@@ -100,6 +100,42 @@ def obstacle_avoidance(
     return out
 
 
+def predator_evasion(
+    positions,
+    predator,
+    *,
+    influence: float = 6.0,
+    strength: float = 5.0,
+    max_accel: float = 8.0,
+) -> list:
+    """Per-agent flee acceleration away from a ``predator`` point.
+
+    Like :func:`obstacle_avoidance` but for a single, scarier point with a
+    longer reach: every agent within ``influence`` of ``predator`` gets an
+    outward push that grows as it gets closer (``strength / dist**2``), clamped
+    to ``max_accel``. ``predator`` is an ``(x, y)`` tuple. Returns ``(ax, ay)``
+    per agent (zero when out of range).
+    """
+    qx, qy = predator
+    out = []
+    for (px, py) in positions:
+        dx, dy = px - qx, py - qy
+        d = math.hypot(dx, dy)
+        if d < influence:
+            w = strength / (max(d, 0.3) ** 2)
+            if d > 1e-9:
+                ax, ay = (dx / d) * w, (dy / d) * w
+            else:
+                ax, ay = w, 0.0   # exactly on the predator: flee +x arbitrarily
+            mag = math.hypot(ax, ay)
+            if mag > max_accel and mag > 0.0:
+                ax, ay = ax / mag * max_accel, ay / mag * max_accel
+            out.append((ax, ay))
+        else:
+            out.append((0.0, 0.0))
+    return out
+
+
 def _clamp_speed(vx: float, vy: float, max_speed: float) -> Vec2:
     speed = math.hypot(vx, vy)
     if max_speed > 0.0 and speed > max_speed and speed > 0.0:

@@ -129,6 +129,16 @@ verified by the flock centroid closing most of the distance to the goal.
 `scripts/make_swarm_sim_gif.py` renders the migrating flock (above); regenerate
 with `python3 scripts/make_swarm_sim_gif.py`.
 
+Pass a `predator` `(x, y)` and the flock flees it (`predator_evasion`): a strong,
+ranged outward push. `scripts/make_predator_gif.py` renders a pursuer chasing
+the flock's centroid while the robots scatter away from it and around the
+obstacles — verified deterministically (the flock's mean distance from the
+predator grows while it stays in bounds).
+
+<p align="center">
+  <img src="media/predator_demo.gif" alt="A flock of robots fleeing a pursuing predator while avoiding obstacles" width="640">
+</p>
+
 ## Roadmap
 
 This is the world core, its ROS node, the localization integration, and a
