@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     container: ros:jazzy-ros-base
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install build tools
         run: |
           apt-get update
