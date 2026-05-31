@@ -150,6 +150,22 @@ flock centroid completes the waypoints and reaches the final goal.
   <img src="media/mission_demo.gif" alt="A swarm carrying out a multi-phase mission: regroup, migrate via waypoints, evade a predator, reach the goal" width="640">
 </p>
 
+## Point-to-point navigation
+
+`mrn_sim.navigate` is the classic single-robot navigation pipeline, assembled
+from pieces already in the repo: `occupancy_from_world` discretizes the world's
+circular obstacles into an inflated occupancy grid, `plan_world_path` plans a
+shortest path on it with the MAPF grid A* (`plan_path` with no constraints) and
+returns world waypoints, and the pure-pursuit follower drives the unicycle robot
+along them through the collision-aware `world.step`. Plan → follow → arrive,
+around the obstacles. Verified deterministically (the robot reaches its goal and
+never enters an obstacle); `scripts/make_nav_gif.py` shows several robots each
+navigating to its own goal.
+
+<p align="center">
+  <img src="media/nav_demo.gif" alt="Four robots planning A* paths around obstacles and following them to their goals" width="640">
+</p>
+
 ## Roadmap
 
 This is the world core, its ROS node, the localization integration, and a

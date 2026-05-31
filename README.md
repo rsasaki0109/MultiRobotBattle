@@ -157,6 +157,14 @@ verified deterministically that the flock completes it):
   <img src="docs/media/mission_demo.gif" alt="A swarm carrying out a multi-phase mission across the obstacle field" width="640">
 </p>
 
+And classic point-to-point **navigation** (`mrn_sim.navigate`): discretize the
+obstacles into an occupancy grid, plan with grid A*, and follow with pure
+pursuit to the goal (`scripts/make_nav_gif.py`):
+
+<p align="center">
+  <img src="docs/media/nav_demo.gif" alt="Four robots planning A* paths around obstacles and following them to their goals" width="640">
+</p>
+
 ## Quick Start
 
 Build with ROS 2 Jazzy:

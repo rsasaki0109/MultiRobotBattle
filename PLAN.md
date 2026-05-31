@@ -904,6 +904,10 @@ Current role:
   `robot_2` GNSS-degraded, cooperative localization pulls its estimate back to
   within ~0.3 m of truth (`status = OK`), verified by an isolated-domain run.
   Also stamps the emitted `AgentState` (header + TTL) so freshness gates accept it
+- [x] point-to-point navigation (`mrn_sim.navigate`): discretize obstacles into
+  an inflated occupancy grid, plan with the MAPF grid A* (`plan_world_path`),
+  follow with pure pursuit to the goal. Verified deterministically (reaches the
+  goal, never enters an obstacle); `scripts/make_nav_gif.py`
 
 - [x] a unicycle path-follower so a MAPF plan can be driven through this world:
   `mrn_coord` `pure_pursuit` (pure) + `mrn_path_follower` node; the
