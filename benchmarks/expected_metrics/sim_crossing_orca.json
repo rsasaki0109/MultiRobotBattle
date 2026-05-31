@@ -1,0 +1,13 @@
+{
+  "collisions": 0,
+  "goals_reached": 3,
+  "goals_total": 3,
+  "makespan_sec": 12.3,
+  "min_obstacle_clearance": 0.045,
+  "min_robot_distance": 0.77,
+  "policy": "orca",
+  "scenario": "crossing",
+  "steps": 123,
+  "success": true,
+  "total_path_length": 51.601
+}

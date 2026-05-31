@@ -55,12 +55,16 @@ simulator emits them; that repo consumes them.
   `run_mapf_benchmark` + `mrn_mapf_bench` CLI; bundled example, CBS /
   prioritized). Drop in downloaded benchmark sets to compare solve-rate /
   makespan.
-- A scenario-driven CI benchmark gate (expected-metrics regression like the
-  localization repo's).
+- [x] scenario-driven CI benchmark gate: `scripts/benchmark_gate.py` runs the
+  bundled scenarios + MovingAI example and regresses their metrics against
+  `benchmarks/expected_metrics/` (like the localization repo's). CI-enforced.
+- [x] ORCA reciprocal local collision avoidance (`mrn_coord.orca`, RVO2-style
+  2-D LP); `orca_policy` benchmark policy + `mrn_sim_bench --policy orca`;
+  guarded by the gate. Resolves the repulsion baseline's oscillation/deadlock.
 - Solve-rate / runtime comparison tables on full MovingAI sets (the loader is
   ready; needs the downloaded data).
-- Continuous-space / kinematic planning beyond the grid; deadlock resolution
-  for reciprocal avoidance (priorities / ORCA).
+- Continuous-space / kinodynamic planning beyond the grid; ORCA tie-break /
+  priority schemes for the perfect-symmetry case.
 - Real-robot bring-up (separate effort; the localization repo is rosbag-first).
 
 ## Rules

@@ -44,10 +44,19 @@ result = run_scenario(Scenario.from_dict(spec), my_policy)
 print(result.as_dict())
 ```
 
-The built-in `navigate_policy` (A* + pursuit + reciprocal avoidance) is a
-turnkey baseline; on the bundled scenarios it solves all goals collision-free
-(e.g. `crossing`: 3/3 reached, min inter-robot distance ≈ 1.4 m, 0 collisions).
-Because it is pure and deterministic, a benchmark result is reproducible and
+Two built-in policies ship as turnkey baselines (and templates for your own):
+`navigate_policy` (A* + pursuit + summed repulsion) and `orca_policy` (A* +
+pursuit + **ORCA** reciprocal avoidance, see
+[coordination.md](coordination.md)). Both solve the bundled scenarios
+collision-free; ORCA is markedly faster and tighter (e.g. `crossing`: makespan
+12.3 s vs 18.5 s). Compare them from the CLI:
+
+```bash
+ros2 run mrn_sim mrn_sim_bench crossing --policy orca
+ros2 run mrn_sim mrn_sim_bench crossing --policy navigate
+```
+
+Because both are pure and deterministic, a benchmark result is reproducible and
 CI-checkable.
 
 ### Regression gate

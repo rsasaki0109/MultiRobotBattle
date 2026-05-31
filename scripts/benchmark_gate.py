@@ -30,12 +30,20 @@ _EXPECTED_DIR = os.path.join(_REPO, "benchmarks", "expected_metrics")
 _FLOAT_TOL = 0.05
 
 
-def _run_sim_scenario(name: str) -> dict:
-    from mrn_sim.benchmark import load_scenario, navigate_policy, run_scenario
+def _run_sim_scenario(name: str, policy: str = "navigate") -> dict:
+    from mrn_sim.benchmark import (
+        load_scenario,
+        navigate_policy,
+        orca_policy,
+        run_scenario,
+    )
 
+    builders = {"navigate": navigate_policy, "orca": orca_policy}
     scenario = load_scenario(os.path.join(_REPO, "mrn_sim", "scenarios", name + ".yaml"))
-    result = run_scenario(scenario, navigate_policy(scenario), dt=0.1, max_steps=600)
-    return result.as_dict()
+    result = run_scenario(scenario, builders[policy](scenario), dt=0.1, max_steps=600)
+    out = result.as_dict()
+    out["policy"] = policy
+    return out
 
 
 def _run_mapf_example(solver: str) -> dict:
@@ -54,6 +62,8 @@ SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
     ("sim_crossing", lambda: _run_sim_scenario("crossing")),
     ("sim_doorway", lambda: _run_sim_scenario("doorway")),
+    ("sim_crossing_orca", lambda: _run_sim_scenario("crossing", "orca")),
+    ("sim_doorway_orca", lambda: _run_sim_scenario("doorway", "orca")),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
 ]

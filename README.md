@@ -39,10 +39,11 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   **reciprocal multi-robot collision avoidance** and **replanning around
   dynamic obstacles**.
 - **Coordination** (`mrn_coord`) — multi-agent path finding (Conflict-Based
-  Search / prioritized planning), decentralized formation control, cooperative
-  coverage (frontier + greedy/Hungarian allocation), and swarm flocking (Boids:
-  separation / alignment / cohesion + obstacle avoidance + migration + predator
-  evasion + leader following).
+  Search / prioritized planning), **ORCA** reciprocal local collision avoidance,
+  decentralized formation control, cooperative coverage (frontier +
+  greedy/Hungarian allocation), and swarm flocking (Boids: separation /
+  alignment / cohesion + obstacle avoidance + migration + predator evasion +
+  leader following).
 - **Benchmark environment** (`mrn_sim.benchmark`) — plug your own multi-robot
   policy into a `Scenario` and get comparable metrics (success, makespan, path
   length, clearance, inter-robot distance, collisions). `ros2 run mrn_sim

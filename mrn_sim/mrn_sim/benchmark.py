@@ -229,3 +229,69 @@ def navigate_policy(scenario: Scenario, *, lookahead: float = 0.9,
         return cmds
 
     return policy
+
+
+def orca_policy(scenario: Scenario, *, lookahead: float = 1.2,
+                max_speed: float = 1.5, time_horizon: float = 2.5,
+                tie_break: float = 0.05):
+    """Policy: A* plan + carrot, with **ORCA** reciprocal collision avoidance.
+
+    Same plan-and-follow skeleton as :func:`navigate_policy`, but the local
+    avoidance is principled ORCA (:func:`mrn_coord.orca.orca_velocity`) instead
+    of summed repulsion: the preferred velocity points at the path carrot, then
+    ORCA returns the closest velocity that is provably collision-free for the
+    horizon given the other robots (reciprocal) and the obstacles (static). A
+    tiny per-robot ``tie_break`` rotation perturbs the preferred velocity to
+    dissolve the perfect-symmetry deadlock ORCA is otherwise prone to.
+    """
+    from mrn_coord.flocking import velocity_to_unicycle
+    from mrn_coord.mapf.path_follower import carrot_point
+    from mrn_coord.orca import orca_velocity
+
+    from .navigate import plan_world_path
+
+    world0 = scenario.world()
+    radius = scenario.robot_radius
+    obstacles = [(o.x, o.y, o.radius) for o in world0.obstacles]
+    paths = {}
+    for a, g in scenario.goals.items():
+        start = (world0.robots[a].pose[0], world0.robots[a].pose[1])
+        paths[a] = plan_world_path(world0, start, g, cell_size=0.5, inflation=0.4)
+
+    ids = list(world0.robots)
+    vel = {a: (0.0, 0.0) for a in ids}              # last holonomic velocity
+    # Deterministic, distinct per-robot tie-break rotation (breaks symmetry).
+    rot = {a: tie_break * (i - (len(ids) - 1) / 2.0) for i, a in enumerate(ids)}
+
+    def policy(world):
+        cmds = {}
+        new_vel = {}
+        for a in ids:
+            pose = world.robots[a].pose
+            path = paths.get(a)
+            if not path:
+                cmds[a] = (0.0, 0.0)
+                new_vel[a] = (0.0, 0.0)
+                continue
+            gx, gy = path[-1]
+            if math.hypot(gx - pose[0], gy - pose[1]) <= 0.3:
+                cmds[a] = (0.0, 0.0)
+                new_vel[a] = (0.0, 0.0)
+                continue
+            cx, cy = carrot_point(pose, path, lookahead)
+            dx, dy = cx - pose[0], cy - pose[1]
+            d = math.hypot(dx, dy) or 1.0
+            ang = math.atan2(dy, dx) + rot[a]
+            pref = (math.cos(ang) * max_speed, math.sin(ang) * max_speed)
+            neighbors = [((world.robots[b].pose[0], world.robots[b].pose[1]),
+                          vel[b], radius) for b in ids if b != a]
+            v = orca_velocity(
+                (pose[0], pose[1]), vel[a], pref, neighbors, obstacles,
+                radius=radius, max_speed=max_speed, time_horizon=time_horizon)
+            new_vel[a] = v
+            cmds[a] = velocity_to_unicycle(pose[2], v[0], v[1],
+                                           max_v=max_speed, max_omega=3.0)
+        vel.update(new_vel)
+        return cmds
+
+    return policy

@@ -152,6 +152,46 @@ their goals:
 ros2 launch mrn_sim mapf_through_sim.launch.py use_rviz:=true
 ```
 
+## Local collision avoidance — ORCA
+
+MAPF plans *globally and discretely* before motion. **ORCA** (`orca.py`) is its
+continuous, reactive complement: each robot, every tick, picks the velocity
+closest to where it wants to go that is still provably collision-free for a
+short time horizon — assuming every neighbour reasons the same way. That mutual
+assumption (Optimal *Reciprocal* Collision Avoidance — van den Berg, Guy, Lin &
+Manocha, 2011) is what removes the oscillation and jitter you get from naively
+summing pairwise repulsion.
+
+Each neighbour forbids a half-plane of velocities; the admissible set is the
+intersection of those half-planes and the max-speed disc, and the best velocity
+in it is a small 2-D linear program (`_linear_program2`, with the RVO2
+distance-minimising fallback `_linear_program3` for jointly-infeasible crowds).
+Moving robots share the avoidance equally (half each); static circular obstacles
+get the full responsibility and a shorter horizon.
+
+```python
+from mrn_coord.orca import orca_velocity
+v = orca_velocity(position, velocity, preferred_velocity,
+                  neighbors=[(pos, vel, radius), ...],
+                  obstacles=[(x, y, radius), ...],
+                  radius=0.25, max_speed=1.5, time_horizon=2.5)
+```
+
+`orca_velocity` is pure and the unit tests pin its guarantee: off-axis agents
+slip past each other, and even a perfectly symmetric four-way crossing — where
+ORCA cannot break the tie to *converge* (a documented property; a real
+controller adds a small perturbation) — still never collides. The simulator
+exposes it as a benchmark policy, `mrn_sim.benchmark.orca_policy` (A* plan +
+carrot + ORCA), with a tiny per-robot tie-break so it converges in practice. On
+the bundled scenarios it reaches all goals collision-free and noticeably faster
+and tighter than the repulsion baseline (e.g. `crossing`: makespan 12.3 s vs
+18.5 s); both are guarded by the CI benchmark gate. Run the comparison:
+
+```bash
+ros2 run mrn_sim mrn_sim_bench crossing --policy orca
+ros2 run mrn_sim mrn_sim_bench crossing --policy navigate
+```
+
 ## Formation — Decentralized Formation Control
 
 This module is the clearest reuse of the localization stack's output: the

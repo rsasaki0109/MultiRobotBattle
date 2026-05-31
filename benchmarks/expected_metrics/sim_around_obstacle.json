@@ -5,6 +5,7 @@
   "makespan_sec": 13.6,
   "min_obstacle_clearance": 0.947,
   "min_robot_distance": 0.0,
+  "policy": "navigate",
   "scenario": "around_obstacle",
   "steps": 136,
   "success": true,

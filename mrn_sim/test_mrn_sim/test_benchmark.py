@@ -79,6 +79,22 @@ class TestNavigatePolicy(unittest.TestCase):
         self.assertTrue(res.success)
         self.assertGreaterEqual(res.min_obstacle_clearance, -0.05)   # stayed clear
 
+    def test_orca_policy_solves_crossing_collision_free(self):
+        from mrn_sim.benchmark import orca_policy
+
+        # Three robots cross past a central obstacle; ORCA reciprocal avoidance
+        # must get them all to their goals without any collision.
+        sc = Scenario(name="crossing", width=20.0, height=10.0,
+                      robots={"r1": (1.5, 3.0, 0.0), "r2": (1.5, 7.0, 0.0),
+                              "r3": (18.5, 5.0, math.pi)},
+                      obstacles=[(10.0, 5.0, 1.2)],
+                      goals={"r1": (18.5, 3.0), "r2": (18.5, 7.0), "r3": (1.5, 5.0)})
+        res = run_scenario(sc, orca_policy(sc), dt=0.1, max_steps=400)
+        self.assertTrue(res.success)
+        self.assertEqual(res.collisions, 0)
+        self.assertGreater(res.min_robot_distance, 2 * sc.robot_radius)
+        self.assertGreaterEqual(res.min_obstacle_clearance, -0.05)
+
 
 if __name__ == "__main__":
     unittest.main()
