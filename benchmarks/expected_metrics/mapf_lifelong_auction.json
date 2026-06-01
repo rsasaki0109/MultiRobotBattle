@@ -1,0 +1,9 @@
+{
+  "agents": 6,
+  "avg_service_time": 3.399,
+  "case": "mapf_lifelong_auction",
+  "completed": 208,
+  "max_wait": 24,
+  "steps": 120,
+  "throughput": 1.7333
+}

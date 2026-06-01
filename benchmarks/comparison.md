@@ -78,3 +78,15 @@ Online/lifelong MAPF on a shelf-and-aisle warehouse (`mrn_coord.lifelong.make_wa
 
 Throughput rises with the team size until aisle congestion starts to lengthen service times — the warehouse-capacity trade-off lifelong MAPF exists to study.
 
+## Task allocation: round-robin vs. auction / Hungarian
+
+Same warehouse and 6 robots over 150 ticks, varying only *how* a freed robot is handed its next task. `stream` is geometry-blind round-robin (the next task in a fixed cycle); `auction` and `hungarian` instead match free robots to the pool of open tasks by obstacle-aware travel distance (a regret-based market auction, and the optimal linear-assignment solution). Sending the *nearest* free robot shortens every trip, so far more tasks finish in the same time.
+
+| allocator | completed | throughput (tasks/step) | avg service (steps) | max wait |
+| --- | --: | --: | --: | --: |
+| stream | 114 | 0.760 | 7.8 | 20 |
+| auction | 262 | 1.747 | 3.4 | 24 |
+| hungarian | 231 | 1.540 | 3.9 | 18 |
+
+Cost-aware allocation roughly doubles throughput and halves service time here. The optimal one-shot matching (Hungarian) and the cheaper regret auction are close; over the lifelong horizon the auction's round-by-round greediness can even edge ahead, since one-shot optimality is not the same as long-run optimality.
+

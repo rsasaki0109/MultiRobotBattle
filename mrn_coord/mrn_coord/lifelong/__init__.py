@@ -7,13 +7,15 @@ reaches its goal is immediately assigned the next one, and the team plans *while
 moving*, forever. The figure of merit is **throughput** — tasks completed per
 timestep — not makespan.
 
-This package adds that loop on top of the existing single-agent space-time A\*:
-:func:`run_lifelong` runs a rolling-horizon, reservation-based prioritized
-planner (replan every tick, commit one step, rotate priority for fairness) that
-is collision-free by construction and reassigns tasks from a deterministic
-stream as they complete.
+This package adds that loop on top of PIBT: :func:`run_lifelong` steps a
+collision-free configuration each tick and reassigns tasks as they complete.
+How free robots are matched to tasks is pluggable (``allocator=``): round-robin
+by default, or cost-aware :func:`~mrn_coord.lifelong.allocation.auction` /
+:func:`~mrn_coord.lifelong.allocation.hungarian` matching by travel distance,
+which lifts throughput by sending the *nearest* free robot to each task.
 """
 
+from .allocation import auction, hungarian
 from .lifelong import LifelongResult, TaskStream, make_warehouse, run_lifelong
 
 __all__ = [
@@ -21,4 +23,6 @@ __all__ = [
     "TaskStream",
     "make_warehouse",
     "run_lifelong",
+    "auction",
+    "hungarian",
 ]

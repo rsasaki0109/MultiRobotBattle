@@ -43,6 +43,10 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=120, help="timesteps to run")
     parser.add_argument("--frames", type=int, default=6,
                         help="ASCII frames to print (0 to skip)")
+    parser.add_argument("--allocator", choices=["stream", "auction", "hungarian"],
+                        default="stream",
+                        help="task allocation: round-robin (stream) or "
+                        "cost-aware auction / hungarian")
     args = parser.parse_args()
 
     grid, endpoints = make_warehouse(rows=args.rows, cols=args.cols)
@@ -51,10 +55,10 @@ def main() -> None:
     stream = TaskStream(list(endpoints))
 
     res = run_lifelong(grid, starts, stream, max_steps=args.steps,
-                       keep_history=args.frames > 0)
+                       allocator=args.allocator, keep_history=args.frames > 0)
 
     print(f"=== lifelong MAPF — {grid.width}x{grid.height} warehouse, "
-          f"{n} agents, {args.steps} steps (PIBT) ===")
+          f"{n} agents, {args.steps} steps (PIBT, {args.allocator} allocation) ===")
     print(f"  tasks completed : {res.completed}")
     print(f"  throughput      : {res.throughput:.3f} tasks/step "
           f"({res.throughput * n:.3f} per robot-step is the ceiling)")

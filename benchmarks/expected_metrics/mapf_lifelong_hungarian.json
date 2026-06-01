@@ -1,0 +1,9 @@
+{
+  "agents": 6,
+  "avg_service_time": 3.841,
+  "case": "mapf_lifelong_hungarian",
+  "completed": 182,
+  "max_wait": 15,
+  "steps": 120,
+  "throughput": 1.5167
+}

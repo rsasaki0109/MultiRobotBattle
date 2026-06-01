@@ -134,19 +134,31 @@ def run_lifelong(
     *,
     max_steps: int = 256,
     keep_history: bool = False,
+    allocator: str = "stream",
+    open_tasks: int | None = None,
     horizon: int | None = None,   # accepted for API symmetry; unused by PIBT
 ) -> LifelongResult:
     """Run lifelong MAPF for ``max_steps`` ticks and return throughput metrics.
 
     ``starts`` maps agent id -> current :class:`Cell`. Each agent gets an initial
-    goal from ``stream`` and a fresh goal whenever it arrives. Movement is
-    collision-free by construction (PIBT). Returns a :class:`LifelongResult`;
-    pass ``keep_history=True`` to also capture per-step positions for rendering.
+    goal and a fresh one whenever it arrives. Movement is collision-free by
+    construction (PIBT). Returns a :class:`LifelongResult`; pass
+    ``keep_history=True`` to also capture per-step positions for rendering.
+
+    ``allocator`` chooses how free robots are matched to tasks:
+
+    - ``"stream"`` (default) — round-robin: deal out the next task in the
+      stream's cycle, geometry-blind.
+    - ``"auction"`` / ``"hungarian"`` — keep a pool of ``open_tasks`` open tasks
+      (default: one per agent) and match free robots to them by obstacle-aware
+      travel distance (:mod:`mrn_coord.lifelong.allocation`), so a robot gets a
+      *near* task instead of the next in line. This raises throughput.
     """
     del horizon
     ids = sorted(starts)
     pos = {a: starts[a] for a in ids}
     goal = {}
+    has_task = {a: False for a in ids}
     assigned_at = {}
     elapsed = {a: 0 for a in ids}        # ticks since current task assigned (priority)
     dist_cache: dict = {}
@@ -161,20 +173,65 @@ def run_lifelong(
     service_times: list = []
     history: list = []
 
+    # --- task assignment: round-robin stream, or cost-aware pool allocator ---
+    if allocator == "stream":
+        def assign(free, step):
+            for a in free:
+                goal[a] = stream.next_goal(avoid=pos[a])
+                has_task[a] = True
+                assigned_at[a] = step
+                elapsed[a] = 0
+    else:
+        from .allocation import ALLOCATORS
+
+        if allocator not in ALLOCATORS:
+            raise ValueError(f"unknown allocator: {allocator!r}")
+        allocate = ALLOCATORS[allocator]
+        pool_size = open_tasks if open_tasks is not None else len(ids)
+        pending: list = []
+
+        def refill():
+            while len(pending) < pool_size:
+                pending.append(stream.next_goal())
+
+        def assign(free, step):
+            refill()
+            rows = list(free)
+            if not rows or not pending:
+                return
+            big = grid.width * grid.height + 1
+            cost = [[(dist_to(t).get(pos[a], big) if t != pos[a] else big)
+                     for t in pending] for a in rows]
+            matched = allocate(cost)
+            for ri in sorted(matched):
+                ci = matched[ri]
+                if cost[ri][ci] >= big:
+                    continue                       # unreachable / would self-assign
+                a = rows[ri]
+                goal[a] = pending[ci]
+                has_task[a] = True
+                assigned_at[a] = step
+                elapsed[a] = 0
+            for ci in sorted({matched[ri] for ri in matched
+                              if cost[ri][matched[ri]] < big}, reverse=True):
+                pending.pop(ci)
+            refill()
+
     for a in ids:
-        goal[a] = stream.next_goal(avoid=pos[a])
-        assigned_at[a] = 0
+        goal[a] = pos[a]                  # default: hold position until tasked
+    assign(ids, 0)
 
     for step in range(max_steps):
         # 1. completions + reassignment.
-        for a in ids:
-            if pos[a] == goal[a]:
-                completed += 1
-                per_agent[a] += 1
-                service_times.append(step - assigned_at[a])
-                goal[a] = stream.next_goal(avoid=pos[a])
-                assigned_at[a] = step
-                elapsed[a] = 0
+        done = [a for a in ids if has_task[a] and pos[a] == goal[a]]
+        for a in done:
+            completed += 1
+            per_agent[a] += 1
+            service_times.append(step - assigned_at[a])
+            has_task[a] = False
+            goal[a] = pos[a]
+        if done:
+            assign(done, step)
 
         if keep_history:
             history.append(dict(pos))
@@ -192,7 +249,7 @@ def run_lifelong(
 
     # final-tick completions.
     for a in ids:
-        if pos[a] == goal[a]:
+        if has_task[a] and pos[a] == goal[a]:
             completed += 1
             per_agent[a] += 1
             service_times.append(max_steps - assigned_at[a])

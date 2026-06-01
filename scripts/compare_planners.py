@@ -183,6 +183,21 @@ def _lifelong_rows():
     return rows
 
 
+def _allocator_rows():
+    """Task allocation: round-robin vs cost-aware auction / Hungarian."""
+    from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
+
+    grid, endpoints = make_warehouse(rows=2, cols=3)
+    n = min(6, len(endpoints))
+    rows = []
+    for allocator in ("stream", "auction", "hungarian"):
+        starts = {f"r{i}": endpoints[i] for i in range(n)}
+        res = run_lifelong(grid, starts, TaskStream(list(endpoints)),
+                           max_steps=150, allocator=allocator)
+        rows.append((allocator, res))
+    return n, rows
+
+
 def _fmt(report_lines):
     return "\n".join(report_lines) + "\n"
 
@@ -321,6 +336,38 @@ def build_report() -> str:
         "Throughput rises with the team size until aisle congestion starts to "
         "lengthen service times — the warehouse-capacity trade-off lifelong MAPF "
         "exists to study.",
+        "",
+    ]
+
+    alloc_n, alloc_rows = _allocator_rows()
+    lines += [
+        "## Task allocation: round-robin vs. auction / Hungarian",
+        "",
+        f"Same warehouse and {alloc_n} robots over 150 ticks, varying only *how* "
+        "a freed robot is handed its next task. `stream` is geometry-blind "
+        "round-robin (the next task in a fixed cycle); `auction` and `hungarian` "
+        "instead match free robots to the pool of open tasks by obstacle-aware "
+        "travel distance (a regret-based market auction, and the optimal "
+        "linear-assignment solution). Sending the *nearest* free robot shortens "
+        "every trip, so far more tasks finish in the same time.",
+        "",
+        "| allocator | completed | throughput (tasks/step) | "
+        "avg service (steps) | max wait |",
+        "| --- | --: | --: | --: | --: |",
+    ]
+    for allocator, res in alloc_rows:
+        d = res.as_dict()
+        lines.append(
+            f"| {allocator} | {d['completed']} | {d['throughput']:.3f} | "
+            f"{d['avg_service_time']:.1f} | {d['max_wait']} |"
+        )
+    lines += [
+        "",
+        "Cost-aware allocation roughly doubles throughput and halves service "
+        "time here. The optimal one-shot matching (Hungarian) and the cheaper "
+        "regret auction are close; over the lifelong horizon the auction's "
+        "round-by-round greediness can even edge ahead, since one-shot optimality "
+        "is not the same as long-run optimality.",
         "",
     ]
     return _fmt(lines)

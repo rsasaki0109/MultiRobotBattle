@@ -178,12 +178,35 @@ deterministic, so the throughput is reproducible and CI-gated.
 ```bash
 ros2 run mrn_coord mrn_lifelong_demo                       # 6 robots, prints throughput + frames
 ros2 run mrn_coord mrn_lifelong_demo --agents 8 --steps 200
+ros2 run mrn_coord mrn_lifelong_demo --allocator auction   # cost-aware assignment
 ```
 
 `scripts/compare_planners.py` tabulates throughput vs. team size
 ([`benchmarks/comparison.md`](../benchmarks/comparison.md)): it climbs with the
 fleet until aisle congestion lengthens service times — the warehouse-capacity
 trade-off lifelong MAPF exists to study.
+
+#### Task allocation (`lifelong/allocation.py`)
+
+PIBT decides *how* robots move; **which task** each freed robot gets is a
+separate lever, set by `run_lifelong(..., allocator=...)`. The default
+`"stream"` is round-robin — deal out the next task in a fixed cycle, ignoring
+geometry — which routinely sends a robot clear across the warehouse past a
+closer one. Two cost-aware allocators instead keep a pool of open tasks and
+match free robots to them by obstacle-aware travel distance:
+
+- **`hungarian`** — the optimal solution to the linear assignment problem
+  (Kuhn-Munkres with potentials, `O(n³)`): minimum total travel.
+- **`auction`** — a regret-based market auction: each round the unassigned robot
+  with the most to lose (largest gap between its best and second-best remaining
+  task) bids first and claims its best task. Decentralized, fast, near-optimal.
+
+Sending the *nearest* free robot to each task shortens every trip; in the
+bundled benchmark (`benchmarks/comparison.md`) cost-aware allocation roughly
+**doubles throughput** and halves service time over round-robin. The optimal
+one-shot Hungarian match and the cheaper auction are close — and over the
+lifelong horizon the auction's round-by-round greediness can even edge ahead,
+since one-shot optimality is not long-run optimality.
 
 ### ROS node
 

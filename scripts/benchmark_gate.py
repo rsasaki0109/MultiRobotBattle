@@ -68,14 +68,17 @@ def _run_mapf_example(solver: str, **kwargs) -> dict:
     return res
 
 
-def _run_lifelong(agents: int = 6, steps: int = 120) -> dict:
+def _run_lifelong(agents: int = 6, steps: int = 120,
+                  allocator: str = "stream") -> dict:
     from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
 
     grid, endpoints = make_warehouse(rows=2, cols=3)
     starts = {f"r{i}": endpoints[i] for i in range(min(agents, len(endpoints)))}
-    res = run_lifelong(grid, starts, TaskStream(list(endpoints)), max_steps=steps)
+    res = run_lifelong(grid, starts, TaskStream(list(endpoints)),
+                       max_steps=steps, allocator=allocator)
     out = res.as_dict()
-    out["case"] = "mapf_lifelong"
+    suffix = "" if allocator == "stream" else "_" + allocator
+    out["case"] = "mapf_lifelong" + suffix
     return out
 
 
@@ -103,8 +106,10 @@ SUITE = [
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
     # same prioritized planner, safe-interval (SIPP) low level
     ("mapf_example_prioritized_sipp", lambda: _run_mapf_example("prioritized_sipp")),
-    # lifelong / online MAPF throughput (PIBT)
+    # lifelong / online MAPF throughput (PIBT), with each task allocator
     ("mapf_lifelong", _run_lifelong),
+    ("mapf_lifelong_auction", lambda: _run_lifelong(allocator="auction")),
+    ("mapf_lifelong_hungarian", lambda: _run_lifelong(allocator="hungarian")),
 ]
 
 

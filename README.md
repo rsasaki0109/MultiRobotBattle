@@ -45,7 +45,8 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   Conflict-Based Search, **bounded-suboptimal ECBS** that scales further,
   prioritized planning, all over a **space-time A\*** or drop-in **SIPP**
   safe-interval low level, plus **lifelong / online MAPF** stepped by
-  **PIBT** for warehouse-style endless-task throughput), **ORCA** reciprocal
+  **PIBT** with **auction / Hungarian** task allocation for warehouse-style
+  endless-task throughput), **ORCA** reciprocal
   local collision avoidance, decentralized formation control, cooperative
   coverage (frontier + greedy/Hungarian allocation), and swarm flocking (Boids:
   separation / alignment / cohesion + obstacle avoidance + migration + predator
