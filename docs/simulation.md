@@ -414,7 +414,7 @@ world. A MAPF solver returns paths that are collision-free *on the grid, in
 discrete time*; the executor turns them into continuous waypoints, drops the
 agents into the world (grid obstacles → circular ones), and drives each robot
 along its own planned path — then measures whether the discrete guarantee
-survives real discs and unicycle kinematics. Three executions of the *same*
+survives real discs and unicycle kinematics. Four executions of the *same*
 plan:
 
 - `"pursuit"` — free-running pure pursuit that keeps the spatial route but
@@ -427,13 +427,20 @@ plan:
   of makespan stretch while robots wait out kinematics.
 - `"dwa"` — keep the route but treat the other robots as moving obstacles, a
   reactive recovery without the schedule.
+- `"shield"` — the *same* schedule-ignoring pursuit nominal, but run under the
+  [certified safety shield](#certified-safety-shield-shieldpy): it turns
+  pursuit's collisions into **zero**, but at the fully symmetric merge a pure
+  safety layer deadlocks (every robot yields) — so it *fails safe* (stops)
+  rather than unsafe (collides). A runtime guarantee, not a substitute for the
+  schedule.
 
-`benchmarks/comparison.md` runs all three on a 4-way crossing: pursuit collides
-and stalls, while TPG and DWA both finish collision-free. Try it with
+`benchmarks/comparison.md` runs all four on a 4-way crossing: pursuit collides
+and stalls; TPG and DWA both finish collision-free; the shield is collision-free
+but deadlocks at the symmetric merge. Try it with
 `ros2 run mrn_sim mrn_mapf_sim --solver lacam`. The lesson is the headline of the
 whole stack: the discrete plan is necessary but not sufficient — bridging it to
-the moving robots takes either a schedule-aware executor or a reactive
-controller, both of which live here.
+the moving robots takes a schedule-aware executor, a reactive controller, or a
+runtime safety guarantee, all of which live here.
 
 ## Roadmap
 

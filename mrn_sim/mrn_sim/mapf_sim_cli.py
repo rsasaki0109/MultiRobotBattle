@@ -1,9 +1,10 @@
 """``mrn_mapf_sim``: execute a discrete MAPF plan in the continuous world.
 
 Solves a small built-in 4-way crossing with a MAPF solver, then runs the *same*
-plan through the deterministic 2D world three ways — free-running pursuit (no
-schedule), Temporal-Plan-Graph execution (schedule-gated), and reactive DWA —
-and prints the plan-vs-reality metrics side by side. The runnable counterpart to
+plan through the deterministic 2D world four ways — free-running pursuit (no
+schedule), Temporal-Plan-Graph execution (schedule-gated), reactive DWA, and
+free-running pursuit under the certified safety shield (fails safe) — and prints
+the plan-vs-reality metrics side by side. The runnable counterpart to
 ``test_mapf_exec`` and the comparison report.
 """
 
@@ -39,7 +40,7 @@ def main() -> None:
           f"{args.solver} plan ===")
     print(f"  {'execution':10} {'success':>7} {'coll':>5} {'disc':>5} "
           f"{'cont':>5} {'makespan_s':>11} {'dev_m':>6}")
-    for controller in ("pursuit", "tpg", "dwa"):
+    for controller in ("pursuit", "tpg", "dwa", "shield"):
         r = execute_mapf_plan(grid, agents, solver=args.solver,
                               controller=controller, cell_size=args.cell_size,
                               robot_radius=args.robot_radius)

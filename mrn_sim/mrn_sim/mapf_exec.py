@@ -23,6 +23,12 @@ The headline is the comparison of how the *same* plan is executed:
   the gap.
 - ``"dwa"`` — a reactive alternative: keep the spatial route but treat the other
   robots as moving obstacles, recovering safety without the schedule.
+- ``"shield"`` — free-running pure pursuit (the *same* schedule-ignoring nominal
+  as ``"pursuit"``) with the **certified safety shield** (:mod:`mrn_sim.shield`)
+  underneath: the nominal still drives robots into the shared cell together, but
+  the shield's braking cap keeps their bodies provably apart. It shows the
+  discrete-to-continuous gap closed by a *runtime guarantee* rather than by
+  re-deriving the schedule (TPG) or by a soft reactive cost (DWA).
 
 Pure and deterministic; reuses the planners, controllers, and world already in
 the stack.
@@ -127,7 +133,8 @@ def execute_mapf_plan(grid, agents, *, solver="lacam", solution=None,
 
     ``agents`` maps id -> ``(start_cell, goal_cell)``. ``controller`` is
     ``"pursuit"`` (free-running, ignores schedule), ``"tpg"`` (schedule-gated,
-    collision-free by construction), or ``"dwa"`` (reactive). Returns an
+    collision-free by construction), ``"dwa"`` (reactive), or ``"shield"``
+    (free-running pursuit under the certified safety shield). Returns an
     :class:`ExecResult` with the discrete-vs-continuous metrics.
     """
     from mrn_coord.mapf import cbs, ecbs, lacam, mapf_lns, prioritized_planning
@@ -168,6 +175,10 @@ def execute_mapf_plan(grid, agents, *, solver="lacam", solution=None,
         from .dwa import DWAConfig
         dwa_cfg = DWAConfig(robot_radius=robot_radius, goal_tolerance=goal_tol)
         from .dwa import dwa_command
+    shield_cfg = None
+    if controller == "shield":
+        from .shield import ShieldConfig, shield_step
+        shield_cfg = ShieldConfig(robot_radius=robot_radius)
 
     collisions = 0
     max_dev = 0.0
@@ -219,6 +230,18 @@ def execute_mapf_plan(grid, agents, *, solver="lacam", solution=None,
             if controller == "pursuit":
                 v, omega, _ = pure_pursuit(pose, wpts[a], lookahead=lookahead,
                                            v_nominal=1.0, goal_tolerance=goal_tol)
+            elif controller == "shield":
+                # same schedule-ignoring nominal as "pursuit", but the certified
+                # shield rides underneath: others enter as moving obstacle discs.
+                v, omega, _ = pure_pursuit(pose, wpts[a], lookahead=lookahead,
+                                           v_nominal=1.0, goal_tolerance=goal_tol)
+                others = [(poses[b][0], poses[b][1], robot_radius,
+                           state[b][0] * math.cos(poses[b][2]),
+                           state[b][0] * math.sin(poses[b][2]))
+                          for b in ids if b != a]
+                v, omega = shield_step((pose[0], pose[1], pose[2], state[a][0]),
+                                       (v, omega), static_obs + others, dt,
+                                       shield_cfg)
             else:  # dwa
                 carrot = carrot_point(pose, wpts[a], lookahead)
                 others = [(poses[b][0], poses[b][1], robot_radius)

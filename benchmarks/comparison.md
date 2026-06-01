@@ -110,15 +110,16 @@ Cost-aware allocation roughly doubles throughput and halves service time here. T
 
 ## MAPF plan execution: plan vs. reality
 
-The *same* LaCAM plan for a 4-way crossing, executed in the continuous world three ways. The plan is collision-free on the grid in discrete time, but the robots are discs with unicycle kinematics. `pursuit` follows the spatial route but ignores the *schedule*, so the discs reach the shared centre together and collide. `tpg` gates each robot with a **Temporal Plan Graph** — enter your next cell only once its previous occupant has left — so the discrete coordination transfers exactly: collision-free, at the cost of makespan stretch while robots wait. `dwa` keeps the route but reacts to the others as moving obstacles. `coll` = robot-robot overlap steps; `cont./disc.` = continuous vs. grid makespan; `dev` = furthest a robot strayed from its planned line (m).
+The *same* LaCAM plan for a 4-way crossing, executed in the continuous world three ways. The plan is collision-free on the grid in discrete time, but the robots are discs with unicycle kinematics. `pursuit` follows the spatial route but ignores the *schedule*, so the discs reach the shared centre together and collide. `tpg` gates each robot with a **Temporal Plan Graph** — enter your next cell only once its previous occupant has left — so the discrete coordination transfers exactly: collision-free, at the cost of makespan stretch while robots wait. `dwa` keeps the route but reacts to the others as moving obstacles. `shield` keeps the *same* schedule-ignoring pursuit nominal but runs it under the certified safety shield: it turns `pursuit`'s collisions into **zero**, but at the fully symmetric merge a pure safety layer deadlocks (every robot yields) — so it *fails safe* (stops) rather than unsafe (collides), and liveness still needs the schedule (TPG) or reactivity (DWA) on top. `coll` = robot-robot overlap steps; `cont./disc.` = continuous vs. grid makespan; `dev` = furthest a robot strayed from its planned line (m).
 
 | execution | success | coll | disc. makespan | cont. steps | dev (m) |
 | --- | :-: | :-: | --: | --: | --: |
 | pursuit | ✗ | 8 | 10 | 271 | 0.83 |
 | tpg | ✓ | 0 | 10 | 162 | 0.22 |
 | dwa | ✓ | 0 | 10 | 105 | 0.78 |
+| shield | ✗ | 0 | 10 | 271 | 0.62 |
 
-The discrete guarantee is necessary but not sufficient: it takes either a schedule-aware executor (TPG) or a reactive controller (DWA) to keep it collision-free once the robots are real.
+The discrete guarantee is necessary but not sufficient: it takes either a schedule-aware executor (TPG) or a reactive controller (DWA) to keep it collision-free *and* live once the robots are real. The certified shield is the third option — a runtime guarantee that never collides — but on its own it only fails safe; it belongs under a planner, not in place of one.
 
 ## Runtime safety shield: certified vs. an adversary
 

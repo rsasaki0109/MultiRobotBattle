@@ -162,6 +162,9 @@ SUITE = [
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),
+    # free-running pursuit under the certified shield: fails safe (collision-free
+    # but deadlocks at the symmetric merge) where bare pursuit collides
+    ("mapf_exec_shield", lambda: _run_mapf_exec("shield")),
 ]
 
 

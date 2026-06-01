@@ -228,7 +228,7 @@ def _mapf_exec_rows():
     agents = {"0": ((0, 3), (6, 3)), "1": ((6, 3), (0, 3)),
               "2": ((3, 0), (3, 6)), "3": ((3, 6), (3, 0))}
     rows = []
-    for controller in ("pursuit", "tpg", "dwa"):
+    for controller in ("pursuit", "tpg", "dwa", "shield"):
         res = execute_mapf_plan(grid, agents, solver="lacam",
                                 controller=controller)
         rows.append((controller, res))
@@ -503,7 +503,12 @@ def build_report() -> str:
         "**Temporal Plan Graph** — enter your next cell only once its previous "
         "occupant has left — so the discrete coordination transfers exactly: "
         "collision-free, at the cost of makespan stretch while robots wait. `dwa` "
-        "keeps the route but reacts to the others as moving obstacles. "
+        "keeps the route but reacts to the others as moving obstacles. `shield` "
+        "keeps the *same* schedule-ignoring pursuit nominal but runs it under the "
+        "certified safety shield: it turns `pursuit`'s collisions into **zero**, "
+        "but at the fully symmetric merge a pure safety layer deadlocks (every "
+        "robot yields) — so it *fails safe* (stops) rather than unsafe (collides), "
+        "and liveness still needs the schedule (TPG) or reactivity (DWA) on top. "
         "`coll` = robot-robot overlap steps; `cont./disc.` = continuous vs. grid "
         "makespan; `dev` = furthest a robot strayed from its planned line (m).",
         "",
@@ -520,7 +525,10 @@ def build_report() -> str:
         "",
         "The discrete guarantee is necessary but not sufficient: it takes either "
         "a schedule-aware executor (TPG) or a reactive controller (DWA) to keep "
-        "it collision-free once the robots are real.",
+        "it collision-free *and* live once the robots are real. The certified "
+        "shield is the third option — a runtime guarantee that never collides — "
+        "but on its own it only fails safe; it belongs under a planner, not in "
+        "place of one.",
         "",
     ]
 

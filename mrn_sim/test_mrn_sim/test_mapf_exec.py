@@ -44,6 +44,16 @@ class TestMapfExecution(unittest.TestCase):
         self.assertTrue(r.success)
         self.assertEqual(r.robot_collisions, 0)
 
+    def test_shield_fails_safe_not_unsafe(self):
+        # The same schedule-ignoring pursuit nominal, but under the certified
+        # shield: where bare pursuit collides, the shield is collision-free. At
+        # the fully symmetric merge a pure safety layer deadlocks, so it fails
+        # *safe* (no goal, but no collision) rather than unsafe.
+        bare = self._run("pursuit")
+        shielded = self._run("shield")
+        self.assertGreater(bare.robot_collisions, 0)     # the gap
+        self.assertEqual(shielded.robot_collisions, 0)   # shield closes it
+
     def test_deterministic(self):
         a = self._run("tpg")
         b = self._run("tpg")

@@ -1,0 +1,10 @@
+{
+  "case": "mapf_exec_shield",
+  "continuous_steps": 271,
+  "discrete_makespan": 10,
+  "makespan_sec": 0.0,
+  "max_path_deviation": 0.618,
+  "robot_collisions": 0,
+  "solved": true,
+  "success": false
+}
