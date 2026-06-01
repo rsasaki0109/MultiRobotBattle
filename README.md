@@ -39,8 +39,10 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   following, with **reciprocal multi-robot collision avoidance** and
   **replanning around dynamic obstacles** — plus a continuous-space
   **Hybrid A\*** kinodynamic planner (bounded turning radius, Dubins curves +
-  analytic expansion) for smooth, feasibly-followable paths, and **DWA** /
-  **MPC (iLQR)** optimizing local controllers for accel-limited tracking.
+  analytic expansion) for smooth, feasibly-followable paths, **DWA** /
+  **MPC (iLQR)** optimizing local controllers for accel-limited tracking, and a
+  **Control Barrier Function** QP safety filter for provable collision-free
+  steering.
 - **Coordination** (`mrn_coord`) — multi-agent path finding (optimal
   Conflict-Based Search, **bounded-suboptimal ECBS**, **complete satisficing
   LaCAM**, and **anytime MAPF-LNS** that scale further, prioritized planning,

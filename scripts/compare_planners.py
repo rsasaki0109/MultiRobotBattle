@@ -36,6 +36,7 @@ _POLICIES = [
     ("grid A* + DWA", "dwa"),
     ("Hybrid A* + DWA", "dwa_kino"),
     ("grid A* + MPC (iLQR)", "mpc"),
+    ("grid A* + MPC + CBF", "mpc_cbf"),
     ("grid A* + ORCA", "orca"),
 ]
 
@@ -54,6 +55,7 @@ def _build(policy: str):
         "dwa": dwa_policy,
         "dwa_kino": lambda s: dwa_policy(s, planner="kino"),
         "mpc": mpc_policy,
+        "mpc_cbf": lambda s: mpc_policy(s, safety="cbf"),
         "orca": orca_policy,
     }[policy]
 
@@ -288,8 +290,11 @@ def build_report() -> str:
         "at a higher per-tick compute cost. MPC (iLQR) goes further still: it "
         "*optimizes* a whole receding-horizon trajectory each tick — smooth and "
         "far-sighted (often the shortest makespan) — predicting the other robots "
-        "along their paths to avoid them in space-time, with a hard safety brake "
-        "guaranteeing the reciprocal case stays collision-free.",
+        "along their paths to avoid them in space-time. Its safety layer is a "
+        "hard brake by default; **MPC + CBF** swaps that for a control-barrier "
+        "QP that returns the nearest *forward-invariant-safe* command, so it "
+        "steers around the conflict instead of braking — keeping more inter-robot "
+        "clearance (see the doorway row) while staying collision-free.",
         "",
         "## MAPF solvers (MovingAI example)",
         "",

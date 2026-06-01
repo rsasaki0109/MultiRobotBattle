@@ -1,0 +1,13 @@
+{
+  "collisions": 0,
+  "goals_reached": 2,
+  "goals_total": 2,
+  "makespan_sec": 10.6,
+  "min_obstacle_clearance": 0.412,
+  "min_robot_distance": 0.86,
+  "policy": "mpc_cbf",
+  "scenario": "doorway",
+  "steps": 106,
+  "success": true,
+  "total_path_length": 31.427
+}

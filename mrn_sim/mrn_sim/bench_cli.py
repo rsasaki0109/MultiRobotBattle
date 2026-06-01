@@ -27,6 +27,7 @@ _POLICIES = {
     "orca": orca_policy,
     "dwa": dwa_policy,
     "mpc": mpc_policy,
+    "mpc_cbf": lambda s: mpc_policy(s, safety="cbf"),
 }
 
 
@@ -49,8 +50,9 @@ def main() -> None:
     )
     parser.add_argument("--policy", choices=sorted(_POLICIES), default="navigate",
                         help="navigate (A* + pursuit + repulsion), orca (A* + "
-                        "pursuit + ORCA), dwa (A* + dynamic window), or mpc "
-                        "(A* + iLQR receding-horizon optimization)")
+                        "pursuit + ORCA), dwa (A* + dynamic window), mpc (A* + "
+                        "iLQR receding-horizon optimization), or mpc_cbf (MPC "
+                        "with a control-barrier-function safety filter)")
     parser.add_argument("--max-steps", type=int, default=600)
     parser.add_argument("--dt", type=float, default=0.1)
     args = parser.parse_args()

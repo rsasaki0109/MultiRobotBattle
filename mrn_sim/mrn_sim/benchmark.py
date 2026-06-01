@@ -478,7 +478,7 @@ def dwa_policy(scenario: Scenario, *, planner: str = "grid",
 def mpc_policy(scenario: Scenario, *, planner: str = "grid",
                turn_radius: float = 1.0, lookahead: float = 1.2,
                inflation: float = 0.4, predict_speed_frac: float = 0.6,
-               cfg=None):
+               safety: str = "brake", cfg=None):
     """Policy: global plan + **MPC (iLQR)** local control, others as obstacles.
 
     Plans each robot's route once (``planner`` = ``"grid"`` or ``"kino"``), then
@@ -488,13 +488,24 @@ def mpc_policy(scenario: Scenario, *, planner: str = "grid",
     The other robots are injected as discs into the obstacle set each tick, and
     the previous solution is shifted and fed back as the warm start, so each
     solve converges in a few iterations.
+
+    ``safety`` is the layer that guarantees the reciprocal case never collides
+    (the soft penalty only *discourages* it): ``"brake"`` (default) stops the
+    robot if its next step would breach the collision distance; ``"cbf"`` instead
+    runs the MPC command through a **control-barrier-function** QP
+    (:func:`mrn_sim.cbf.cbf_filter`) that returns the nearest command keeping the
+    safe set forward-invariant — steering smoothly rather than braking hard;
+    ``"none"`` applies the raw MPC command.
     """
     from mrn_coord.mapf.path_follower import carrot_point
 
+    from .cbf import CBFConfig, cbf_filter
     from .kinematics import unicycle_step
     from .mpc import MPCConfig, mpc_command
 
     cfg = cfg or MPCConfig(robot_radius=scenario.robot_radius)
+    cbf_cfg = CBFConfig(robot_radius=scenario.robot_radius, max_v=cfg.max_v,
+                        max_omega=cfg.max_omega)
     world0 = scenario.world()
     paths = _plan_for(scenario, world0, planner,
                       turn_radius=turn_radius, inflation=inflation)
@@ -542,19 +553,32 @@ def mpc_policy(scenario: Scenario, *, planner: str = "grid",
             (v, omega), us = mpc_command(
                 pose, state[a][0], state[a][1], local_goal,
                 static_obs, world, cfg, warm[a], moving=moving)
-            # Hard safety shield: if executing this command would bring the
-            # robot within the collision distance of another robot's current
-            # position, brake. The soft penalty steers smoothly; the shield
-            # guarantees the reciprocal case never actually collides.
-            d_safe = 2.0 * rr + 0.05
-            nxt = unicycle_step(pose, v, omega, cfg.dt)
-            for b in ids:
-                if b == a:
-                    continue
-                bx, by = world.robots[b].pose[0], world.robots[b].pose[1]
-                if math.hypot(nxt[0] - bx, nxt[1] - by) < d_safe:
-                    v, omega = 0.0, 0.0
-                    break
+            if safety == "cbf":
+                # CBF QP filter: nearest safe command, steering not just braking.
+                # Other robots enter as moving discs (current pose + velocity).
+                discs = list(static_obs)
+                for b in ids:
+                    if b == a:
+                        continue
+                    bp = world.robots[b].pose
+                    bv = state[b][0]
+                    discs.append((bp[0], bp[1], rr,
+                                  bv * math.cos(bp[2]), bv * math.sin(bp[2])))
+                v, omega = cbf_filter(pose, (v, omega), discs, cbf_cfg)
+            elif safety == "brake":
+                # Hard safety shield: if executing this command would bring the
+                # robot within the collision distance of another robot's current
+                # position, brake. The soft penalty steers smoothly; the shield
+                # guarantees the reciprocal case never actually collides.
+                d_safe = 2.0 * rr + 0.05
+                nxt = unicycle_step(pose, v, omega, cfg.dt)
+                for b in ids:
+                    if b == a:
+                        continue
+                    bx, by = world.robots[b].pose[0], world.robots[b].pose[1]
+                    if math.hypot(nxt[0] - bx, nxt[1] - by) < d_safe:
+                        v, omega = 0.0, 0.0
+                        break
             warm[a] = us[1:] + [us[-1]]
             state[a] = (v, omega)
             cmds[a] = (v, omega)

@@ -47,6 +47,7 @@ jobs:
           ros2 run mrn_coord mrn_lifelong_demo --frames 0 --allocator auction
           # the local controllers as drop-in benchmark policies
           ros2 run mrn_sim mrn_sim_bench around_obstacle --policy mpc --max-steps 200
+          ros2 run mrn_sim mrn_sim_bench doorway --policy mpc_cbf --max-steps 200
       - name: Benchmark gate
         run: |
           . /opt/ros/jazzy/setup.sh

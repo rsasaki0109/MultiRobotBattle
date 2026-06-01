@@ -48,6 +48,7 @@ def _run_sim_scenario(name: str, policy: str = "navigate") -> dict:
         "dwa": dwa_policy,                                  # grid plan + DWA
         "dwa_kino": lambda s: dwa_policy(s, planner="kino"),  # kino plan + DWA
         "mpc": mpc_policy,                                  # grid plan + iLQR MPC
+        "mpc_cbf": lambda s: mpc_policy(s, safety="cbf"),   # MPC + CBF safety QP
     }
     scenario = load_scenario(os.path.join(_REPO, "mrn_sim", "scenarios", name + ".yaml"))
     result = run_scenario(scenario, builders[policy](scenario), dt=0.1, max_steps=600)
@@ -100,6 +101,9 @@ SUITE = [
     ("sim_around_obstacle_mpc", lambda: _run_sim_scenario("around_obstacle", "mpc")),
     ("sim_crossing_mpc", lambda: _run_sim_scenario("crossing", "mpc")),
     ("sim_doorway_mpc", lambda: _run_sim_scenario("doorway", "mpc")),
+    # MPC with a control-barrier-function QP safety filter (steer, don't brake)
+    ("sim_crossing_mpc_cbf", lambda: _run_sim_scenario("crossing", "mpc_cbf")),
+    ("sim_doorway_mpc_cbf", lambda: _run_sim_scenario("doorway", "mpc_cbf")),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     # bounded-suboptimal ECBS (cost <= w * optimal)
     ("mapf_example_ecbs", lambda: _run_mapf_example("ecbs", weight=1.5)),

@@ -321,6 +321,31 @@ carrot. Unit-tested for accel-limited progress, cost improvement, bending around
 an obstacle, warm-start refinement, space-time avoidance of a moving obstacle,
 and an end-to-end planner-tracking run.
 
+## Safety filter: Control Barrier Function (`cbf.py`)
+
+A safety filter wraps *any* nominal controller and guarantees collision-freedom
+without owning the goal-seeking. `cbf.cbf_filter(pose, u_nom, obstacles)` passes
+the nominal command through when it is safe and otherwise returns the **closest**
+command that keeps the robot out of collision. The guarantee is a **control
+barrier function**: per obstacle, ``h(x) >= 0`` on the safe set, and enforcing
+``ḣ(x, u) >= -alpha·h(x)`` makes that set *forward invariant* — once safe, it
+stays safe. Those inequalities plus the actuation box bound a polytope of safe
+commands, and the filter solves
+
+    minimize ½‖u − u_nom‖²   subject to   A u ≥ b,
+
+a two-variable QP solved exactly by enumerating active sets (the optimum touches
+0, 1, or 2 constraints). A first-order CBF on a unicycle is degenerate (`ḣ` is
+independent of `omega`, so it could only brake), so the filter regulates a
+**look-ahead point** a short distance ahead of the wheel axis, whose velocity
+maps invertibly to `(v, omega)` — letting both controls enter `ḣ` so it *steers*
+around obstacles. Moving obstacles' velocities enter the barrier rate.
+`mpc_policy(..., safety="cbf")` uses it in place of the hard brake: in the
+benchmark it stays collision-free while holding *more* inter-robot clearance at
+the doorway (it steers apart instead of stopping). Unit-tested for QP optimality
+(vs. dense sampling), pass-through when safe, forward invariance under a
+head-on approach, and a collision-free doorway run.
+
 ## Benchmark comparison
 
 The benchmark environment ships these as drop-in policies — `navigate_policy`
