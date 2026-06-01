@@ -20,12 +20,16 @@ from .solution import Solution, sum_of_costs
 from .space_time_astar import plan_path
 
 
-def cbs(grid: GridWorld, agents: dict, *, max_expansions: int = 100_000):
+def cbs(grid: GridWorld, agents: dict, *, max_expansions: int = 100_000,
+        stats: dict | None = None):
     """Solve a MAPF instance optimally (sum-of-costs).
 
     ``agents`` maps an agent id to a ``(start, goal)`` tuple. Returns a
     :class:`Solution` whose paths are collision-free, or ``None`` if the
-    instance is infeasible (or the expansion budget is exhausted).
+    instance is infeasible (or the expansion budget is exhausted). If ``stats``
+    is given, ``stats["expansions"]`` is set to the number of high-level
+    constraint-tree nodes expanded — for comparison against bounded-suboptimal
+    ECBS (:func:`mrn_coord.mapf.ecbs.ecbs`).
     """
     # Root: plan each agent with no constraints.
     vertex: dict = {a: frozenset() for a in agents}
@@ -45,10 +49,14 @@ def cbs(grid: GridWorld, agents: dict, *, max_expansions: int = 100_000):
         cost, _, vertex, edge, paths = heapq.heappop(open_heap)
         expansions += 1
         if expansions > max_expansions:
+            if stats is not None:
+                stats["expansions"] = expansions
             return None
 
         conflict = detect_first_conflict(paths)
         if conflict is None:
+            if stats is not None:
+                stats["expansions"] = expansions
             return Solution(paths=dict(paths), cost=cost)
 
         if isinstance(conflict, VertexConflict):
@@ -88,4 +96,6 @@ def cbs(grid: GridWorld, agents: dict, *, max_expansions: int = 100_000):
                  child_vertex, child_edge, child_paths),
             )
 
+    if stats is not None:
+        stats["expansions"] = expansions
     return None

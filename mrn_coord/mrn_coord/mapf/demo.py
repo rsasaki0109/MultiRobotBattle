@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 
 from .cbs import cbs
+from .ecbs import ecbs
 from .grid import GridWorld
 from .prioritized import prioritized_planning
 from .solution import pad_paths, render_ascii
@@ -53,11 +54,20 @@ def _print_solution(title, grid, agents, solver_name, solution):
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--solver", choices=["cbs", "prioritized"], default="cbs",
+        "--solver", choices=["cbs", "ecbs", "prioritized"], default="cbs",
         help="high-level solver to run",
     )
+    parser.add_argument(
+        "-w", "--weight", type=float, default=1.5,
+        help="ECBS suboptimality factor (cost <= w * optimal)",
+    )
     args = parser.parse_args()
-    solve = cbs if args.solver == "cbs" else prioritized_planning
+    solvers = {
+        "cbs": cbs,
+        "ecbs": lambda grid, agents: ecbs(grid, agents, w=args.weight),
+        "prioritized": prioritized_planning,
+    }
+    solve = solvers[args.solver]
 
     for builder in (_crossing_scenario, _swap_scenario):
         title, grid, agents = builder()

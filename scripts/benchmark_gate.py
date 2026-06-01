@@ -54,13 +54,14 @@ def _run_sim_scenario(name: str, policy: str = "navigate") -> dict:
     return out
 
 
-def _run_mapf_example(solver: str) -> dict:
+def _run_mapf_example(solver: str, **kwargs) -> dict:
     from mrn_coord.mapf.movingai import load_map, load_scen, run_mapf_benchmark
 
     bench = os.path.join(_REPO, "mrn_coord", "benchmarks")
     grid = load_map(os.path.join(bench, "example.map"))
     tasks = load_scen(os.path.join(bench, "example.scen"))
-    res = run_mapf_benchmark(grid, tasks, solver=solver, max_expansions=50_000)
+    res = run_mapf_benchmark(grid, tasks, solver=solver, max_expansions=50_000,
+                             **kwargs)
     res["case"] = "mapf_example_" + solver
     return res
 
@@ -91,6 +92,8 @@ SUITE = [
     ("sim_around_obstacle_dwa", lambda: _run_sim_scenario("around_obstacle", "dwa")),
     ("sim_doorway_dwa", lambda: _run_sim_scenario("doorway", "dwa")),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
+    # bounded-suboptimal ECBS (cost <= w * optimal)
+    ("mapf_example_ecbs", lambda: _run_mapf_example("ecbs", weight=1.5)),
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
     # same prioritized planner, safe-interval (SIPP) low level
     ("mapf_example_prioritized_sipp", lambda: _run_mapf_example("prioritized_sipp")),

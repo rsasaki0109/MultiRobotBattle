@@ -86,6 +86,25 @@ each add one constraint to one of the two agents and replan only that agent.
 The first conflict-free node popped is optimal. Returns a `Solution` or `None`
 (infeasible, or the expansion budget is exhausted).
 
+### High level: Enhanced CBS (`ecbs.py`)
+
+`ecbs(grid, agents, w=1.5)` is the **bounded-suboptimal** solver: it returns
+collision-free paths whose sum-of-costs is at most `w` times the optimum, and
+in exchange expands far fewer constraint-tree nodes than CBS — so it keeps
+solving as the team grows past where CBS's tree explodes. The mechanism is
+**focal search** at both levels. The low level
+(`_focal_low_level`) is a single-agent A* that, among all paths within `w` of
+the cheapest, picks the one with the fewest conflicts against the other agents'
+current paths, and also reports `f_min`, a lower bound on that agent's
+constrained optimum. The high level orders OPEN by `LB(N) = Σ f_min` and expands
+from the FOCAL set — nodes whose actual cost is `≤ w·min LB` — choosing the one
+with the fewest total conflicts. Popping a conflict-free FOCAL node gives a
+solution with `cost ≤ w·min LB ≤ w·optimal`. With `w=1` it reduces to optimal
+CBS. `benchmarks/comparison.md` sweeps team size: CBS's expansions blow up and
+it starts exhausting its budget while ECBS stays in a handful of nodes for a
+few-percent cost premium. Run `mrn_mapf_demo --solver ecbs` or
+`mrn_mapf_bench --solver ecbs -w 1.3`.
+
 ### High level: prioritized planning (`prioritized.py`)
 
 `prioritized_planning(grid, agents, order)` is the fast, **incomplete**
@@ -105,6 +124,7 @@ visualization.
 
 ```bash
 ros2 run mrn_coord mrn_mapf_demo                 # CBS on two built-in scenarios
+ros2 run mrn_coord mrn_mapf_demo --solver ecbs   # bounded-suboptimal (w=1.5)
 ros2 run mrn_coord mrn_mapf_demo --solver prioritized
 ```
 
@@ -125,11 +145,13 @@ bundled (`mrn_coord/benchmarks/example.{map,scen}`).
 ```bash
 ros2 run mrn_coord mrn_mapf_bench                       # bundled example (CBS)
 ros2 run mrn_coord mrn_mapf_bench my.map my.scen -n 8   # first 8 agents
+ros2 run mrn_coord mrn_mapf_bench --solver ecbs -w 1.3  # bounded-suboptimal
 ros2 run mrn_coord mrn_mapf_bench --solver prioritized
 ```
 
-CBS is optimal but scales to small teams; use the prioritized solver (fast,
-incomplete) for many agents.
+CBS is optimal but scales to small teams; for many agents use **ECBS**
+(`--solver ecbs`, bounded-suboptimal — much further reach for a small cost
+premium) or the prioritized solver (fast, incomplete).
 
 ### Lifelong / online MAPF (`lifelong/`)
 

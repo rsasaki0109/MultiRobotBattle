@@ -33,10 +33,11 @@ Conflict-Based Search (optimal sum-of-costs) vs. prioritized planning (fast, inc
 | solver | solved | makespan | sum of costs |
 | --- | :-: | --: | --: |
 | cbs | ✓ | 14 | 42 |
+| ecbs | ✓ | 14 | 42 |
 | prioritized | ✓ | 14 | 42 |
 | prioritized_sipp | ✓ | 14 | 42 |
 
-`prioritized` and `prioritized_sipp` are the same high-level planner with two interchangeable low-level planners — time-expanded A\* and **SIPP** (safe-interval). They find equal-cost solutions; SIPP just reaches them while expanding far fewer states (next table).
+`ecbs` is bounded-suboptimal (cost ≤ `w`·optimal, here `w=1.5`); on this small example it happens to match the optimum. Its payoff shows as the team grows (next table). `prioritized` and `prioritized_sipp` are the same high-level planner with two interchangeable low-level planners — time-expanded A\* and **SIPP** (safe-interval). They find equal-cost solutions; SIPP just reaches them while expanding far fewer states (next table).
 
 ## Low-level planner: SIPP vs. time-expanded A\*
 
@@ -48,6 +49,18 @@ Single-agent query where a parked obstacle reserves a one-cell chokepoint for th
 | 40 | 47 | 48 | 8 |
 | 160 | 167 | 168 | 8 |
 | 640 | 647 | 648 | 8 |
+
+## Scaling: optimal CBS vs. bounded-suboptimal ECBS
+
+25 seeded random instances per team size on a fixed pillared arena, each solved by CBS (optimal) and ECBS (`w=1.3`) under a shared 800-node expansion budget. `solved` counts instances finished within the budget; `mean exp` is the average high-level nodes expanded over the instances *both* solve; `cost ratio` is mean ECBS/CBS sum-of-costs. As agents pack in, CBS's constraint tree blows up and it starts exhausting the budget, while ECBS stays in a handful of nodes for a few-percent cost premium — well inside its `w=1.3` guarantee.
+
+| agents | CBS solved | ECBS solved | CBS mean exp | ECBS mean exp | cost ratio |
+| --: | :-: | :-: | --: | --: | --: |
+| 3 | 25/25 | 25/25 | 2 | 1 | 1.000 |
+| 4 | 25/25 | 25/25 | 2 | 1 | 1.005 |
+| 6 | 24/25 | 25/25 | 21 | 2 | 1.030 |
+| 8 | 22/25 | 25/25 | 152 | 4 | 1.032 |
+| 10 | 10/25 | 24/25 | 231 | 5 | 1.065 |
 
 ## Lifelong MAPF throughput (PIBT)
 

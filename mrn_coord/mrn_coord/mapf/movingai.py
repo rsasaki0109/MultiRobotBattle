@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .cbs import cbs
+from .ecbs import ecbs
 from .grid import Cell, GridWorld
 from .prioritized import prioritized_planning
 from .sipp import plan_sipp
@@ -97,18 +98,22 @@ def run_mapf_benchmark(
     num_agents: int | None = None,
     solver: str = "cbs",
     max_expansions: int = 100_000,
+    weight: float = 1.5,
 ) -> dict:
     """Solve the first ``num_agents`` tasks and return benchmark metrics.
 
-    ``solver`` is ``"cbs"`` (optimal, small teams), ``"prioritized"`` (fast,
-    incomplete), or ``"prioritized_sipp"`` (the same, but with the safe-interval
-    low-level planner). Returns a dict with ``solved`` / ``num_agents`` / and,
-    when solved, ``makespan`` and ``sum_of_costs``.
+    ``solver`` is ``"cbs"`` (optimal, small teams), ``"ecbs"`` (bounded-
+    suboptimal, ``cost <= weight * optimal``; scales further), ``"prioritized"``
+    (fast, incomplete), or ``"prioritized_sipp"`` (the same, but with the
+    safe-interval low-level planner). Returns a dict with ``solved`` /
+    ``num_agents`` / and, when solved, ``makespan`` and ``sum_of_costs``.
     """
     chosen = tasks if num_agents is None else tasks[:num_agents]
     agents = {str(i): (t.start, t.goal) for i, t in enumerate(chosen)}
     if solver == "cbs":
         solution = cbs(grid, agents, max_expansions=max_expansions)
+    elif solver == "ecbs":
+        solution = ecbs(grid, agents, w=weight, max_expansions=max_expansions)
     elif solver == "prioritized":
         solution = prioritized_planning(grid, agents)
     elif solver == "prioritized_sipp":

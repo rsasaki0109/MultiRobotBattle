@@ -1,0 +1,8 @@
+{
+  "case": "mapf_example_ecbs",
+  "makespan": 14,
+  "num_agents": 3,
+  "solved": true,
+  "solver": "ecbs",
+  "sum_of_costs": 42
+}

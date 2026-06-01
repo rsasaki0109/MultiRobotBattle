@@ -40,8 +40,9 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   **replanning around dynamic obstacles** — plus a continuous-space
   **Hybrid A\*** kinodynamic planner (bounded turning radius, Dubins curves +
   analytic expansion) for smooth, feasibly-followable paths.
-- **Coordination** (`mrn_coord`) — multi-agent path finding (Conflict-Based
-  Search / prioritized planning over a **space-time A\*** or drop-in **SIPP**
+- **Coordination** (`mrn_coord`) — multi-agent path finding (optimal
+  Conflict-Based Search, **bounded-suboptimal ECBS** that scales further,
+  prioritized planning, all over a **space-time A\*** or drop-in **SIPP**
   safe-interval low level, plus **lifelong / online MAPF** stepped by
   **PIBT** for warehouse-style endless-task throughput), **ORCA** reciprocal
   local collision avoidance, decentralized formation control, cooperative

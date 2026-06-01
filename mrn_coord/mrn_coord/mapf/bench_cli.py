@@ -31,8 +31,10 @@ def main() -> None:
     parser.add_argument("scen", nargs="?", help="MovingAI .scen (default: bundled example)")
     parser.add_argument("-n", "--num-agents", type=int, default=None)
     parser.add_argument("--solver",
-                        choices=["cbs", "prioritized", "prioritized_sipp"],
+                        choices=["cbs", "ecbs", "prioritized", "prioritized_sipp"],
                         default="cbs")
+    parser.add_argument("-w", "--weight", type=float, default=1.5,
+                        help="ECBS suboptimality factor (cost <= w * optimal)")
     parser.add_argument("--max-expansions", type=int, default=100000)
     args = parser.parse_args()
 
@@ -41,7 +43,8 @@ def main() -> None:
     grid = load_map(map_path)
     tasks = load_scen(scen_path)
     result = run_mapf_benchmark(grid, tasks, num_agents=args.num_agents,
-                                solver=args.solver, max_expansions=args.max_expansions)
+                                solver=args.solver, max_expansions=args.max_expansions,
+                                weight=args.weight)
     result["map"] = os.path.basename(map_path)
     result["grid"] = f"{grid.width}x{grid.height}"
     result["tasks_available"] = len(tasks)

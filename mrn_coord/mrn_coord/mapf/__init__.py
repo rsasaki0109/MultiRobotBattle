@@ -14,12 +14,16 @@ The pieces compose bottom-up:
   paths, with stay-at-goal semantics.
 - :mod:`cbs` — Conflict-Based Search: an optimal (sum-of-costs) two-level
   search that resolves conflicts by branching constraints.
+- :mod:`ecbs` — Enhanced CBS: bounded-suboptimal (``cost <= w * optimal``) via
+  focal search at both levels; expands far fewer nodes than CBS for a little
+  cost slack, so it scales to more agents.
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
 from .cbs import cbs
+from .ecbs import ecbs
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -44,6 +48,7 @@ __all__ = [
     "cell_at",
     "detect_first_conflict",
     "cbs",
+    "ecbs",
     "prioritized_planning",
     "pure_pursuit",
     "Solution",
