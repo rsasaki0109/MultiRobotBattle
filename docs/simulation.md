@@ -470,6 +470,36 @@ whole stack: the discrete plan is necessary but not sufficient — bridging it t
 the moving robots takes a schedule-aware executor, a reactive controller, or a
 runtime safety guarantee, all of which live here.
 
+## Bodied AMR execution: footprint and turning (`amr_footprint.py`)
+
+`mapf_exec` closes the *timing* gap for a disc robot; `amr_footprint.execute_amr`
+closes the other one — the gap a **rectangular, differential-drive** body opens.
+A MAPF plan proves no two *points* share a cell, but a real autonomous mobile
+robot has an orientation and a footprint: it cannot strafe between cells, so it
+must **turn in place** before it drives (time the point plan never counts), and
+its rectangle **sweeps area** that the cell model ignored. The executor replays a
+plan *synchronized to its own discrete schedule* (so timing is controlled for —
+only the body is under test), driving each step as a turn-then-drive phase, and
+reports the makespan stretch and the footprint clearance (signed: negative where
+bodies overlap, via a separating-axis polygon distance).
+
+Sweeping the aisle width on a six-AMR warehouse lifelong plan
+(`ros2 run mrn_sim mrn_amr_footprint`, footprint 0.7 × 0.45 m) shows both gaps
+cleanly:
+
+| cell (m) | turn fraction | makespan stretch | min robot clearance | footprint collisions |
+| --: | --: | --: | --: | --: |
+| 1.6 | 0.36 | 1.56× | +0.32 m | 0 |
+| 1.3 | 0.41 | 1.69× | +0.13 m | 0 |
+| 1.0 | 0.47 | 1.90× | −0.08 m | 7 |
+| 0.8 | 0.53 | 2.12× | −0.18 m | 108 |
+
+Turning alone stretches the wall-clock 1.6–2.1× over the plan's implied time, and
+below roughly a one-metre aisle the body overlaps a shelf or a neighbour where the
+discrete plan called it safe — so a warehouse laid out for *point* MAPF needs
+aisles wide enough for the *body*, and a schedule whose timing accounts for the
+turns. Pure and deterministic; the contract is the same as everywhere else.
+
 ## Roadmap
 
 This is the world core, its ROS node, the localization integration, and a

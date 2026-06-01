@@ -66,7 +66,10 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   avoidance), and **ORCA** — and
   and an **end-to-end MAPF executor** (`mrn_sim.mapf_exec`) runs a discrete
   grid plan in the continuous world — exposing where the discrete guarantee
-  breaks down and bridging it with a Temporal-Plan-Graph schedule —
+  breaks down and bridging it with a Temporal-Plan-Graph schedule — while a
+  **bodied-AMR executor** (`mrn_sim.amr_footprint`) replays the same plan as a
+  rectangular differential-drive robot, surfacing the turning cost and the aisle
+  width below which the footprint overlaps where the point plan called it safe —
   `scripts/compare_planners.py` tabulates them all across the bundled scenarios
   ([`benchmarks/comparison.md`](benchmarks/comparison.md)). `ros2 run mrn_sim
   mrn_sim_bench crossing` runs a bundled scenario with a baseline policy. MAPF
