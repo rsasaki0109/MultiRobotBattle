@@ -1,7 +1,7 @@
 # ros_gz_bridge parameter_bridge config for the 3-robot recording world
-# (multirobot_demo.sdf). cmd_vel ROS -> gz, pose gz -> ROS, for robot_1..3.
-# Used by scripts/record_gazebo_gif.py to drive the robots from an rclpy
-# controller. Media-generation only; not part of CI.
+# (multirobot_demo.sdf). cmd_vel ROS -> gz, pose + lidar scan gz -> ROS, for
+# robot_1..3. Used by scripts/record_gazebo_gif.py to drive the robots from an
+# rclpy controller and overlay their laser scans. Media-generation only; not CI.
 - ros_topic_name: "/model/robot_1/cmd_vel"
   gz_topic_name: "/model/robot_1/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
@@ -11,6 +11,11 @@
   gz_topic_name: "/model/robot_1/pose"
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/robot_1/scan"
+  gz_topic_name: "/model/robot_1/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS
 
 - ros_topic_name: "/model/robot_2/cmd_vel"
@@ -23,6 +28,11 @@
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
   direction: GZ_TO_ROS
+- ros_topic_name: "/model/robot_2/scan"
+  gz_topic_name: "/model/robot_2/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
 
 - ros_topic_name: "/model/robot_3/cmd_vel"
   gz_topic_name: "/model/robot_3/cmd_vel"
@@ -33,4 +43,9 @@
   gz_topic_name: "/model/robot_3/pose"
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/robot_3/scan"
+  gz_topic_name: "/model/robot_3/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS

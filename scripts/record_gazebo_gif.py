@@ -192,11 +192,21 @@ def run(output, duration, fps, width, settle):
                 poses[rid] = (m.pose.position.x, m.pose.position.y, yaw)
             return cb
 
+        scans = {}
+
+        def mk_scan_cb(rid):
+            def cb(m):
+                scans[rid] = (m.angle_min, m.angle_increment, list(m.ranges))
+            return cb
+
         from geometry_msgs.msg import PoseStamped
+        from sensor_msgs.msg import LaserScan
         cmd_pubs = {}
         for rid in IDS:
             node.create_subscription(PoseStamped, f"/model/{rid}/pose",
                                      mk_pose_cb(rid), 10)
+            node.create_subscription(LaserScan, f"/model/{rid}/scan",
+                                     mk_scan_cb(rid), 10)
             cmd_pubs[rid] = node.create_publisher(Twist, f"/model/{rid}/cmd_vel", 10)
 
         def img_cb(m):
@@ -242,7 +252,9 @@ def run(output, duration, fps, width, settle):
             rclpy.spin_once(node, timeout_sec=0.005)
             now = time.time()
             if now >= next_t:
-                frames.append(latest["img"])
+                # snapshot the frame together with the poses + scans behind it
+                frames.append((latest["img"], dict(poses),
+                               {r: scans.get(r) for r in IDS}))
                 next_t += period
         # stop the robots
         for rid in IDS:
@@ -255,24 +267,85 @@ def run(output, duration, fps, width, settle):
         shutdown()
 
 
+# Per-robot RGB (matches the chassis materials in multirobot_demo.sdf), used to
+# tint each robot's overlaid laser scan.
+ROBOT_RGB = {
+    "robot_1": (56, 189, 248),    # cyan
+    "robot_2": (244, 114, 182),   # pink
+    "robot_3": (163, 230, 53),    # green
+}
+
+# --- Static camera projection (world -> pixel) -----------------------------
+# These MUST match the rec_camera sensor in multirobot_demo.sdf. The camera is
+# fixed, so one projection serves every frame; we use it to splat each robot's
+# LiDAR returns back onto the rendered image as a live laser scan.
+_CAM_POS = (6.0, -7.2, 9.2)
+_CAM_YAW, _CAM_PITCH = 1.5707, 0.66
+_CAM_W, _CAM_H, _CAM_HFOV = 1000, 700, 0.92
+_LIDAR_Z = 0.44   # world height of the lidar ring (model z 0.1 + sensor z 0.34)
+_F = (_CAM_W / 2.0) / math.tan(_CAM_HFOV / 2.0)
+
+
+def _project(p):
+    """World point ``(x, y, z)`` -> ``(u, v)`` pixel in the full 1000x700 frame,
+    or ``None`` if behind the camera. Derived (and validated) for the gz camera
+    convention: optical axis +X, up +Z, left +Y, with R = Rz(yaw)·Ry(pitch)."""
+    dx, dy, dz = p[0] - _CAM_POS[0], p[1] - _CAM_POS[1], p[2] - _CAM_POS[2]
+    cy, sy = math.cos(_CAM_YAW), math.sin(_CAM_YAW)
+    cp, sp = math.cos(_CAM_PITCH), math.sin(_CAM_PITCH)
+    px = cy * cp * dx + sy * cp * dy - sp * dz   # forward (depth)
+    py = -sy * dx + cy * dy                       # left
+    pz = cy * sp * dx + sy * sp * dy + cp * dz    # up
+    if px <= 0.05:
+        return None
+    return (_CAM_W / 2.0 - _F * py / px, _CAM_H / 2.0 - _F * pz / px)
+
+
+def _draw_lidar(draw, poses, scans):
+    """Overlay each robot's laser scan onto the frame: faint rays + bright hits."""
+    for rid, sc in scans.items():
+        pose = poses.get(rid)
+        if not sc or pose is None:
+            continue
+        amin, ainc, ranges = sc
+        rx, ry, yaw = pose
+        origin = _project((rx, ry, _LIDAR_Z))
+        col = ROBOT_RGB.get(rid, (220, 220, 220))
+        dim = tuple(int(c * 0.40) for c in col)
+        for i, r in enumerate(ranges):
+            if not r or not (r == r) or r >= 5.95:   # skip no-return / inf / NaN
+                continue
+            a = yaw + amin + i * ainc
+            hit = _project((rx + r * math.cos(a), ry + r * math.sin(a), _LIDAR_Z))
+            if hit is None:
+                continue
+            if origin is not None:
+                draw.line([origin, hit], fill=dim, width=1)
+            draw.ellipse([hit[0] - 1.6, hit[1] - 1.6, hit[0] + 1.6, hit[1] + 1.6],
+                         fill=col)
+
+
 # The camera frames a 12x8 arena isometrically, which leaves dead ground above
 # the far edge and a sliver below the near edge — crop them off before encoding.
 _CROP_TOP, _CROP_BOTTOM = 0.10, 0.04
 
 
 def _encode(frames, output, fps, width, PImage):
+    from PIL import ImageDraw
     imgs = []
-    for f in frames:
+    for f, fposes, fscans in frames:
         if f is None:
             continue
         im = PImage.fromarray(f, "RGB")
+        if fscans and any(fscans.values()):     # splat the laser scans on first
+            _draw_lidar(ImageDraw.Draw(im), fposes, fscans)
         top = int(im.height * _CROP_TOP)
         bot = int(im.height * (1.0 - _CROP_BOTTOM))
         im = im.crop((0, top, im.width, bot))
         if width and im.width != width:
             h = int(round(im.height * width / im.width))
             im = im.resize((width, h), PImage.LANCZOS)
-        imgs.append(im.quantize(colors=128, method=PImage.FASTOCTREE,
+        imgs.append(im.quantize(colors=96, method=PImage.FASTOCTREE,
                                 dither=PImage.Dither.NONE))
     if not imgs:
         raise RuntimeError("no frames captured")

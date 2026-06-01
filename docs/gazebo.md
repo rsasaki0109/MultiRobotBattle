@@ -91,6 +91,12 @@ primitives), closed over Gazebo's reported poses. Each robot moves via the
 kinematic `VelocityControl` system (commanded body twist → motion, stable and
 slip-free — steadier than tuning a `DiffDrive` chassis for a demo).
 
+Each robot also carries a 360° `gpu_lidar`; the script bridges every scan
+(`sensor_msgs/LaserScan`), projects the returns back onto the rendered frame
+through the fixed camera's known projection, and draws them as colored rays +
+hit points — so the GIF shows the lasers sweeping the obstacles and the other
+robots, like a real robotics simulator.
+
 Recording is **fully offscreen**: a static isometric camera sensor renders on
 the GPU (forced onto the NVIDIA EGL vendor) and publishes frames on `/rec_camera`;
 the script bridges them to ROS (`ros_gz_image`, over CycloneDDS to dodge the

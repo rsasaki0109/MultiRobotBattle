@@ -108,6 +108,14 @@
           <material><ambient>0.13 0.55 0.77 1</ambient><diffuse>0.22 0.74 0.93 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.22 0 0.18 0 0 0</pose><geometry><box><size>0.1 0.18 0.1</size></box></geometry>
           <material><ambient>0.9 0.95 1 1</ambient><diffuse>0.9 0.95 1 1</diffuse></material></visual>
+        <visual name="lidar_puck"><pose>0 0 0.30 0 0 0</pose><geometry><cylinder><radius>0.06</radius><length>0.08</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.34 0 0 0</pose>
+          <update_rate>15</update_rate><always_on>1</always_on><topic>/model/robot_1/scan</topic>
+          <lidar><scan><horizontal><samples>120</samples><resolution>1</resolution>
+              <min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar>
+        </sensor>
       </link>
       <link name="left_wheel"><pose>0 0.18 0 -1.5707 0 0</pose>
         <inertial><mass>0.2</mass><inertia><ixx>0.001</ixx><iyy>0.001</iyy><izz>0.001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
@@ -141,6 +149,14 @@
           <material><ambient>0.78 0.30 0.55 1</ambient><diffuse>0.96 0.45 0.71 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.22 0 0.18 0 0 0</pose><geometry><box><size>0.1 0.18 0.1</size></box></geometry>
           <material><ambient>1 0.95 0.97 1</ambient><diffuse>1 0.95 0.97 1</diffuse></material></visual>
+        <visual name="lidar_puck"><pose>0 0 0.30 0 0 0</pose><geometry><cylinder><radius>0.06</radius><length>0.08</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.34 0 0 0</pose>
+          <update_rate>15</update_rate><always_on>1</always_on><topic>/model/robot_2/scan</topic>
+          <lidar><scan><horizontal><samples>120</samples><resolution>1</resolution>
+              <min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar>
+        </sensor>
       </link>
       <link name="left_wheel"><pose>0 0.18 0 -1.5707 0 0</pose>
         <inertial><mass>0.2</mass><inertia><ixx>0.001</ixx><iyy>0.001</iyy><izz>0.001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
@@ -174,6 +190,14 @@
           <material><ambient>0.51 0.74 0.16 1</ambient><diffuse>0.64 0.90 0.21 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.22 0 0.18 0 0 0</pose><geometry><box><size>0.1 0.18 0.1</size></box></geometry>
           <material><ambient>0.97 1 0.92 1</ambient><diffuse>0.97 1 0.92 1</diffuse></material></visual>
+        <visual name="lidar_puck"><pose>0 0 0.30 0 0 0</pose><geometry><cylinder><radius>0.06</radius><length>0.08</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.34 0 0 0</pose>
+          <update_rate>15</update_rate><always_on>1</always_on><topic>/model/robot_3/scan</topic>
+          <lidar><scan><horizontal><samples>120</samples><resolution>1</resolution>
+              <min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar>
+        </sensor>
       </link>
       <link name="left_wheel"><pose>0 0.18 0 -1.5707 0 0</pose>
         <inertial><mass>0.2</mass><inertia><ixx>0.001</ixx><iyy>0.001</iyy><izz>0.001</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
