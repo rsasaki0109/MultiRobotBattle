@@ -228,10 +228,13 @@ the build — the benchmarks are a guarded contract, not decoration.
 Two further jobs check our implementations against the **reference libraries**
 they reproduce, each built from source so the core build never depends on it: our
 ORCA against [RVO2](https://github.com/snape/RVO2) (same velocity to ~1e-5,
-[`benchmarks/orca_rvo2.md`](benchmarks/orca_rvo2.md)) and our CBS against
-[libMultiRobotPlanning](https://github.com/whoenig/libMultiRobotPlanning) (the
-identical optimal sum-of-costs, [`benchmarks/mapf_libmrp.md`](benchmarks/mapf_libmrp.md)).
-"Faithful port" and "optimal solver" are measured contracts, not claims.
+[`benchmarks/orca_rvo2.md`](benchmarks/orca_rvo2.md)) and our MAPF search against
+[libMultiRobotPlanning](https://github.com/whoenig/libMultiRobotPlanning) — CBS
+reproducing its identical optimal sum-of-costs
+([`benchmarks/mapf_libmrp.md`](benchmarks/mapf_libmrp.md)) and ECBS honoring the
+same `w·optimal` suboptimality bound
+([`benchmarks/ecbs_libmrp.md`](benchmarks/ecbs_libmrp.md)). "Faithful port",
+"optimal solver", and "bounded-suboptimal" are measured contracts, not claims.
 
 ## License
 

@@ -107,8 +107,9 @@ program-options, and yaml-cpp):
 ```bash
 git clone https://github.com/whoenig/libMultiRobotPlanning.git /tmp/libMultiRobotPlanning
 cmake -S /tmp/libMultiRobotPlanning -B /tmp/libMultiRobotPlanning/build -DCMAKE_BUILD_TYPE=Release
-cmake --build /tmp/libMultiRobotPlanning/build --target cbs
+cmake --build /tmp/libMultiRobotPlanning/build --target cbs ecbs
 export LIBMRP_CBS=/tmp/libMultiRobotPlanning/build/cbs
+export LIBMRP_ECBS=/tmp/libMultiRobotPlanning/build/ecbs
 python3 scripts/compare_mapf_libmrp.py --check       # gated equivalence contract
 python3 scripts/compare_mapf_libmrp.py --write        # refresh benchmarks/mapf_libmrp.md
 ```
@@ -134,6 +135,21 @@ CBS. `benchmarks/comparison.md` sweeps team size: CBS's expansions blow up and
 it starts exhausting its budget while ECBS stays in a handful of nodes for a
 few-percent cost premium. Run `mrn_mapf_demo --solver ecbs` or
 `mrn_mapf_bench --solver ecbs -w 1.3`.
+
+#### Validated against the reference libMultiRobotPlanning
+
+The `w·optimal` guarantee is the whole point of ECBS, so we hold it to the
+reference's `ecbs` exactly as we held CBS to its `cbs`.
+`scripts/compare_ecbs_libmrp.py` solves the same instances with our `ecbs.py` and
+libMultiRobotPlanning's `ecbs` at the same `w`, takes the optimum from our CBS
+(itself pinned to the reference `cbs`, see above), and checks the **bound**:
+`cost ≤ w · optimal` for both solvers. The two need not return the *same* cost —
+focal-search tie-breaking differs — so, unlike the optimal-CBS contract, equality
+is not gated; the ratios (in [`benchmarks/ecbs_libmrp.md`](../benchmarks/ecbs_libmrp.md))
+show the suboptimality actually taken, which sits at or below the ceiling. Build
+the reference as above (the `ecbs` target ships in the same `cmake --build`), set
+`LIBMRP_ECBS`, and the `mapf-libmrp-equivalence` CI job runs it on every push —
+so the suboptimality *bound*, like the optimum itself, is a guarded contract.
 
 ### High level: LaCAM (`lacam.py`)
 

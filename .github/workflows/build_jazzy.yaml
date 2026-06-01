@@ -95,9 +95,10 @@ jobs:
           python3 scripts/compare_orca_rvo2.py --check
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest mrn_coord/test_mrn_coord/test_orca_rvo2.py -v
 
-  # Independent of the ROS build: validate that our from-scratch CBS computes the
-  # same optimal sum-of-costs as the reference libMultiRobotPlanning. The C++
-  # `cbs` binary is built from source here so the core build never depends on it.
+  # Independent of the ROS build: validate our MAPF search against the reference
+  # libMultiRobotPlanning — our CBS reproduces its exact optimal sum-of-costs, and
+  # our ECBS honors the same w-suboptimality bound. The C++ `cbs` / `ecbs` binaries
+  # are built from source here so the core build never depends on them.
   mapf-libmrp-equivalence:
     runs-on: ubuntu-24.04
     steps:
@@ -108,20 +109,22 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake build-essential git \
             libboost-program-options-dev libyaml-cpp-dev python3-pytest
-      - name: Build the reference libMultiRobotPlanning cbs
+      - name: Build the reference libMultiRobotPlanning cbs + ecbs
         run: |
           # Pin the reference to a known-good commit for reproducibility.
           git clone https://github.com/whoenig/libMultiRobotPlanning.git /tmp/libMultiRobotPlanning
           git -C /tmp/libMultiRobotPlanning checkout 4c75fa20c435c440d8b6bd6dc81668ddc7296ba0
           cmake -S /tmp/libMultiRobotPlanning -B /tmp/libMultiRobotPlanning/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/libMultiRobotPlanning/build --target cbs -j2
-          test -x /tmp/libMultiRobotPlanning/build/cbs && echo "cbs OK"
-      - name: CBS == reference libMultiRobotPlanning
+          cmake --build /tmp/libMultiRobotPlanning/build --target cbs ecbs -j2
+          test -x /tmp/libMultiRobotPlanning/build/cbs && test -x /tmp/libMultiRobotPlanning/build/ecbs && echo "cbs + ecbs OK"
+      - name: CBS == reference (exact optimum); ECBS within w·optimal
         env:
           LIBMRP_CBS: /tmp/libMultiRobotPlanning/build/cbs
+          LIBMRP_ECBS: /tmp/libMultiRobotPlanning/build/ecbs
         run: |
-          # The guarded contract: the same instances through our CBS and the
-          # reference must yield the identical optimal sum-of-costs (the unique
-          # optimum) and agree on solvability. A mismatch fails the build.
+          # The guarded contracts: our CBS yields the identical optimal
+          # sum-of-costs (the unique optimum) and agrees on solvability; our ECBS
+          # (and the reference) stay within w*optimal. A breach fails the build.
           python3 scripts/compare_mapf_libmrp.py --check
-          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest mrn_coord/test_mrn_coord/test_mapf_libmrp.py -v
+          python3 scripts/compare_ecbs_libmrp.py --check
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest mrn_coord/test_mrn_coord/test_mapf_libmrp.py mrn_coord/test_mrn_coord/test_ecbs_libmrp.py -v
