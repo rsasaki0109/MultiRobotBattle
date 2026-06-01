@@ -128,3 +128,30 @@ jobs:
           python3 scripts/compare_mapf_libmrp.py --check
           python3 scripts/compare_ecbs_libmrp.py --check
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest mrn_coord/test_mrn_coord/test_mapf_libmrp.py mrn_coord/test_mrn_coord/test_ecbs_libmrp.py -v
+
+  # Independent of the ROS build: validate that the PIBT core driving our
+  # warehouse/fleet demos agrees with the paper author's own reference, pypibt.
+  # It is pure Python (installed into a venv) so the core build never depends on it.
+  pibt-pypibt-equivalence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install the reference pypibt
+        run: |
+          python3 -m venv /tmp/pypibt-venv
+          . /tmp/pypibt-venv/bin/activate
+          pip install --upgrade pip numpy pytest
+          # Pin the reference to a known-good commit for reproducibility.
+          git clone https://github.com/Kei18/pypibt.git /tmp/pypibt
+          git -C /tmp/pypibt checkout a3c97f60413c6619a29a5022969896bc54877edc
+          pip install /tmp/pypibt
+          python3 -c "import pypibt; print('pypibt OK')"
+      - name: PIBT collision-free == reference; makespan within bound
+        run: |
+          . /tmp/pypibt-venv/bin/activate
+          # The guarded contract: every configuration our PIBT emits is
+          # collision-free under the reference's own checks (the load-bearing
+          # claim), and where our deterministic solver converges its makespan
+          # tracks the reference's within a bound. A breach fails the build.
+          python3 scripts/compare_pibt_pypibt.py --check
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest mrn_coord/test_mrn_coord/test_pibt_pypibt.py -v

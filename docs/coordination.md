@@ -280,6 +280,44 @@ one PIBT collision-free configuration; throughput climbs past **25 tasks/step**:
   <em>Fleet system at scale: 100 AMRs, lifelong MAPF, every move a PIBT collision-free configuration. Regenerate with <code>python3 scripts/make_warehouse_gif.py --preset fleet</code>.</em>
 </p>
 
+#### Validated against the reference pypibt
+
+"Collision-free, by PIBT" is the load-bearing claim under every frame above, so we
+hold it to the canonical reference: Keisuke Okumura's own
+[`pypibt`](https://github.com/Kei18/pypibt) (the paper author's implementation).
+The contract is judged by the *reference's own* code — we feed our PIBT output
+through `pypibt`'s `get_neighbors` + `validate_mapf_solution` — and gates the
+guarantee our code actually makes, **not** an exact path: PIBT's completeness
+theorem relies on a *random* tie-break, which `pypibt` has (`rng.shuffle`) and our
+`_Pibt` deliberately does not (deterministic ties keep the demos bit-reproducible).
+
+- **collision-free** — for every instance and *every timestep*, including the full
+  lifelong warehouse run, our configuration has zero vertex collisions, zero edge
+  (swap) collisions, and only step-or-wait transitions. This is **gated**.
+- **converged** — the honest cost of the deterministic tie-break: as a one-shot
+  fixed-goal solver `_Pibt` can livelock in a symmetric standoff the reference's
+  random tie-break escapes, so it is not *complete* the way `pypibt` is. We report
+  the rate (~0.7 across the suite) rather than hide it; it is irrelevant to
+  lifelong throughput, where goals change on arrival and no standoff is permanent.
+- **makespan** — where ours converges, its length tracks the reference's within a
+  bound (a bound, not equality). Numbers in
+  [`benchmarks/pibt_pypibt.md`](../benchmarks/pibt_pypibt.md).
+
+The reference is an *optional*, pure-Python dependency — the core build and test
+suite never touch it (the equivalence test skips cleanly when it is absent):
+
+```bash
+python3 -m venv /tmp/pypibt-venv && . /tmp/pypibt-venv/bin/activate
+pip install --upgrade pip numpy pytest
+git clone https://github.com/Kei18/pypibt.git /tmp/pypibt
+pip install /tmp/pypibt
+python3 scripts/compare_pibt_pypibt.py --check       # gated equivalence contract
+python3 scripts/compare_pibt_pypibt.py --write        # refresh benchmarks/pibt_pypibt.md
+```
+
+The `pibt-pypibt-equivalence` CI job does exactly this on every push, so the
+collision-free guarantee under the warehouse/fleet demos stays a checked contract.
+
 ```bash
 ros2 run mrn_coord mrn_lifelong_demo                       # 6 robots, prints throughput + frames
 ros2 run mrn_coord mrn_lifelong_demo --agents 8 --steps 200

@@ -234,16 +234,21 @@ checked-in expectations in `benchmarks/expected_metrics/`, so a regression that
 drops a goal, introduces a collision, or worsens a makespan / sum-of-costs fails
 the build — the benchmarks are a guarded contract, not decoration.
 
-Two further jobs check our implementations against the **reference libraries**
+Three further jobs check our implementations against the **reference libraries**
 they reproduce, each built from source so the core build never depends on it: our
 ORCA against [RVO2](https://github.com/snape/RVO2) (same velocity to ~1e-5,
-[`benchmarks/orca_rvo2.md`](benchmarks/orca_rvo2.md)) and our MAPF search against
+[`benchmarks/orca_rvo2.md`](benchmarks/orca_rvo2.md)); our MAPF search against
 [libMultiRobotPlanning](https://github.com/whoenig/libMultiRobotPlanning) — CBS
 reproducing its identical optimal sum-of-costs
 ([`benchmarks/mapf_libmrp.md`](benchmarks/mapf_libmrp.md)) and ECBS honoring the
 same `w·optimal` suboptimality bound
-([`benchmarks/ecbs_libmrp.md`](benchmarks/ecbs_libmrp.md)). "Faithful port",
-"optimal solver", and "bounded-suboptimal" are measured contracts, not claims.
+([`benchmarks/ecbs_libmrp.md`](benchmarks/ecbs_libmrp.md)); and the **PIBT** core
+that steps the warehouse/fleet demos against the paper author's own
+[`pypibt`](https://github.com/Kei18/pypibt) — every configuration we emit judged
+collision-free by the *reference's own* validator, over the full lifelong run
+([`benchmarks/pibt_pypibt.md`](benchmarks/pibt_pypibt.md)). "Faithful port",
+"optimal solver", "bounded-suboptimal", and "collision-free PIBT" are measured
+contracts, not claims.
 
 ## License
 
