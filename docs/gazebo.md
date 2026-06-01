@@ -81,6 +81,33 @@ unreliable (only a subset of pose topics get discovered), which degrades the
 flock. Disabling shared-memory transport (`FASTDDS_BUILTIN_TRANSPORTS=UDPv4`)
 helps but did not fully resolve it in that environment.
 
+## Demo video (`record_gazebo_gif.py`)
+
+The 3D demo GIF in the README is recorded from a dedicated world,
+`worlds/multirobot_demo.sdf`: three robots cross an arena of cylindrical
+obstacles, driven over `cmd_vel` by the repo's **own navigation stack** — A\*
+grid planning + pure-pursuit + reciprocal avoidance (`mrn_sim.navigate`
+primitives), closed over Gazebo's reported poses. Each robot moves via the
+kinematic `VelocityControl` system (commanded body twist → motion, stable and
+slip-free — steadier than tuning a `DiffDrive` chassis for a demo).
+
+Recording is **fully offscreen**: a static isometric camera sensor renders on
+the GPU (forced onto the NVIDIA EGL vendor) and publishes frames on `/rec_camera`;
+the script bridges them to ROS (`ros_gz_image`, over CycloneDDS to dodge the
+shared-memory transport flakiness) and encodes a GIF. No GUI or desktop window is
+ever opened. `scripts/record_gazebo_gif.py` orchestrates the gz server, the
+bridges, the controller, and the encode, and tears every process down on exit.
+
+```bash
+# ROS 2 Jazzy sourced; needs gz sim (Harmonic), ros_gz, a GPU with EGL, rclpy:
+python3 scripts/record_gazebo_gif.py
+python3 scripts/record_gazebo_gif.py --duration 16 --fps 15 --width 720
+```
+
+Being wall-clock-paced 3D, the result is **not bit-for-bit deterministic**
+(unlike the 2D `make_*_gif.py` demos) — it is media-generation only and, like the
+rest of `mrn_gazebo`, not part of CI.
+
 ## Scope
 
 This is a working seam, not a full benchmark. Multi-robot spawning, sensors

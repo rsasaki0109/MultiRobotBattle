@@ -115,6 +115,17 @@ to its goal that stays provably safe (`mrn_coord.orca`, regenerate with
   <img src="docs/media/orca_demo.gif" alt="Two crowds of agents walk into each other and pass through collision-free via ORCA reciprocal avoidance" width="560">
 </p>
 
+**3D physics — Gazebo** — the same navigation, but in the `mrn_gazebo` (`gz sim`,
+Harmonic) **3D** world: three robots cross an obstacle arena under the repo's own
+A\* grid planning + pure-pursuit + reciprocal avoidance, driven over `cmd_vel` and
+moved by the kinematic `VelocityControl` system. Rendered and recorded **fully
+offscreen on the GPU** (no GUI, no desktop window) by `scripts/record_gazebo_gif.py`
+— the 3D counterpart to the deterministic 2D demos, driven by the same algorithms:
+
+<p align="center">
+  <img src="docs/media/gazebo_demo.gif" alt="Three robots cross a 3D Gazebo arena of cylindrical obstacles, routing around them and avoiding each other via the repo's A* + pure-pursuit + reciprocal-avoidance navigation" width="640">
+</p>
+
 ## Packages
 
 | Package | Role |

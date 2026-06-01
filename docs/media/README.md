@@ -15,11 +15,18 @@ algorithms** — regenerate any of them with the matching script:
 | `recip_nav_demo.gif` | `make_recip_nav_gif.py` | multi-robot navigation with reciprocal avoidance |
 | `replan_demo.gif` | `make_replan_gif.py` | replanning around a moving obstacle |
 | `orca_demo.gif` | `make_orca_gif.py` | ORCA reciprocal avoidance: two crowds pass through each other |
+| `gazebo_demo.gif` | `record_gazebo_gif.py` | **3D Gazebo**: three robots cross an obstacle arena via A\* + pure-pursuit + reciprocal avoidance |
 
 ```bash
 python3 scripts/make_<name>_gif.py     # writes docs/media/<name>_demo.gif
 ```
 
-The generators need only `matplotlib` + `Pillow` (and the `mrn_sim` / `mrn_coord`
-packages on the path, which the scripts add automatically). No ROS or running
-stack required.
+The `make_*_gif.py` generators need only `matplotlib` + `Pillow` (and the
+`mrn_sim` / `mrn_coord` packages on the path, which the scripts add
+automatically). No ROS or running stack required.
+
+`record_gazebo_gif.py` is the exception: it drives the **real Gazebo** world and
+so needs `gz sim` (Harmonic), `ros_gz` (`ros_gz_bridge` / `ros_gz_image`), a GPU
+with EGL, and `rclpy` — run it with ROS 2 Jazzy sourced. It renders fully
+offscreen (no GUI / desktop window). Being wall-clock-paced 3D, it is not
+bit-for-bit deterministic; it is media-generation only and not part of CI.
