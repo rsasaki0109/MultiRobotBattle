@@ -99,10 +99,12 @@ robots, like a real robotics simulator.
 
 Recording is **fully offscreen**: a static isometric camera sensor renders on
 the GPU (forced onto the NVIDIA EGL vendor) and publishes frames on `/rec_camera`;
-the script bridges them to ROS (`ros_gz_image`, over CycloneDDS to dodge the
+the harness bridges them to ROS (`ros_gz_image`, over CycloneDDS to dodge the
 shared-memory transport flakiness) and encodes a GIF. No GUI or desktop window is
-ever opened. `scripts/record_gazebo_gif.py` orchestrates the gz server, the
-bridges, the controller, and the encode, and tears every process down on exit.
+ever opened. The shared harness `scripts/_gz_record.py` orchestrates the gz
+server, the bridges, the control loop, the optional LiDAR overlay, and the
+encode, and tears every process down on exit; each demo script is just a thin
+controller plus a `Scenario` (world, camera, controller, LiDAR options).
 
 ```bash
 # ROS 2 Jazzy sourced; needs gz sim (Harmonic), ros_gz, a GPU with EGL, rclpy:
@@ -117,11 +119,16 @@ and driven by the matching `mrn_coord` algorithm (the 3D counterparts of the 2D
 - `record_gazebo_orca_gif.py` (`worlds/orca_demo.sdf`) — two streams of holonomic
   robots on near-head-on lanes pass *through* each other via `mrn_coord.orca`.
 - `record_gazebo_swarm_gif.py` (`worlds/swarm_demo.sdf`) — twelve robots flock
-  past obstacles via `mrn_coord.flocking` Boids + a migration pull.
+  past obstacles via `mrn_coord.flocking` Boids + a migration pull, with the
+  flock's LiDAR returns overlaid as a point cloud.
 - `record_gazebo_coord_gif.py` (`worlds/coord_demo.sdf`) — three robots funnel
   through a doorway on a Conflict-Based-Search schedule, then assemble a
   formation; the CBS + formation trajectory is precomputed by `mrn_coord` and
-  replayed by tracking each robot's waypoint.
+  replayed by tracking each robot's waypoint, LiDAR tracing the wall.
+
+The swarm and coordination robots also carry a `gpu_lidar`, so all three
+companions can overlay scans too — `Scenario.use_lidar` (with `lidar_rays` /
+`lidar_step`) toggles it in the shared harness.
 
 Being wall-clock-paced 3D, the result is **not bit-for-bit deterministic**
 (unlike the 2D `make_*_gif.py` demos) — it is media-generation only and, like the

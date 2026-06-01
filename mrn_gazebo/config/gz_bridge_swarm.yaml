@@ -1,5 +1,5 @@
-# ros_gz_bridge config for the swarm world (swarm_demo.sdf): cmd_vel ROS->gz
-# and pose gz->ROS for all 12 robots. record_gazebo_swarm_gif.py. Media-only.
+# ros_gz_bridge config for the swarm world (swarm_demo.sdf): cmd_vel ROS->gz,
+# pose + lidar scan gz->ROS for all 12 robots. record_gazebo_swarm_gif.py.
 - ros_topic_name: "/model/a0/cmd_vel"
   gz_topic_name: "/model/a0/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
@@ -9,6 +9,11 @@
   gz_topic_name: "/model/a0/pose"
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/a0/scan"
+  gz_topic_name: "/model/a0/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS
 - ros_topic_name: "/model/a1/cmd_vel"
   gz_topic_name: "/model/a1/cmd_vel"
@@ -20,6 +25,11 @@
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
   direction: GZ_TO_ROS
+- ros_topic_name: "/model/a1/scan"
+  gz_topic_name: "/model/a1/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
 - ros_topic_name: "/model/a2/cmd_vel"
   gz_topic_name: "/model/a2/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
@@ -29,6 +39,11 @@
   gz_topic_name: "/model/a2/pose"
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/a2/scan"
+  gz_topic_name: "/model/a2/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS
 - ros_topic_name: "/model/a3/cmd_vel"
   gz_topic_name: "/model/a3/cmd_vel"
@@ -40,6 +55,11 @@
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
   direction: GZ_TO_ROS
+- ros_topic_name: "/model/a3/scan"
+  gz_topic_name: "/model/a3/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
 - ros_topic_name: "/model/a4/cmd_vel"
   gz_topic_name: "/model/a4/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
@@ -49,6 +69,11 @@
   gz_topic_name: "/model/a4/pose"
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/a4/scan"
+  gz_topic_name: "/model/a4/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS
 - ros_topic_name: "/model/a5/cmd_vel"
   gz_topic_name: "/model/a5/cmd_vel"
@@ -60,6 +85,11 @@
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
   direction: GZ_TO_ROS
+- ros_topic_name: "/model/a5/scan"
+  gz_topic_name: "/model/a5/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
 - ros_topic_name: "/model/a6/cmd_vel"
   gz_topic_name: "/model/a6/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
@@ -69,6 +99,11 @@
   gz_topic_name: "/model/a6/pose"
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/a6/scan"
+  gz_topic_name: "/model/a6/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS
 - ros_topic_name: "/model/a7/cmd_vel"
   gz_topic_name: "/model/a7/cmd_vel"
@@ -80,6 +115,11 @@
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
   direction: GZ_TO_ROS
+- ros_topic_name: "/model/a7/scan"
+  gz_topic_name: "/model/a7/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
 - ros_topic_name: "/model/a8/cmd_vel"
   gz_topic_name: "/model/a8/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
@@ -89,6 +129,11 @@
   gz_topic_name: "/model/a8/pose"
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/a8/scan"
+  gz_topic_name: "/model/a8/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS
 - ros_topic_name: "/model/a9/cmd_vel"
   gz_topic_name: "/model/a9/cmd_vel"
@@ -100,6 +145,11 @@
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
   direction: GZ_TO_ROS
+- ros_topic_name: "/model/a9/scan"
+  gz_topic_name: "/model/a9/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
 - ros_topic_name: "/model/a10/cmd_vel"
   gz_topic_name: "/model/a10/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
@@ -110,6 +160,11 @@
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
   direction: GZ_TO_ROS
+- ros_topic_name: "/model/a10/scan"
+  gz_topic_name: "/model/a10/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
 - ros_topic_name: "/model/a11/cmd_vel"
   gz_topic_name: "/model/a11/cmd_vel"
   ros_type_name: "geometry_msgs/msg/Twist"
@@ -119,4 +174,9 @@
   gz_topic_name: "/model/a11/pose"
   ros_type_name: "geometry_msgs/msg/PoseStamped"
   gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/a11/scan"
+  gz_topic_name: "/model/a11/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
   direction: GZ_TO_ROS

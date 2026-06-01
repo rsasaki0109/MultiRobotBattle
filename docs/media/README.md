@@ -17,8 +17,8 @@ algorithms** — regenerate any of them with the matching script:
 | `orca_demo.gif` | `make_orca_gif.py` | ORCA reciprocal avoidance: two crowds pass through each other |
 | `gazebo_demo.gif` | `record_gazebo_gif.py` | **3D Gazebo**: three robots cross an obstacle arena via A\* + pure-pursuit + reciprocal avoidance, with live 360° LiDAR overlaid |
 | `gazebo_orca_demo.gif` | `record_gazebo_orca_gif.py` | **3D Gazebo**: two robot streams pass through each other collision-free via ORCA |
-| `gazebo_swarm_demo.gif` | `record_gazebo_swarm_gif.py` | **3D Gazebo**: twelve robots flock past obstacles via Boids (separation/alignment/cohesion + migration) |
-| `gazebo_coord_demo.gif` | `record_gazebo_coord_gif.py` | **3D Gazebo**: three robots funnel through a doorway via CBS, then assemble a formation |
+| `gazebo_swarm_demo.gif` | `record_gazebo_swarm_gif.py` | **3D Gazebo**: twelve robots flock past obstacles via Boids, with their LiDAR point cloud |
+| `gazebo_coord_demo.gif` | `record_gazebo_coord_gif.py` | **3D Gazebo**: three robots funnel through a doorway via CBS then form up, LiDAR tracing the wall |
 
 ```bash
 python3 scripts/make_<name>_gif.py     # writes docs/media/<name>_demo.gif
@@ -28,8 +28,9 @@ The `make_*_gif.py` generators need only `matplotlib` + `Pillow` (and the
 `mrn_sim` / `mrn_coord` packages on the path, which the scripts add
 automatically). No ROS or running stack required.
 
-`record_gazebo_gif.py` is the exception: it drives the **real Gazebo** world and
-so needs `gz sim` (Harmonic), `ros_gz` (`ros_gz_bridge` / `ros_gz_image`), a GPU
-with EGL, and `rclpy` — run it with ROS 2 Jazzy sourced. It renders fully
-offscreen (no GUI / desktop window). Being wall-clock-paced 3D, it is not
-bit-for-bit deterministic; it is media-generation only and not part of CI.
+The `record_gazebo_*_gif.py` scripts are the exception: they drive the **real
+Gazebo** worlds (sharing one harness, `scripts/_gz_record.py`) and so need
+`gz sim` (Harmonic), `ros_gz` (`ros_gz_bridge` / `ros_gz_image`), a GPU with EGL,
+and `rclpy` — run them with ROS 2 Jazzy sourced. They render fully offscreen (no
+GUI / desktop window). Being wall-clock-paced 3D, they are not bit-for-bit
+deterministic; they are media-generation only and not part of CI.

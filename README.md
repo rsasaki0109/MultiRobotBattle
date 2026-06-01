@@ -129,14 +129,15 @@ demos, driven by the same algorithms:
 </p>
 
 The same offscreen seam runs the other layers in 3D too — **ORCA** crowds passing
-through each other, **Boids** swarming past obstacles, and **CBS + formation**
-funneling through a doorway — each driven by the matching `mrn_coord` algorithm
-(`scripts/record_gazebo_{orca,swarm,coord}_gif.py`):
+through each other, **Boids** swarming past obstacles (with the flock's LiDAR
+point cloud), and **CBS + formation** funneling through a doorway — each driven by
+the matching `mrn_coord` algorithm and sharing one recording harness
+(`scripts/_gz_record.py`, `scripts/record_gazebo_{orca,swarm,coord}_gif.py`):
 
 <p align="center">
   <img src="docs/media/gazebo_orca_demo.gif" alt="Two streams of robots in a 3D Gazebo world pass through each other collision-free via ORCA" width="265">
-  <img src="docs/media/gazebo_swarm_demo.gif" alt="Twelve robots flock through a 3D Gazebo arena past obstacles via Boids rules" width="265">
-  <img src="docs/media/gazebo_coord_demo.gif" alt="Three robots funnel through a doorway via Conflict-Based Search then assemble a formation, in 3D Gazebo" width="265">
+  <img src="docs/media/gazebo_swarm_demo.gif" alt="Twelve robots flock through a 3D Gazebo arena past obstacles via Boids rules, their LiDAR returns drawn as a point cloud" width="265">
+  <img src="docs/media/gazebo_coord_demo.gif" alt="Three robots funnel through a doorway via Conflict-Based Search then assemble a formation in 3D Gazebo, their LiDAR tracing the wall" width="265">
 </p>
 
 ## Packages

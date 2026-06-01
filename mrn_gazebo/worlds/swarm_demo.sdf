@@ -1,10 +1,9 @@
 <?xml version="1.0" ?>
 <!--
-  Gazebo (gz sim, Harmonic) swarm demo world: 12 robots flock across an open
-  arena past a few obstacles, driven over cmd_vel by mrn_coord.flocking Boids
-  (separation/alignment/cohesion + migration + obstacle avoidance) via
-  scripts/record_gazebo_swarm_gif.py, each moving with the kinematic
-  VelocityControl system. Rendered fully offscreen. Media-only; not in CI.
+  Gazebo (gz sim, Harmonic) swarm demo world: 12 robots (each with a 360° lidar)
+  flock across an open arena past obstacles, driven over cmd_vel by
+  mrn_coord.flocking Boids via scripts/record_gazebo_swarm_gif.py, moving with the
+  kinematic VelocityControl system. Rendered fully offscreen. Media-only; not CI.
 -->
 <sdf version="1.8">
   <world name="swarm_demo">
@@ -41,6 +40,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a0/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a0/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -56,6 +60,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a1/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a1/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -71,6 +80,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a2/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a2/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -86,6 +100,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a3/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a3/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -101,6 +120,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a4/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a4/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -116,6 +140,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a5/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a5/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -131,6 +160,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a6/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a6/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -146,6 +180,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a7/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a7/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -161,6 +200,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a8/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a8/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -176,6 +220,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a9/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a9/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -191,6 +240,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a10/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a10/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
@@ -206,6 +260,11 @@
           <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
         <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
           <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+        <visual name="puck"><pose>0 0 0.24 0 0 0</pose><geometry><cylinder><radius>0.05</radius><length>0.06</length></cylinder></geometry>
+          <material><ambient>0.05 0.06 0.08 1</ambient><diffuse>0.08 0.09 0.11 1</diffuse></material></visual>
+        <sensor name="lidar" type="gpu_lidar"><pose>0 0 0.28 0 0 0</pose><update_rate>15</update_rate><always_on>1</always_on><topic>/model/a11/scan</topic>
+          <lidar><scan><horizontal><samples>72</samples><resolution>1</resolution><min_angle>-3.14159</min_angle><max_angle>3.14159</max_angle></horizontal></scan>
+            <range><min>0.12</min><max>6.0</max><resolution>0.01</resolution></range></lidar></sensor>
       </link>
       <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a11/cmd_vel</topic></plugin>
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
