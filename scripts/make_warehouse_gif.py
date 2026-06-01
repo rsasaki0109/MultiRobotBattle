@@ -13,7 +13,8 @@ matters for a warehouse AMR fleet. Deterministic, no ROS.
 
 Usage::
 
-    python3 scripts/make_warehouse_gif.py
+    python3 scripts/make_warehouse_gif.py                 # the 12-AMR demo
+    python3 scripts/make_warehouse_gif.py --preset fleet   # a 100-AMR fleet system
 """
 
 from __future__ import annotations
@@ -46,11 +47,14 @@ INK = "#c9d1d9"
 MUTED = "#6b7689"
 ACCENT = "#38bdf8"
 
+# Defaults are the compact 12-AMR demo; --preset fleet scales to a full
+# warehouse of ~100 AMRs. All of these are overridable from the CLI.
 ROWS, COLS, AISLE = 3, 5, 1
 AGENTS = 12
 STEPS = 130
 SUBSTEPS = 2          # interpolated frames between integer cells (smooth motion)
 ROBOT_R = 0.34
+TRAIL = 10
 
 
 def _robot_colors(n):
@@ -120,73 +124,102 @@ def render(output: str, fps: int = 20) -> None:
     ids = sorted(result.history[0])
     colors = dict(zip(ids, _robot_colors(len(ids))))
     W, H = grid.width, grid.height
-    trail = 10
+    trail = TRAIL
 
-    fig, ax = plt.subplots(figsize=(6.8, 4.6), dpi=96)
+    # Scale the canvas to the warehouse aspect; bigger floors get more pixels so
+    # a 100-AMR fleet stays legible.
+    aspect = W / H
+    fh = 4.6 if W <= 22 else 5.8
+    fig, ax = plt.subplots(figsize=(fh * aspect, fh), dpi=96)
     fig.patch.set_facecolor(BG)
     fig.subplots_adjust(left=0.02, right=0.98, top=0.9, bottom=0.1)
 
-    def draw(fi):
-        ax.clear()
-        ax.set_facecolor(PANEL)
-        ax.set_xlim(-0.5, W - 0.5)
-        ax.set_ylim(-0.5, H - 0.5)
-        ax.set_aspect("equal")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.invert_yaxis()                       # row 0 at top, warehouse-style
-        for spine in ax.spines.values():
-            spine.set_color(SHELF_EDGE)
+    # A big fleet would drown in per-robot goal stars and fat trails; thin them
+    # down as the fleet grows so the swarm of bodies stays readable.
+    dense = len(ids) > 30
+    star_s = 26 if dense else 55
+    star_a = 0.18 if dense else 0.4
+    trail_lw = 1.0 if dense else 1.8
+    trail_a = 0.28 if dense else 0.4
+    body_lw = 0.7 if dense else 1.0
 
-        # Shelving (one rounded tile per blocked cell — reads as racking units).
-        for (x, y) in grid.blocked:
-            ax.add_patch(FancyBboxPatch(
-                (x - 0.42, y - 0.42), 0.84, 0.84,
-                boxstyle="round,pad=0,rounding_size=0.16",
-                facecolor=SHELF, edgecolor=SHELF_EDGE, lw=0.8, zorder=1))
-        # Pick/drop stations.
-        for (x, y) in endpoints:
-            ax.scatter([x], [y], marker="s", s=26, facecolor="none",
-                       edgecolor=STATION, lw=1.1, zorder=2)
+    # --- static layer: drawn ONCE (re-adding 200+ shelf tiles every frame is
+    # what made a 100-AMR render crawl). Only the robots/trails/counter move. ---
+    ax.set_facecolor(PANEL)
+    ax.set_xlim(-0.5, W - 0.5)
+    ax.set_ylim(-0.5, H - 0.5)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.invert_yaxis()                       # row 0 at top, warehouse-style
+    for spine in ax.spines.values():
+        spine.set_color(SHELF_EDGE)
+    for (x, y) in grid.blocked:             # shelving — rounded racking units
+        ax.add_patch(FancyBboxPatch(
+            (x - 0.42, y - 0.42), 0.84, 0.84,
+            boxstyle="round,pad=0,rounding_size=0.16",
+            facecolor=SHELF, edgecolor=SHELF_EDGE, lw=0.8, zorder=1))
+    ex = [c[0] for c in endpoints]
+    ey = [c[1] for c in endpoints]
+    ax.scatter(ex, ey, marker="s", s=26, facecolor="none",
+               edgecolor=STATION, lw=1.1, zorder=2)
+    ax.text(-0.3, -0.78,
+            "Fleet system — lifelong MAPF" if dense
+            else "Lifelong MAPF — warehouse AMR fleet",
+            color=INK, fontsize=12, weight="bold", va="bottom", zorder=7)
+    ax.text(-0.3, H - 0.1,
+            "endless pick/drop tasks, collision-free via PIBT "
+            "(mrn_coord.lifelong)",
+            color=MUTED, fontsize=8.0, va="top", zorder=7)
+
+    def draw(fi):
+        # Tear down only the moving artists from the previous frame.
+        for art in draw.dynamic:
+            art.remove()
+        draw.dynamic = []
 
         snap = frames[fi]
         step = step_of[fi]
         goals = goal_hist[min(step, len(goal_hist) - 1)]
+        lo = max(0, fi - trail)
+
+        # Goal stars for the whole fleet in one scatter call.
+        gx = [goals[k][0] for k in ids]
+        gy = [goals[k][1] for k in ids]
+        gc = [colors[k] for k in ids]
+        draw.dynamic.append(ax.scatter(
+            gx, gy, marker="*", s=star_s, c=gc, alpha=star_a,
+            edgecolor=BG, linewidth=0.4, zorder=3))
+
         for k in ids:
             c = colors[k]
-            # faint marker at this robot's current task station
-            gx, gy = goals[k]
-            ax.scatter([gx], [gy], marker="*", s=55, color=c, alpha=0.4,
-                       edgecolor=BG, linewidth=0.4, zorder=3)
-            # short trail
-            lo = max(0, fi - trail)
             xs = [frames[j][k][0] for j in range(lo, fi + 1)]
             ys = [frames[j][k][1] for j in range(lo, fi + 1)]
-            ax.plot(xs, ys, color=c, lw=1.8, alpha=0.4, solid_capstyle="round",
-                    zorder=4)
+            draw.dynamic.extend(ax.plot(
+                xs, ys, color=c, lw=trail_lw, alpha=trail_a,
+                solid_capstyle="round", zorder=4))
             x, y = snap[k]
-            ax.add_patch(Circle((x, y), ROBOT_R, facecolor=c, edgecolor=BG,
-                                lw=1.0, zorder=5))
+            body = Circle((x, y), ROBOT_R, facecolor=c, edgecolor=BG,
+                          lw=body_lw, zorder=5)
+            ax.add_patch(body)
+            draw.dynamic.append(body)
 
-        # title + live throughput share the top margin; subtitle sits below.
-        ax.text(-0.3, -0.78, "Lifelong MAPF — warehouse AMR fleet",
-                color=INK, fontsize=12, weight="bold", va="bottom", zorder=7)
+        # live throughput counter (top-right)
         n_served = served[min(step, len(served) - 1)]
         tput = n_served / max(1, step) if step else 0.0
-        ax.text(W - 0.2, -0.78,
-                f"AMRs {len(ids)}   served {n_served}   {tput:.2f}/step",
-                color=ACCENT, fontsize=8.5, va="bottom", ha="right", zorder=7)
-        ax.text(-0.3, H - 0.1,
-                "endless pick/drop tasks, collision-free via PIBT "
-                "(mrn_coord.lifelong)",
-                color=MUTED, fontsize=8.0, va="top", zorder=7)
+        draw.dynamic.append(ax.text(
+            W - 0.2, -0.78,
+            f"AMRs {len(ids)}   served {n_served}   {tput:.1f}/step",
+            color=ACCENT, fontsize=8.5, va="bottom", ha="right", zorder=7))
         return ()
+
+    draw.dynamic = []
 
     anim = FuncAnimation(fig, draw, frames=len(frames),
                          interval=1000 / fps, blit=False)
     anim.save(output, writer=PillowWriter(fps=fps))
     plt.close(fig)
-    _optimize_gif(output, fps)
+    _optimize_gif(output, fps, colors=64 if dense else 80)
     print(f"throughput {result.throughput:.3f} tasks/step over {result.steps} "
           f"steps, {result.completed} tasks served, "
           f"avg service {result.avg_service_time:.2f} steps")
@@ -209,12 +242,49 @@ def _optimize_gif(path: str, fps: int, colors: int = 80) -> None:
 
 
 def main() -> None:
+    global ROWS, COLS, AISLE, AGENTS, STEPS, ROBOT_R, TRAIL
+
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", default="docs/media/warehouse_demo.gif")
+    parser.add_argument("--output", default=None)
     parser.add_argument("--fps", type=int, default=20)
+    parser.add_argument("--preset", choices=("compact", "fleet"),
+                        default="compact",
+                        help="compact: the 12-AMR demo; "
+                             "fleet: a ~100-AMR warehouse fleet system")
+    parser.add_argument("--rows", type=int)
+    parser.add_argument("--cols", type=int)
+    parser.add_argument("--aisle", type=int)
+    parser.add_argument("--agents", type=int)
+    parser.add_argument("--steps", type=int)
     args = parser.parse_args()
-    render(args.output, fps=args.fps)
-    print(f"wrote {args.output}")
+
+    # The fleet preset: a big floor (6x9 shelf blocks → 108 stations) packed
+    # with ~100 AMRs, the whole point being density at scale.
+    if args.preset == "fleet":
+        global SUBSTEPS
+        ROWS, COLS, AISLE = 6, 9, 1
+        AGENTS, STEPS = 100, 110
+        ROBOT_R, TRAIL = 0.3, 7
+        SUBSTEPS = 1          # 100 bodies read fine as quick discrete hops; one
+                              # frame per step keeps the GIF small
+
+    # Explicit flags win over the preset.
+    if args.rows is not None:
+        ROWS = args.rows
+    if args.cols is not None:
+        COLS = args.cols
+    if args.aisle is not None:
+        AISLE = args.aisle
+    if args.agents is not None:
+        AGENTS = args.agents
+    if args.steps is not None:
+        STEPS = args.steps
+
+    output = args.output or (
+        "docs/media/fleet_demo.gif" if args.preset == "fleet"
+        else "docs/media/warehouse_demo.gif")
+    render(output, fps=args.fps)
+    print(f"wrote {output}")
 
 
 if __name__ == "__main__":

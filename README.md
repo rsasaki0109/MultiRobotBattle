@@ -153,6 +153,15 @@ metric a real fleet is judged on (`mrn_coord.lifelong`, regenerate with
   <img src="docs/media/warehouse_demo.gif" alt="Twelve autonomous mobile robots stream endless pickup/dropoff tasks through a shelf-and-aisle warehouse, collision-free via PIBT, while a counter shows the throughput per timestep" width="560">
 </p>
 
+The same engine scales to a full **fleet system** — **100 AMRs** working a
+six-by-nine shelf floor, every per-timestep move still the collision-free PIBT
+configuration, the counter climbing past **25 tasks/step**
+(`scripts/make_warehouse_gif.py --preset fleet`):
+
+<p align="center">
+  <img src="docs/media/fleet_demo.gif" alt="A hundred autonomous mobile robots swarm a large shelf-and-aisle warehouse floor on a lifelong-MAPF schedule, collision-free via PIBT, the counter showing over twenty-five tasks served per timestep" width="640">
+</p>
+
 **3D physics — Gazebo** — the demo at the top of this README runs in the
 `mrn_gazebo` (`gz sim`, Harmonic) **3D** world: three robots cross the obstacle
 arena under the repo's own A\* grid planning + pure-pursuit + reciprocal

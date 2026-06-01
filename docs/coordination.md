@@ -268,6 +268,18 @@ deterministic, so the throughput is reproducible and CI-gated.
   <em>A warehouse AMR fleet: twelve robots take an endless stream of pick/drop tasks, stepped collision-free by PIBT with cost-aware allocation, and the counter tracks throughput (tasks/step) — the metric a real fleet is judged on. Deterministic; regenerate with <code>python3 scripts/make_warehouse_gif.py</code>.</em>
 </p>
 
+The same code scales straight to a **fleet system** — `--preset fleet` packs
+**100 AMRs** onto a six-by-nine shelf floor (108 stations). Every step is still
+one PIBT collision-free configuration; throughput climbs past **25 tasks/step**:
+
+<p align="center">
+  <img src="media/fleet_demo.gif" alt="A hundred autonomous mobile robots swarm a large shelf-and-aisle warehouse on a lifelong-MAPF schedule, collision-free via PIBT, the counter showing over twenty-five tasks served per timestep" width="720">
+</p>
+
+<p align="center">
+  <em>Fleet system at scale: 100 AMRs, lifelong MAPF, every move a PIBT collision-free configuration. Regenerate with <code>python3 scripts/make_warehouse_gif.py --preset fleet</code>.</em>
+</p>
+
 ```bash
 ros2 run mrn_coord mrn_lifelong_demo                       # 6 robots, prints throughput + frames
 ros2 run mrn_coord mrn_lifelong_demo --agents 8 --steps 200
