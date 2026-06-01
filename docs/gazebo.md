@@ -110,6 +110,11 @@ python3 scripts/record_gazebo_gif.py
 python3 scripts/record_gazebo_gif.py --duration 16 --fps 15 --width 720
 ```
 
+A companion script, `scripts/record_gazebo_orca_gif.py`, records the same way
+from `worlds/orca_demo.sdf`: two streams of holonomic robots on near-head-on
+lanes pass *through* each other collision-free, driven by `mrn_coord.orca`
+reciprocal avoidance (the 3D counterpart of `make_orca_gif.py`).
+
 Being wall-clock-paced 3D, the result is **not bit-for-bit deterministic**
 (unlike the 2D `make_*_gif.py` demos) — it is media-generation only and, like the
 rest of `mrn_gazebo`, not part of CI.

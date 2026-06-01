@@ -128,6 +128,14 @@ demos, driven by the same algorithms:
   <img src="docs/media/gazebo_demo.gif" alt="Three robots cross a 3D Gazebo arena of cylindrical obstacles via the repo's A* + pure-pursuit + reciprocal-avoidance navigation, each sweeping a 360-degree LiDAR whose returns trace the obstacles" width="660">
 </p>
 
+The same Gazebo seam also runs the **ORCA crowd** (`scripts/record_gazebo_orca_gif.py`):
+two streams of robots walk into each other on near-head-on lanes and pass
+*through*, collision-free, each driven by `mrn_coord.orca` reciprocal avoidance:
+
+<p align="center">
+  <img src="docs/media/gazebo_orca_demo.gif" alt="Two streams of robots in a 3D Gazebo world walk into each other and pass through collision-free via ORCA reciprocal avoidance" width="660">
+</p>
+
 ## Packages
 
 | Package | Role |
