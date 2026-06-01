@@ -37,6 +37,7 @@ _POLICIES = [
     ("Hybrid A* + DWA", "dwa_kino"),
     ("grid A* + MPC (iLQR)", "mpc"),
     ("grid A* + MPC + CBF", "mpc_cbf"),
+    ("grid A* + MPC + shield", "mpc_shield"),
     ("grid A* + ORCA", "orca"),
 ]
 
@@ -56,6 +57,7 @@ def _build(policy: str):
         "dwa_kino": lambda s: dwa_policy(s, planner="kino"),
         "mpc": mpc_policy,
         "mpc_cbf": lambda s: mpc_policy(s, safety="cbf"),
+        "mpc_shield": lambda s: mpc_policy(s, safety="shield"),
         "orca": orca_policy,
     }[policy]
 
@@ -231,6 +233,21 @@ def _mapf_exec_rows():
                                 controller=controller)
         rows.append((controller, res))
     return rows
+
+
+def _shield_rows():
+    """Adversarial certification of the runtime safety shield (deterministic)."""
+    sys.path.insert(0, os.path.join(_REPO, "scripts"))
+    from certify_shield import certify
+
+    m = certify(seed=0, trials=2000, steps=250)
+    rows = []
+    for name, label in (("unshielded", "unshielded (the attack)"),
+                        ("lookahead", "look-ahead CBF (mrn_sim.cbf)"),
+                        ("shield", "certified shield (mrn_sim.shield)")):
+        rows.append((label, m[name + "_collisions"], m["trials"],
+                     m[name + "_min_clearance"], m[name + "_mean_deviation"]))
+    return rows, m["trials"]
 
 
 def _lifelong_rows():
@@ -491,6 +508,36 @@ def build_report() -> str:
         "The discrete guarantee is necessary but not sufficient: it takes either "
         "a schedule-aware executor (TPG) or a reactive controller (DWA) to keep "
         "it collision-free once the robots are real.",
+        "",
+    ]
+
+    shield_rows, shield_n = _shield_rows()
+    lines += [
+        "## Runtime safety shield: certified vs. an adversary",
+        "",
+        f"A safety filter's guarantee is only worth what survives an attack. Each "
+        f"row runs the *same* {shield_n} randomized obstacle fields with a nominal "
+        f"command engineered to crash — steer straight at the nearest obstacle at "
+        f"full speed, every tick — and measures the **robot body**. `coll` = "
+        f"rollouts whose body clearance ever went negative; `min clr` = worst body "
+        f"clearance reached (m, negative = penetrated); `dev` = mean deviation from "
+        f"the nominal command. The look-ahead CBF protects a point ahead of the "
+        f"axle, so a hard turn can still swing the body across the boundary; the "
+        f"certified shield's braking speed cap bounds the body itself, so it stays "
+        f"collision-free for *any* command the adversary picks "
+        f"(`scripts/certify_shield.py`).",
+        "",
+        "| controller | coll | min clr (m) | dev |",
+        "| --- | :-: | --: | --: |",
+    ]
+    for label, coll, _n, minclr, dev in shield_rows:
+        lines.append(f"| {label} | {coll} | {minclr:.3f} | {dev:.3f} |")
+    lines += [
+        "",
+        "Safety is not liveness: the shield guarantees the body never collides, "
+        "but a pure safety filter can deadlock (stop) at a symmetric obstacle — "
+        "routing around it is the planner's job, which is why the shield rides "
+        "*under* the global plan in the policies above.",
         "",
     ]
     return _fmt(lines)

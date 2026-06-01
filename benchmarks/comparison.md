@@ -14,6 +14,7 @@ Each navigation policy run on every bundled scenario (`mrn_sim/scenarios/`). `su
 | around_obstacle | Hybrid A* + DWA | ✓ | 156 | 15.6 | 12.6 | 0.27 | — | 0 |
 | around_obstacle | grid A* + MPC (iLQR) | ✓ | 93 | 9.3 | 14.4 | 0.37 | — | 0 |
 | around_obstacle | grid A* + MPC + CBF | ✓ | 93 | 9.3 | 14.4 | 0.37 | — | 0 |
+| around_obstacle | grid A* + MPC + shield | ✓ | 102 | 10.2 | 14.5 | 0.34 | — | 0 |
 | around_obstacle | grid A* + ORCA | ✓ | 97 | 9.7 | 14.3 | 0.29 | — | 0 |
 | crossing | grid A* + pursuit | ✓ | 185 | 18.5 | 55.3 | 0.88 | 1.39 | 0 |
 | crossing | Hybrid A* (kinodynamic) | ✓ | 205 | 20.5 | 55.2 | 0.89 | 1.45 | 0 |
@@ -21,6 +22,7 @@ Each navigation policy run on every bundled scenario (`mrn_sim/scenarios/`). `su
 | crossing | Hybrid A* + DWA | ✓ | 211 | 21.1 | 50.9 | 0.18 | 0.65 | 0 |
 | crossing | grid A* + MPC (iLQR) | ✓ | 119 | 11.9 | 52.0 | 0.16 | 0.74 | 0 |
 | crossing | grid A* + MPC + CBF | ✓ | 120 | 12.0 | 52.1 | 0.14 | 0.72 | 0 |
+| crossing | grid A* + MPC + shield | ✓ | 151 | 15.1 | 52.2 | 0.11 | 0.83 | 0 |
 | crossing | grid A* + ORCA | ✓ | 123 | 12.3 | 51.6 | 0.04 | 0.77 | 0 |
 | doorway | grid A* + pursuit | ✓ | 136 | 13.6 | 33.4 | 0.99 | 1.53 | 0 |
 | doorway | Hybrid A* (kinodynamic) | ✓ | 104 | 10.4 | 27.6 | 1.07 | 1.33 | 0 |
@@ -28,6 +30,7 @@ Each navigation policy run on every bundled scenario (`mrn_sim/scenarios/`). `su
 | doorway | Hybrid A* + DWA | ✓ | 175 | 17.5 | 26.7 | 0.98 | 0.67 | 0 |
 | doorway | grid A* + MPC (iLQR) | ✓ | 103 | 10.3 | 31.5 | 0.41 | 0.65 | 0 |
 | doorway | grid A* + MPC + CBF | ✓ | 106 | 10.6 | 31.4 | 0.41 | 0.86 | 0 |
+| doorway | grid A* + MPC + shield | ✓ | 134 | 13.4 | 31.5 | 0.37 | 0.73 | 0 |
 | doorway | grid A* + ORCA | ✓ | 115 | 11.5 | 32.3 | 0.24 | 0.51 | 0 |
 
 **Reading it.** Grid A\* plans fast but axis-aligned; the kinodynamic Hybrid A\* trades a little planning time for smooth, bounded-curvature paths (often fewer steps and more clearance to follow). DWA decides speed and avoidance by forward-simulating accel-limited velocities, so it tracks tighter and reacts to the other robots as moving obstacles, at a higher per-tick compute cost. MPC (iLQR) goes further still: it *optimizes* a whole receding-horizon trajectory each tick — smooth and far-sighted (often the shortest makespan) — predicting the other robots along their paths to avoid them in space-time. Its safety layer is a hard brake by default; **MPC + CBF** swaps that for a control-barrier QP that returns the nearest *forward-invariant-safe* command, so it steers around the conflict instead of braking — keeping more inter-robot clearance (see the doorway row) while staying collision-free.
@@ -116,4 +119,16 @@ The *same* LaCAM plan for a 4-way crossing, executed in the continuous world thr
 | dwa | ✓ | 0 | 10 | 105 | 0.78 |
 
 The discrete guarantee is necessary but not sufficient: it takes either a schedule-aware executor (TPG) or a reactive controller (DWA) to keep it collision-free once the robots are real.
+
+## Runtime safety shield: certified vs. an adversary
+
+A safety filter's guarantee is only worth what survives an attack. Each row runs the *same* 1990 randomized obstacle fields with a nominal command engineered to crash — steer straight at the nearest obstacle at full speed, every tick — and measures the **robot body**. `coll` = rollouts whose body clearance ever went negative; `min clr` = worst body clearance reached (m, negative = penetrated); `dev` = mean deviation from the nominal command. The look-ahead CBF protects a point ahead of the axle, so a hard turn can still swing the body across the boundary; the certified shield's braking speed cap bounds the body itself, so it stays collision-free for *any* command the adversary picks (`scripts/certify_shield.py`).
+
+| controller | coll | min clr (m) | dev |
+| --- | :-: | --: | --: |
+| unshielded (the attack) | 1990 | -1.043 | 3.061 |
+| look-ahead CBF (mrn_sim.cbf) | 1 | -0.798 | 1.493 |
+| certified shield (mrn_sim.shield) | 0 | 0.020 | 1.492 |
+
+Safety is not liveness: the shield guarantees the body never collides, but a pure safety filter can deadlock (stop) at a symmetric obstacle — routing around it is the planner's job, which is why the shield rides *under* the global plan in the policies above.
 

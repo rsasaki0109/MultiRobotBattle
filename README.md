@@ -40,9 +40,11 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   **replanning around dynamic obstacles** — plus a continuous-space
   **Hybrid A\*** kinodynamic planner (bounded turning radius, Dubins curves +
   analytic expansion) for smooth, feasibly-followable paths, **DWA** /
-  **MPC (iLQR)** optimizing local controllers for accel-limited tracking, and a
+  **MPC (iLQR)** optimizing local controllers for accel-limited tracking, a
   **Control Barrier Function** QP safety filter for provable collision-free
-  steering.
+  steering, and a **certified body-true safety shield** whose braking speed cap
+  keeps the robot body — not a look-ahead point — collision-free under the accel
+  limit, adversarially certified (`scripts/certify_shield.py`).
 - **Coordination** (`mrn_coord`) — multi-agent path finding (optimal
   Conflict-Based Search, **bounded-suboptimal ECBS**, **complete satisficing
   LaCAM**, and **anytime MAPF-LNS** that scale further, prioritized planning,

@@ -49,6 +49,7 @@ def _run_sim_scenario(name: str, policy: str = "navigate") -> dict:
         "dwa_kino": lambda s: dwa_policy(s, planner="kino"),  # kino plan + DWA
         "mpc": mpc_policy,                                  # grid plan + iLQR MPC
         "mpc_cbf": lambda s: mpc_policy(s, safety="cbf"),   # MPC + CBF safety QP
+        "mpc_shield": lambda s: mpc_policy(s, safety="shield"),  # MPC + certified shield
     }
     scenario = load_scenario(os.path.join(_REPO, "mrn_sim", "scenarios", name + ".yaml"))
     result = run_scenario(scenario, builders[policy](scenario), dt=0.1, max_steps=600)
@@ -80,6 +81,18 @@ def _run_mapf_exec(controller: str) -> dict:
     out = res.as_dict()
     out["case"] = "mapf_exec_" + controller
     return out
+
+
+def _run_shield_certify() -> dict:
+    # Adversarial certification of the runtime safety shield: a nominal command
+    # engineered to crash (steer at the nearest obstacle, full speed) on
+    # randomized fields. The contract is that the certified body-true shield
+    # never lets the robot body cross an obstacle boundary, while the same attack
+    # collides every time unshielded.
+    sys.path.insert(0, os.path.join(_REPO, "scripts"))
+    from certify_shield import certify
+
+    return certify(seed=0, trials=400, steps=200)
 
 
 def _run_lifelong(agents: int = 6, steps: int = 120,
@@ -117,6 +130,10 @@ SUITE = [
     # MPC with a control-barrier-function QP safety filter (steer, don't brake)
     ("sim_crossing_mpc_cbf", lambda: _run_sim_scenario("crossing", "mpc_cbf")),
     ("sim_doorway_mpc_cbf", lambda: _run_sim_scenario("doorway", "mpc_cbf")),
+    # certified body-true safety shield (steer/brake QP) vs an adversary
+    ("sim_crossing_mpc_shield", lambda: _run_sim_scenario("crossing", "mpc_shield")),
+    ("sim_doorway_mpc_shield", lambda: _run_sim_scenario("doorway", "mpc_shield")),
+    ("shield_certify", _run_shield_certify),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     # bounded-suboptimal ECBS (cost <= w * optimal)
     ("mapf_example_ecbs", lambda: _run_mapf_example("ecbs", weight=1.5)),

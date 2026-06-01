@@ -495,17 +495,23 @@ def mpc_policy(scenario: Scenario, *, planner: str = "grid",
     runs the MPC command through a **control-barrier-function** QP
     (:func:`mrn_sim.cbf.cbf_filter`) that returns the nearest command keeping the
     safe set forward-invariant — steering smoothly rather than braking hard;
-    ``"none"`` applies the raw MPC command.
+    ``"shield"`` runs the *certified* body-true shield
+    (:func:`mrn_sim.shield.shield_step`), whose braking speed cap keeps the robot
+    body — not a look-ahead point — provably collision-free under the accel
+    limit; ``"none"`` applies the raw MPC command.
     """
     from mrn_coord.mapf.path_follower import carrot_point
 
     from .cbf import CBFConfig, cbf_filter
     from .kinematics import unicycle_step
     from .mpc import MPCConfig, mpc_command
+    from .shield import ShieldConfig, shield_step
 
     cfg = cfg or MPCConfig(robot_radius=scenario.robot_radius)
     cbf_cfg = CBFConfig(robot_radius=scenario.robot_radius, max_v=cfg.max_v,
                         max_omega=cfg.max_omega)
+    shield_cfg = ShieldConfig(robot_radius=scenario.robot_radius,
+                              max_v=cfg.max_v, max_omega=cfg.max_omega)
     world0 = scenario.world()
     paths = _plan_for(scenario, world0, planner,
                       turn_radius=turn_radius, inflation=inflation)
@@ -565,6 +571,21 @@ def mpc_policy(scenario: Scenario, *, planner: str = "grid",
                     discs.append((bp[0], bp[1], rr,
                                   bv * math.cos(bp[2]), bv * math.sin(bp[2])))
                 v, omega = cbf_filter(pose, (v, omega), discs, cbf_cfg)
+            elif safety == "shield":
+                # Certified body-true shield: the braking speed cap keeps the
+                # robot body provably collision-free under the accel limit; the
+                # other robots enter as moving discs.
+                discs = list(static_obs)
+                for b in ids:
+                    if b == a:
+                        continue
+                    bp = world.robots[b].pose
+                    bv = state[b][0]
+                    discs.append((bp[0], bp[1], rr,
+                                  bv * math.cos(bp[2]), bv * math.sin(bp[2])))
+                v, omega = shield_step(
+                    (pose[0], pose[1], pose[2], state[a][0]),
+                    (v, omega), discs, cfg.dt, shield_cfg)
             elif safety == "brake":
                 # Hard safety shield: if executing this command would bring the
                 # robot within the collision distance of another robot's current

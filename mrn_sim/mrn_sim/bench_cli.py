@@ -28,6 +28,7 @@ _POLICIES = {
     "dwa": dwa_policy,
     "mpc": mpc_policy,
     "mpc_cbf": lambda s: mpc_policy(s, safety="cbf"),
+    "mpc_shield": lambda s: mpc_policy(s, safety="shield"),
 }
 
 

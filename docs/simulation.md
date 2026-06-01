@@ -346,6 +346,38 @@ the doorway (it steers apart instead of stopping). Unit-tested for QP optimality
 (vs. dense sampling), pass-through when safe, forward invariance under a
 head-on approach, and a collision-free doorway run.
 
+## Certified safety shield (`shield.py`)
+
+The look-ahead trick has a tell: the guarantee is about the **point ahead of the
+axle**, not the body, so a hard turn can swing the body across the boundary — and
+a *continuous-time* CBF condition does not by itself survive a finite step `dt`
+and finite `a_max` (the vehicle can be physically unable to brake in time).
+`shield.shield_step(state, u_nom, obstacles, dt)` removes the trick and certifies
+the **robot body** with two decoupled layers:
+
+- **Braking speed cap (hard).** Against each obstacle the body has
+  `remaining = ‖p − o‖ − D` metres to the boundary; the largest speed a
+  maximal-deceleration stop fits inside is `v_cap = √(2·a_max·remaining)`.
+  Capping the command at the per-obstacle minimum of that, within the
+  accel-limited window `|v − v_prev| ≤ a_max·dt`, means a safe command (brake)
+  *always exists* — the QP can never trap the robot — and it bounds the body, not
+  a look-ahead point. Discrete-robust by construction.
+- **Look-ahead steering (soft).** The first-order CBF contributes a turn that
+  slides *around* an obstacle; it is advisory, and if it ever disagrees with the
+  cap, the cap wins — so steering can never talk the body into the obstacle.
+
+The certificate is empirical and falsifiable. `scripts/certify_shield.py` throws
+thousands of randomized obstacle fields at three controllers with a nominal
+command engineered to crash (steer at the nearest obstacle, full speed): the
+attack collides every time unshielded, the look-ahead filter still lets the body
+graze the boundary, and the certified shield is collision-free across every
+rollout — `--check` (and the benchmark gate's `shield_certify` case) fail the
+build on a single body-frame violation. **Safety is not liveness**: a pure safety
+filter can deadlock at a symmetric obstacle, so the shield rides *under* the
+global plan (`mpc_policy(..., safety="shield")`), which owns routing. Unit-tested
+for body forward-invariance, the braking cap, QP feasibility when boxed in, the
+actuation limits, and the adversarial certificate.
+
 ## Benchmark comparison
 
 The benchmark environment ships these as drop-in policies — `navigate_policy`

@@ -1,0 +1,13 @@
+{
+  "case": "shield_certify",
+  "lookahead_collisions": 0,
+  "lookahead_mean_deviation": 1.4665,
+  "lookahead_min_clearance": 0.2953,
+  "shield_collisions": 0,
+  "shield_mean_deviation": 1.4759,
+  "shield_min_clearance": 0.02,
+  "trials": 396,
+  "unshielded_collisions": 396,
+  "unshielded_mean_deviation": 3.013,
+  "unshielded_min_clearance": -1.022
+}
