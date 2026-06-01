@@ -44,7 +44,9 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   **Control Barrier Function** QP safety filter for provable collision-free
   steering, and a **certified body-true safety shield** whose braking speed cap
   keeps the robot body — not a look-ahead point — collision-free under the accel
-  limit, adversarially certified (`scripts/certify_shield.py`).
+  limit, even against moving obstacles, and **reciprocally** for several shielded
+  robots in adversarial mutual pursuit with no shared coordination
+  (`scripts/certify_shield.py`).
 - **Coordination** (`mrn_coord`) — multi-agent path finding (optimal
   Conflict-Based Search, **bounded-suboptimal ECBS**, **complete satisficing
   LaCAM**, and **anytime MAPF-LNS** that scale further, prioritized planning,

@@ -95,6 +95,16 @@ def _run_shield_certify() -> dict:
     return certify(seed=0, trials=400, steps=200)
 
 
+def _run_shield_reciprocal() -> dict:
+    # Reciprocal certification: several shielded robots in adversarial mutual
+    # pursuit, each treating the others as moving obstacles. The contract is that
+    # all-shielded never collide, while the same pursuit unshielded always does.
+    sys.path.insert(0, os.path.join(_REPO, "scripts"))
+    from certify_shield import certify_reciprocal
+
+    return certify_reciprocal(seed=0, trials=150, n_robots=4)
+
+
 def _run_lifelong(agents: int = 6, steps: int = 120,
                   allocator: str = "stream") -> dict:
     from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
@@ -134,6 +144,7 @@ SUITE = [
     ("sim_crossing_mpc_shield", lambda: _run_sim_scenario("crossing", "mpc_shield")),
     ("sim_doorway_mpc_shield", lambda: _run_sim_scenario("doorway", "mpc_shield")),
     ("shield_certify", _run_shield_certify),
+    ("shield_certify_reciprocal", _run_shield_reciprocal),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     # bounded-suboptimal ECBS (cost <= w * optimal)
     ("mapf_example_ecbs", lambda: _run_mapf_example("ecbs", weight=1.5)),

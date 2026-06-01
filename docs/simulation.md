@@ -361,7 +361,10 @@ the **robot body** with two decoupled layers:
   Capping the command at the per-obstacle minimum of that, within the
   accel-limited window `|v − v_prev| ≤ a_max·dt`, means a safe command (brake)
   *always exists* — the QP can never trap the robot — and it bounds the body, not
-  a look-ahead point. Discrete-robust by construction.
+  a look-ahead point. Discrete-robust by construction. For a **moving** obstacle
+  closing at `c` the boundary advances during the stop, so the cap tightens to
+  the RSS-style safe speed `v_cap = -c + √(c² + 2·a_max·remaining)` (it reduces
+  to the static cap when `c = 0`).
 - **Look-ahead steering (soft).** The first-order CBF contributes a turn that
   slides *around* an obstacle; it is advisory, and if it ever disagrees with the
   cap, the cap wins — so steering can never talk the body into the obstacle.
@@ -372,11 +375,19 @@ command engineered to crash (steer at the nearest obstacle, full speed): the
 attack collides every time unshielded, the look-ahead filter still lets the body
 graze the boundary, and the certified shield is collision-free across every
 rollout — `--check` (and the benchmark gate's `shield_certify` case) fail the
-build on a single body-frame violation. **Safety is not liveness**: a pure safety
+build on a single body-frame violation. The hardest moving-obstacle case is
+covered by `--mode reciprocal`: several shielded robots in *adversarial mutual
+pursuit* (each steers at its nearest neighbour, treating the others as moving
+obstacles with no shared coordination) never collide, while the same pursuit
+unshielded collides every time — reciprocal safety with zero communication,
+gated by `shield_certify_reciprocal`. **Safety is not liveness**: a pure safety
 filter can deadlock at a symmetric obstacle, so the shield rides *under* the
-global plan (`mpc_policy(..., safety="shield")`), which owns routing. Unit-tested
-for body forward-invariance, the braking cap, QP feasibility when boxed in, the
-actuation limits, and the adversarial certificate.
+global plan (`mpc_policy(..., safety="shield")`), which owns routing. Disturbance
+/ sensing-noise robustness (an ISS-safe margin under bounded state error) is
+future work — the cap is currently certified under exact state. Unit-tested for
+body forward-invariance, the static and moving-obstacle braking cap, QP
+feasibility when boxed in, the actuation limits, and both the single-robot and
+reciprocal adversarial certificates.
 
 ## Benchmark comparison
 

@@ -250,6 +250,19 @@ def _shield_rows():
     return rows, m["trials"]
 
 
+def _shield_reciprocal_rows():
+    """Reciprocal certification: N shielded robots in adversarial mutual pursuit."""
+    sys.path.insert(0, os.path.join(_REPO, "scripts"))
+    from certify_shield import certify_reciprocal
+
+    rows = []
+    for n in (2, 3, 4):
+        m = certify_reciprocal(seed=0, trials=300, n_robots=n)
+        rows.append((n, m["trials"], m["unshielded_collisions"],
+                     m["shield_collisions"], m["shield_min_gap"]))
+    return rows
+
+
 def _lifelong_rows():
     from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
 
@@ -538,6 +551,27 @@ def build_report() -> str:
         "but a pure safety filter can deadlock (stop) at a symmetric obstacle — "
         "routing around it is the planner's job, which is why the shield rides "
         "*under* the global plan in the policies above.",
+        "",
+        "### Reciprocal: N shielded robots, no shared coordination",
+        "",
+        "The hardest moving-obstacle case is other robots that are *also* trying "
+        "to collide. Each robot steers straight at its nearest neighbour at full "
+        "speed and treats the others as moving obstacles (its braking cap reserves "
+        "for their closing speed); no robot knows the others are shielded. "
+        "Unshielded, the same mutual pursuit collides every time; all-shielded, "
+        "they never touch — reciprocal safety with zero communication "
+        "(`scripts/certify_shield.py --mode reciprocal`).",
+        "",
+        "| robots | rollouts | unshielded coll | shielded coll | min gap (m) |",
+        "| :-: | --: | :-: | :-: | --: |",
+    ]
+    for n, ntrials, unsh, sh, gap in _shield_reciprocal_rows():
+        lines.append(f"| {n} | {ntrials} | {unsh} | {sh} | {gap:.3f} |")
+    lines += [
+        "",
+        "Disturbance / sensing-noise robustness (an ISS-safe margin under bounded "
+        "state error) is future work; the cap is currently certified under exact "
+        "state.",
         "",
     ]
     return _fmt(lines)

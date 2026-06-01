@@ -114,13 +114,115 @@ def certify(seed: int = 0, trials: int = 3000, steps: int = 250,
     return out
 
 
+def certify_reciprocal(seed: int = 0, trials: int = 800, n_robots: int = 4,
+                       steps: int = 300, dt: float = 0.1) -> dict:
+    """Reciprocal certification: ``n_robots`` shielded robots in *adversarial*
+    mutual pursuit (each steers straight at its nearest neighbour at full speed),
+    each treating the others as moving obstacles with no shared coordination.
+
+    This is the multi-robot analogue of the single-robot certificate, and the
+    moving-obstacle case in its hardest form — every "obstacle" is itself trying
+    to collide. The contract: with every robot shielded, none ever touch; the
+    same adversarial pursuit with no shield collides in (almost) every rollout.
+    """
+    from mrn_sim.kinematics import unicycle_step
+    from mrn_sim.shield import ShieldConfig, shield_step
+
+    cfg = ShieldConfig()
+    rr = cfg.robot_radius
+    rng = random.Random(seed)
+    n = n_robots
+
+    def min_gap(rob):
+        return min(math.hypot(rob[i][0] - rob[j][0], rob[i][1] - rob[j][1])
+                   - 2.0 * rr
+                   for i in range(n) for j in range(i + 1, n))
+
+    coll = {"shield": 0, "unshielded": 0}
+    worst = {"shield": float("inf"), "unshielded": float("inf")}
+    ran = 0
+    for _ in range(trials):
+        start = []
+        for i in range(n):
+            ang = 2.0 * math.pi * i / n + rng.uniform(-0.3, 0.3)
+            radius = rng.uniform(4.0, 6.0)
+            start.append([radius * math.cos(ang), radius * math.sin(ang),
+                          ang + math.pi, 0.0])     # x, y, theta, v facing centre
+        if min_gap(start) < 0.3:
+            continue
+        ran += 1
+        for mode in ("shield", "unshielded"):
+            rob = [list(s) for s in start]
+            run_worst = float("inf")
+            for _k in range(steps):
+                cmds = []
+                for i in range(n):
+                    others = [(rob[j][0], rob[j][1], rr,
+                               rob[j][3] * math.cos(rob[j][2]),
+                               rob[j][3] * math.sin(rob[j][2]))
+                              for j in range(n) if j != i]
+                    near = min(others, key=lambda o: math.hypot(
+                        rob[i][0] - o[0], rob[i][1] - o[1]))
+                    ang = math.atan2(near[1] - rob[i][1], near[0] - rob[i][0])
+                    derr = math.atan2(math.sin(ang - rob[i][2]),
+                                      math.cos(ang - rob[i][2]))
+                    u = (cfg.max_v, 4.0 * derr)
+                    if mode == "shield":
+                        cmds.append(shield_step(
+                            (rob[i][0], rob[i][1], rob[i][2], rob[i][3]),
+                            u, others, dt, cfg))
+                    else:
+                        cmds.append((max(-cfg.max_v, min(cfg.max_v, u[0])),
+                                     max(-cfg.max_omega, min(cfg.max_omega, u[1]))))
+                for i in range(n):
+                    p = unicycle_step((rob[i][0], rob[i][1], rob[i][2]),
+                                      cmds[i][0], cmds[i][1], dt)
+                    rob[i] = [p[0], p[1], p[2], cmds[i][0]]
+                run_worst = min(run_worst, min_gap(rob))
+            worst[mode] = min(worst[mode], run_worst)
+            if run_worst < -1e-3:
+                coll[mode] += 1
+
+    out = {"case": "shield_certify_reciprocal", "trials": ran, "n_robots": n}
+    for mode in ("unshielded", "shield"):
+        out[mode + "_collisions"] = coll[mode]
+        out[mode + "_min_gap"] = round(worst[mode], 4)
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true",
                         help="exit non-zero if the certified shield ever collides")
+    parser.add_argument("--mode", choices=("static", "reciprocal"),
+                        default="static",
+                        help="static single-robot adversary, or reciprocal "
+                        "multi-robot mutual pursuit")
+    parser.add_argument("--robots", type=int, default=4,
+                        help="number of robots in --mode reciprocal")
     parser.add_argument("--trials", type=int, default=3000)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
+
+    if args.mode == "reciprocal":
+        m = certify_reciprocal(seed=args.seed, trials=args.trials,
+                               n_robots=args.robots)
+        hdr = f"{'controller':12s} {'collisions':>11s} {'min gap (m)':>12s}"
+        print(f"reciprocal certification — {m['trials']} rollouts, "
+              f"{m['n_robots']} robots in adversarial mutual pursuit\n")
+        print(hdr)
+        print("-" * len(hdr))
+        for name in ("unshielded", "shield"):
+            print(f"{name:12s} {m[name + '_collisions']:>11d} "
+                  f"{m[name + '_min_gap']:>12.4f}")
+        if args.check:
+            if m["shield_collisions"] != 0:
+                print(f"\nFAIL: shielded robots collided in "
+                      f"{m['shield_collisions']} rollouts")
+                return 1
+            print(f"\nok: {m['n_robots']} shielded robots collision-free across "
+                  f"{m['trials']} adversarial rollouts")
+        return 0
 
     m = certify(seed=args.seed, trials=args.trials)
     hdr = f"{'controller':12s} {'collisions':>11s} {'min body clr':>13s} {'mean dev':>9s}"

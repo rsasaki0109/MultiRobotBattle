@@ -2,12 +2,12 @@
   "collisions": 0,
   "goals_reached": 2,
   "goals_total": 2,
-  "makespan_sec": 13.4,
+  "makespan_sec": 14.1,
   "min_obstacle_clearance": 0.37,
-  "min_robot_distance": 0.731,
+  "min_robot_distance": 0.656,
   "policy": "mpc_shield",
   "scenario": "doorway",
-  "steps": 134,
+  "steps": 141,
   "success": true,
-  "total_path_length": 31.461
+  "total_path_length": 31.448
 }

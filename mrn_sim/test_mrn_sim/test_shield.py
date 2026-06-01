@@ -47,6 +47,19 @@ class TestShieldBasics(unittest.TestCase):
             braking_speed_cap((0.0, 0.0, 0.0), [(50.0, 0.0, 0.5)], cfg),
             cfg.max_v, places=6)
 
+    def test_braking_cap_tightens_for_a_closing_obstacle(self):
+        cfg = ShieldConfig()
+        robot = (0.0, 0.0, 0.0)
+        # close enough that the cap is below max_v, so the effect is visible
+        static = braking_speed_cap(robot, [(1.2, 0.0, 0.5)], cfg)
+        self.assertLess(static, cfg.max_v)
+        # same obstacle approaching at 0.7 m/s -> cap must be strictly lower
+        closing = braking_speed_cap(robot, [(1.2, 0.0, 0.5, -0.7, 0.0)], cfg)
+        # ...and receding at 0.7 m/s -> cap at least as high as static
+        receding = braking_speed_cap(robot, [(1.2, 0.0, 0.5, 0.7, 0.0)], cfg)
+        self.assertLess(closing, static)
+        self.assertGreaterEqual(receding + 1e-9, static)
+
 
 class TestBodyForwardInvariance(unittest.TestCase):
     def test_head_on_charge_never_penetrates_body(self):
@@ -114,6 +127,71 @@ class TestAdversarialCertificate(unittest.TestCase):
         self.assertGreater(ran, 80)
         self.assertEqual(shield_coll, 0)               # certificate holds
         self.assertGreater(unshielded_coll, 0)         # the attack is real
+
+
+class TestReciprocalCertificate(unittest.TestCase):
+    def test_shielded_robots_never_collide_in_mutual_pursuit(self):
+        # several shielded robots each steer at their nearest neighbour at full
+        # speed (adversarial), treating the others as moving obstacles with no
+        # shared coordination -- they must never touch; unshielded, they do.
+        cfg = ShieldConfig()
+        rr = cfg.robot_radius
+        n = 4
+        rng = random.Random(0)
+
+        def min_gap(rob):
+            return min(math.hypot(rob[i][0] - rob[j][0], rob[i][1] - rob[j][1])
+                       - 2.0 * rr
+                       for i in range(n) for j in range(i + 1, n))
+
+        shield_coll, unshielded_coll, ran = 0, 0, 0
+        for _ in range(40):
+            start = []
+            for i in range(n):
+                ang = 2.0 * math.pi * i / n + rng.uniform(-0.3, 0.3)
+                radius = rng.uniform(4.0, 6.0)
+                start.append([radius * math.cos(ang), radius * math.sin(ang),
+                              ang + math.pi, 0.0])
+            if min_gap(start) < 0.3:
+                continue
+            ran += 1
+            for shielded in (True, False):
+                rob = [list(s) for s in start]
+                worst = float("inf")
+                for _k in range(250):
+                    cmds = []
+                    for i in range(n):
+                        others = [(rob[j][0], rob[j][1], rr,
+                                   rob[j][3] * math.cos(rob[j][2]),
+                                   rob[j][3] * math.sin(rob[j][2]))
+                                  for j in range(n) if j != i]
+                        near = min(others, key=lambda o: math.hypot(
+                            rob[i][0] - o[0], rob[i][1] - o[1]))
+                        ang = math.atan2(near[1] - rob[i][1],
+                                         near[0] - rob[i][0])
+                        derr = math.atan2(math.sin(ang - rob[i][2]),
+                                          math.cos(ang - rob[i][2]))
+                        u = (cfg.max_v, 4.0 * derr)
+                        if shielded:
+                            cmds.append(shield_step(
+                                (rob[i][0], rob[i][1], rob[i][2], rob[i][3]),
+                                u, others, 0.1, cfg))
+                        else:
+                            cmds.append((max(-cfg.max_v, min(cfg.max_v, u[0])),
+                                         u[1]))
+                    for i in range(n):
+                        p = unicycle_step((rob[i][0], rob[i][1], rob[i][2]),
+                                          cmds[i][0], cmds[i][1], 0.1)
+                        rob[i] = [p[0], p[1], p[2], cmds[i][0]]
+                    worst = min(worst, min_gap(rob))
+                if worst < -1e-3:
+                    if shielded:
+                        shield_coll += 1
+                    else:
+                        unshielded_coll += 1
+        self.assertGreater(ran, 25)
+        self.assertEqual(shield_coll, 0)
+        self.assertGreater(unshielded_coll, 0)
 
 
 class TestShieldInPolicy(unittest.TestCase):

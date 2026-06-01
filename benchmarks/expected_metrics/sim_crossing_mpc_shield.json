@@ -4,10 +4,10 @@
   "goals_total": 3,
   "makespan_sec": 15.1,
   "min_obstacle_clearance": 0.114,
-  "min_robot_distance": 0.831,
+  "min_robot_distance": 0.797,
   "policy": "mpc_shield",
   "scenario": "crossing",
   "steps": 151,
   "success": true,
-  "total_path_length": 52.163
+  "total_path_length": 52.092
 }

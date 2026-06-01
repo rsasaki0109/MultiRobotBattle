@@ -13,12 +13,16 @@ Two layers, decoupled so the hard guarantee never depends on the soft one:
 1.  **Braking speed cap (the hard guarantee).**  Against each obstacle the body
     has ``remaining = ‖p − o‖ − D`` metres before the boundary (``D`` = both
     radii + margin). The largest speed from which a maximal-deceleration stop
-    fits inside ``remaining`` is ``v_cap = √(2 a_max · remaining)``. Capping the
-    commanded speed at the per-obstacle minimum of that — together with the
-    accel-limited window ``|v − v_prev| ≤ a_max·dt`` — means a feasible safe
-    command (brake) *always exists*: the input-constrained / backup-set idea,
-    made discrete-robust. This bounds the body, not a look-ahead point, and it
-    cannot become infeasible.
+    fits inside ``remaining`` is ``v_cap = √(2 a_max · remaining)``; against a
+    *moving* obstacle closing at ``c`` the boundary advances during the stop, so
+    the cap tightens to ``v_cap = -c + √(c² + 2 a_max · remaining)`` (the
+    RSS-style safe speed — see :func:`braking_speed_cap`). Capping the commanded
+    speed at the per-obstacle minimum of that — together with the accel-limited
+    window ``|v − v_prev| ≤ a_max·dt`` — means a feasible safe command (brake)
+    *always exists*: the input-constrained / backup-set idea, made
+    discrete-robust. This bounds the body, not a look-ahead point, and it cannot
+    become infeasible. (Two shielded robots each treating the other as a moving
+    obstacle stay collision-free *reciprocally*, with no shared coordination.)
 
 2.  **Look-ahead steering (the soft maneuver).**  A first-order CBF on the
     look-ahead point contributes a turn that slides the robot *around* an
@@ -59,20 +63,35 @@ class ShieldConfig:
     alpha: float = 4.0              # class-K gain for the steering CBF
 
 
-def braking_speed_cap(pose, obstacles, cfg: ShieldConfig) -> float:
-    """Largest body-safe speed: ``min_o √(2 a_max · (‖p − o‖ − D))``, clamped to ``max_v``.
+def braking_speed_cap(pose, obstacles, cfg: ShieldConfig, dt: float = 0.0) -> float:
+    """Largest body-safe speed against (possibly moving) obstacles, clamped to ``max_v``.
 
-    From any speed at or below this, a maximal-deceleration stop fits inside the
-    distance left to every obstacle boundary — so the body cannot be carried past
-    it. This is the hard guarantee; it depends only on the body position.
+    For a *static* obstacle the body has ``remaining = ‖p − o‖ − D`` metres to the
+    boundary and the cap is ``√(2 a_max · remaining)`` — from any speed at or below
+    it a maximal-deceleration stop fits inside ``remaining``. For a *moving*
+    obstacle that closes at ``c`` (its velocity projected onto the line of sight,
+    ``c > 0`` when approaching), the boundary itself advances during the stop, so
+    the reservation must cover it: ``v²/(2 a_max) + c·(v/a_max) ≤ remaining``,
+    giving ``v_cap = -c + √(c² + 2 a_max · remaining)`` (the RSS-style safe speed;
+    it reduces to the static cap when ``c = 0``). A ``c·dt`` term reserves the
+    extra ground the obstacle covers before the cap is recomputed next step. This
+    is the hard guarantee, and it bounds the body — not a look-ahead point.
     """
     x, y = pose[0], pose[1]
     cap = cfg.max_v
     for obs in obstacles:
         ox, oy, r = obs[0], obs[1], obs[2]
+        ovx, ovy = (obs[3], obs[4]) if len(obs) >= 5 else (0.0, 0.0)
+        ex, ey = x - ox, y - oy
+        nrm = math.hypot(ex, ey)
         d = r + cfg.robot_radius + cfg.safety_margin
-        remaining = math.hypot(x - ox, y - oy) - d
-        cap = min(cap, math.sqrt(2.0 * cfg.a_max * max(0.0, remaining)))
+        # obstacle closing speed along the line of sight (>0 == approaching)
+        c = max(0.0, (ex * ovx + ey * ovy) / nrm) if nrm > 1e-9 else 0.0
+        remaining = nrm - d - c * dt
+        if remaining <= 0.0:
+            return 0.0
+        cap = min(cap, max(0.0, -c + math.sqrt(
+            c * c + 2.0 * cfg.a_max * remaining)))
     return cap
 
 
@@ -109,7 +128,7 @@ def shield_step(state, u_nom, obstacles, dt, cfg: ShieldConfig = ShieldConfig())
     command; if none exists the shield brakes as hard as the accel limit allows.
     """
     x, y, theta, v = state
-    cap = braking_speed_cap((x, y, theta), obstacles, cfg)
+    cap = braking_speed_cap((x, y, theta), obstacles, cfg, dt)
 
     # accel-limited speed window, narrowed by the braking cap
     vlo = max(0.0, v - cfg.a_max * dt)

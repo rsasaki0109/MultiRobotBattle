@@ -22,7 +22,7 @@ Each navigation policy run on every bundled scenario (`mrn_sim/scenarios/`). `su
 | crossing | Hybrid A* + DWA | ✓ | 211 | 21.1 | 50.9 | 0.18 | 0.65 | 0 |
 | crossing | grid A* + MPC (iLQR) | ✓ | 119 | 11.9 | 52.0 | 0.16 | 0.74 | 0 |
 | crossing | grid A* + MPC + CBF | ✓ | 120 | 12.0 | 52.1 | 0.14 | 0.72 | 0 |
-| crossing | grid A* + MPC + shield | ✓ | 151 | 15.1 | 52.2 | 0.11 | 0.83 | 0 |
+| crossing | grid A* + MPC + shield | ✓ | 151 | 15.1 | 52.1 | 0.11 | 0.80 | 0 |
 | crossing | grid A* + ORCA | ✓ | 123 | 12.3 | 51.6 | 0.04 | 0.77 | 0 |
 | doorway | grid A* + pursuit | ✓ | 136 | 13.6 | 33.4 | 0.99 | 1.53 | 0 |
 | doorway | Hybrid A* (kinodynamic) | ✓ | 104 | 10.4 | 27.6 | 1.07 | 1.33 | 0 |
@@ -30,7 +30,7 @@ Each navigation policy run on every bundled scenario (`mrn_sim/scenarios/`). `su
 | doorway | Hybrid A* + DWA | ✓ | 175 | 17.5 | 26.7 | 0.98 | 0.67 | 0 |
 | doorway | grid A* + MPC (iLQR) | ✓ | 103 | 10.3 | 31.5 | 0.41 | 0.65 | 0 |
 | doorway | grid A* + MPC + CBF | ✓ | 106 | 10.6 | 31.4 | 0.41 | 0.86 | 0 |
-| doorway | grid A* + MPC + shield | ✓ | 134 | 13.4 | 31.5 | 0.37 | 0.73 | 0 |
+| doorway | grid A* + MPC + shield | ✓ | 141 | 14.1 | 31.4 | 0.37 | 0.66 | 0 |
 | doorway | grid A* + ORCA | ✓ | 115 | 11.5 | 32.3 | 0.24 | 0.51 | 0 |
 
 **Reading it.** Grid A\* plans fast but axis-aligned; the kinodynamic Hybrid A\* trades a little planning time for smooth, bounded-curvature paths (often fewer steps and more clearance to follow). DWA decides speed and avoidance by forward-simulating accel-limited velocities, so it tracks tighter and reacts to the other robots as moving obstacles, at a higher per-tick compute cost. MPC (iLQR) goes further still: it *optimizes* a whole receding-horizon trajectory each tick — smooth and far-sighted (often the shortest makespan) — predicting the other robots along their paths to avoid them in space-time. Its safety layer is a hard brake by default; **MPC + CBF** swaps that for a control-barrier QP that returns the nearest *forward-invariant-safe* command, so it steers around the conflict instead of braking — keeping more inter-robot clearance (see the doorway row) while staying collision-free.
@@ -131,4 +131,16 @@ A safety filter's guarantee is only worth what survives an attack. Each row runs
 | certified shield (mrn_sim.shield) | 0 | 0.020 | 1.492 |
 
 Safety is not liveness: the shield guarantees the body never collides, but a pure safety filter can deadlock (stop) at a symmetric obstacle — routing around it is the planner's job, which is why the shield rides *under* the global plan in the policies above.
+
+### Reciprocal: N shielded robots, no shared coordination
+
+The hardest moving-obstacle case is other robots that are *also* trying to collide. Each robot steers straight at its nearest neighbour at full speed and treats the others as moving obstacles (its braking cap reserves for their closing speed); no robot knows the others are shielded. Unshielded, the same mutual pursuit collides every time; all-shielded, they never touch — reciprocal safety with zero communication (`scripts/certify_shield.py --mode reciprocal`).
+
+| robots | rollouts | unshielded coll | shielded coll | min gap (m) |
+| :-: | --: | :-: | :-: | --: |
+| 2 | 300 | 300 | 0 | 0.069 |
+| 3 | 300 | 300 | 0 | 0.020 |
+| 4 | 300 | 300 | 0 | 0.020 |
+
+Disturbance / sensing-noise robustness (an ISS-safe margin under bounded state error) is future work; the cap is currently certified under exact state.
 

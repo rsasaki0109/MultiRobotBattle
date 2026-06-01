@@ -49,8 +49,10 @@ jobs:
           ros2 run mrn_sim mrn_sim_bench around_obstacle --policy mpc --max-steps 200
           ros2 run mrn_sim mrn_sim_bench doorway --policy mpc_cbf --max-steps 200
           ros2 run mrn_sim mrn_sim_bench doorway --policy mpc_shield --max-steps 200
-          # certify the safety shield: the body stays collision-free vs an adversary
+          # certify the safety shield: the body stays collision-free vs an adversary,
+          # and several shielded robots in adversarial mutual pursuit never collide
           python3 scripts/certify_shield.py --check --trials 200
+          python3 scripts/certify_shield.py --mode reciprocal --robots 4 --trials 60 --check
           # execute a discrete MAPF plan in the continuous world (plan vs reality)
           ros2 run mrn_sim mrn_mapf_sim --solver lacam
       - name: Benchmark gate

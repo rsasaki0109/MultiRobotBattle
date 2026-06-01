@@ -1,0 +1,9 @@
+{
+  "case": "shield_certify_reciprocal",
+  "n_robots": 4,
+  "shield_collisions": 0,
+  "shield_min_gap": 0.02,
+  "trials": 150,
+  "unshielded_collisions": 150,
+  "unshielded_min_gap": -0.4995
+}
