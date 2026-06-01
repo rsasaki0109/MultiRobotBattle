@@ -1,0 +1,13 @@
+{
+  "collisions": 0,
+  "goals_reached": 1,
+  "goals_total": 1,
+  "makespan_sec": 9.3,
+  "min_obstacle_clearance": 0.368,
+  "min_robot_distance": 0.0,
+  "policy": "mpc",
+  "scenario": "around_obstacle",
+  "steps": 93,
+  "success": true,
+  "total_path_length": 14.442
+}

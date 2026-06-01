@@ -294,22 +294,49 @@ that were not in the plan. Pure and deterministic, depending only on `world` /
 `kinematics`; unit-tested for the accel window, obstacle reaction, a braking
 fallback when boxed in, and an end-to-end planner-tracking run to the goal.
 
+## Local control: MPC by iLQR (`mpc.py`)
+
+Where DWA *samples* a menu of one-step-constant velocities, MPC *optimizes* a
+whole control sequence over a receding horizon. `mpc.mpc_command` minimizes a
+smooth cost — distance to the (carrot) goal, control effort, and soft
+obstacle/wall penalties — subject to the unicycle dynamics, then applies the
+first command and re-solves next tick. The optimizer is **iterative LQR**
+(iLQR): roll the controls out, sweep backward building a local quadratic model
+of the cost-to-go into a feedback law `du = alpha*k + K*dx` (Levenberg-Marquardt
+regularization keeps the control Hessian positive-definite), forward-roll under
+it with a line search, repeat to convergence. It is hand-rolled 3x3/2x2 linear
+algebra over the model — pure, deterministic, no numpy.
+
+Two touches make it work multi-robot. The other robots are injected as
+**time-indexed moving obstacles** — predicted forward along their own planned
+paths — so MPC avoids where they *will be*, not just where they are
+(`solve_ilqr(..., moving=[...])`). And because two identical robots optimizing
+symmetrically can still graze in a tight crossing, a thin **hard safety brake**
+sits on top: if the chosen command would breach the collision distance with
+another robot's current position, the robot brakes. The soft cost steers
+smoothly; the shield guarantees the reciprocal case never actually collides.
+Like DWA it is a *local* controller (a head-on symmetric obstacle is a
+local-minimum it shares with any gradient method), so it tracks a global plan's
+carrot. Unit-tested for accel-limited progress, cost improvement, bending around
+an obstacle, warm-start refinement, space-time avoidance of a moving obstacle,
+and an end-to-end planner-tracking run.
+
 ## Benchmark comparison
 
 The benchmark environment ships these as drop-in policies — `navigate_policy`
 (grid A\* + pursuit), `kinodynamic_policy` (Hybrid A\*), `dwa_policy`
-(`planner="grid"|"kino"` + DWA, with the other robots injected as moving
-obstacles), and `orca_policy` — all sharing the `policy(world) -> {id: (v,
-omega)}` contract, so they are directly comparable. `scripts/compare_planners.py`
-runs every policy on every bundled scenario (and CBS vs. prioritized on the
-MovingAI example) and writes a Markdown report to
-[`benchmarks/comparison.md`](../benchmarks/comparison.md). It is pure and
+(`planner="grid"|"kino"` + DWA), `mpc_policy` (grid/kino + iLQR MPC, others as
+predicted moving obstacles), and `orca_policy` — all sharing the
+`policy(world) -> {id: (v, omega)}` contract, so they are directly comparable.
+`scripts/compare_planners.py` runs every policy on every bundled scenario (and
+CBS / ECBS / prioritized on the MovingAI example) and writes a Markdown report
+to [`benchmarks/comparison.md`](../benchmarks/comparison.md). It is pure and
 deterministic; the same metrics are regression-gated by
 `scripts/benchmark_gate.py`, so a row that changes is a row the gate guards. The
 report shows, for instance, that the kinodynamic planner reaches the goal in
 fewer steps over a shorter, smoother path than grid A\* at equal-or-better
-clearance, while DWA tracks tighter and ORCA finishes fastest but with the
-thinnest clearance.
+clearance, that DWA tracks tighter, that MPC's optimized trajectories give the
+shortest makespan, and that ORCA finishes fast but with the thinnest clearance.
 
 ## Roadmap
 

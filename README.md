@@ -39,7 +39,8 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   following, with **reciprocal multi-robot collision avoidance** and
   **replanning around dynamic obstacles** — plus a continuous-space
   **Hybrid A\*** kinodynamic planner (bounded turning radius, Dubins curves +
-  analytic expansion) for smooth, feasibly-followable paths.
+  analytic expansion) for smooth, feasibly-followable paths, and **DWA** /
+  **MPC (iLQR)** optimizing local controllers for accel-limited tracking.
 - **Coordination** (`mrn_coord`) — multi-agent path finding (optimal
   Conflict-Based Search, **bounded-suboptimal ECBS** that scales further,
   prioritized planning, all over a **space-time A\*** or drop-in **SIPP**
@@ -51,9 +52,10 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   evasion + leader following).
 - **Benchmark environment** (`mrn_sim.benchmark`) — plug your own multi-robot
   policy into a `Scenario` and get comparable metrics (success, makespan, path
-  length, clearance, inter-robot distance, collisions). Four baseline policies
+  length, clearance, inter-robot distance, collisions). Five baseline policies
   ship for comparison — grid A* + pursuit, **Hybrid A\*** kinodynamic, **DWA**
-  local control (others as moving obstacles), and **ORCA** — and
+  local control, **MPC** (iLQR receding-horizon optimization, space-time
+  avoidance), and **ORCA** — and
   `scripts/compare_planners.py` tabulates them all across the bundled scenarios
   ([`benchmarks/comparison.md`](benchmarks/comparison.md)). `ros2 run mrn_sim
   mrn_sim_bench crossing` runs a bundled scenario with a baseline policy. MAPF

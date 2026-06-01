@@ -35,6 +35,7 @@ def _run_sim_scenario(name: str, policy: str = "navigate") -> dict:
         dwa_policy,
         kinodynamic_policy,
         load_scenario,
+        mpc_policy,
         navigate_policy,
         orca_policy,
         run_scenario,
@@ -46,6 +47,7 @@ def _run_sim_scenario(name: str, policy: str = "navigate") -> dict:
         "kinodynamic": kinodynamic_policy,
         "dwa": dwa_policy,                                  # grid plan + DWA
         "dwa_kino": lambda s: dwa_policy(s, planner="kino"),  # kino plan + DWA
+        "mpc": mpc_policy,                                  # grid plan + iLQR MPC
     }
     scenario = load_scenario(os.path.join(_REPO, "mrn_sim", "scenarios", name + ".yaml"))
     result = run_scenario(scenario, builders[policy](scenario), dt=0.1, max_steps=600)
@@ -91,6 +93,10 @@ SUITE = [
     # DWA local controller (grid plan + dynamic-window tracking)
     ("sim_around_obstacle_dwa", lambda: _run_sim_scenario("around_obstacle", "dwa")),
     ("sim_doorway_dwa", lambda: _run_sim_scenario("doorway", "dwa")),
+    # MPC local controller (grid plan + iLQR receding-horizon optimization)
+    ("sim_around_obstacle_mpc", lambda: _run_sim_scenario("around_obstacle", "mpc")),
+    ("sim_crossing_mpc", lambda: _run_sim_scenario("crossing", "mpc")),
+    ("sim_doorway_mpc", lambda: _run_sim_scenario("doorway", "mpc")),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     # bounded-suboptimal ECBS (cost <= w * optimal)
     ("mapf_example_ecbs", lambda: _run_mapf_example("ecbs", weight=1.5)),

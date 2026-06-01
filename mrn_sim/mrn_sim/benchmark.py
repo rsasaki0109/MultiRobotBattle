@@ -326,6 +326,53 @@ def _plan_for(scenario: Scenario, world0: World, planner: str, *,
     return paths
 
 
+def _predict_along_path(path, pos, speed, dt, steps, radius):
+    """Predict ``steps+1`` future positions of a robot cruising along ``path``.
+
+    Projects ``pos`` onto the polyline, then walks ``speed*dt`` of arc length per
+    step, sampling the point at each. Returns ``[(x, y, radius), ...]`` of length
+    ``steps + 1`` (held at the path end past arrival). Used to inject the other
+    robots into MPC as time-indexed moving obstacles.
+    """
+    pts = [(p[0], p[1]) for p in path]
+    if len(pts) == 1:
+        return [(pts[0][0], pts[0][1], radius)] * (steps + 1)
+    # cumulative arc length and the closest arc position to pos
+    cum = [0.0]
+    for i in range(1, len(pts)):
+        cum.append(cum[-1] + math.hypot(pts[i][0] - pts[i - 1][0],
+                                        pts[i][1] - pts[i - 1][1]))
+    best_s, best_d = 0.0, float("inf")
+    for i in range(len(pts) - 1):
+        ax, ay = pts[i]
+        bx, by = pts[i + 1]
+        seg = cum[i + 1] - cum[i]
+        if seg <= 1e-9:
+            continue
+        t = ((pos[0] - ax) * (bx - ax) + (pos[1] - ay) * (by - ay)) / (seg * seg)
+        t = max(0.0, min(1.0, t))
+        px, py = ax + t * (bx - ax), ay + t * (by - ay)
+        d = math.hypot(pos[0] - px, pos[1] - py)
+        if d < best_d:
+            best_d, best_s = d, cum[i] + t * seg
+
+    def sample(s):
+        s = max(0.0, min(cum[-1], s))
+        for i in range(len(pts) - 1):
+            if s <= cum[i + 1] or i == len(pts) - 2:
+                seg = cum[i + 1] - cum[i]
+                t = 0.0 if seg <= 1e-9 else (s - cum[i]) / seg
+                return (pts[i][0] + t * (pts[i + 1][0] - pts[i][0]),
+                        pts[i][1] + t * (pts[i + 1][1] - pts[i][1]))
+        return pts[-1]
+
+    out = []
+    for k in range(steps + 1):
+        x, y = sample(best_s + k * speed * dt)
+        out.append((x, y, radius))
+    return out
+
+
 def kinodynamic_policy(scenario: Scenario, *, turn_radius: float = 1.0,
                        lookahead: float = 0.9, max_speed: float = 1.6,
                        w_mutual: float = 1.6, mutual_radius: float = 1.6,
@@ -421,6 +468,94 @@ def dwa_policy(scenario: Scenario, *, planner: str = "grid",
                        scenario.robot_radius) for b in ids if b != a]
             v, omega = dwa_command(pose, state[a][0], state[a][1], local_goal,
                                    static_obs + others, world, cfg)
+            state[a] = (v, omega)
+            cmds[a] = (v, omega)
+        return cmds
+
+    return policy
+
+
+def mpc_policy(scenario: Scenario, *, planner: str = "grid",
+               turn_radius: float = 1.0, lookahead: float = 1.2,
+               inflation: float = 0.4, predict_speed_frac: float = 0.6,
+               cfg=None):
+    """Policy: global plan + **MPC (iLQR)** local control, others as obstacles.
+
+    Plans each robot's route once (``planner`` = ``"grid"`` or ``"kino"``), then
+    each tick tracks the path carrot by optimizing a receding-horizon control
+    sequence with :func:`mrn_sim.mpc.mpc_command` — minimizing goal distance,
+    control effort, and soft obstacle/wall penalties under the unicycle model.
+    The other robots are injected as discs into the obstacle set each tick, and
+    the previous solution is shifted and fed back as the warm start, so each
+    solve converges in a few iterations.
+    """
+    from mrn_coord.mapf.path_follower import carrot_point
+
+    from .kinematics import unicycle_step
+    from .mpc import MPCConfig, mpc_command
+
+    cfg = cfg or MPCConfig(robot_radius=scenario.robot_radius)
+    world0 = scenario.world()
+    paths = _plan_for(scenario, world0, planner,
+                      turn_radius=turn_radius, inflation=inflation)
+    ids = list(world0.robots)
+    state = {a: (0.0, 0.0) for a in ids}            # last (v, omega) per robot
+    warm = {a: None for a in ids}                   # warm-start control sequence
+    static_obs = [(o.x, o.y, o.radius) for o in world0.obstacles]
+    rr = scenario.robot_radius
+    # predict a moving robot at least this fast so a momentarily-slow robot is
+    # still expected to clear the conflict zone (space-time avoidance).
+    predict_speed = predict_speed_frac * cfg.max_v
+
+    def policy(world):
+        cmds = {}
+        for a in ids:
+            pose = world.robots[a].pose
+            path = paths.get(a)
+            if not path:
+                cmds[a] = (0.0, 0.0)
+                state[a] = (0.0, 0.0)
+                warm[a] = None
+                continue
+            gx, gy = path[-1]
+            if math.hypot(gx - pose[0], gy - pose[1]) <= cfg.goal_tolerance:
+                cmds[a] = (0.0, 0.0)
+                state[a] = (0.0, 0.0)
+                warm[a] = None
+                continue
+            local_goal = carrot_point(pose, path, lookahead)
+            # Predict every other robot forward along its planned path, so this
+            # robot avoids where they will be over the horizon (reciprocally —
+            # each robot does the same, so both veer apart like ORCA).
+            moving = []
+            for b in ids:
+                if b == a:
+                    continue
+                bpose = world.robots[b].pose
+                bpath = paths.get(b)
+                if not bpath:
+                    moving.append([(bpose[0], bpose[1], rr)] * (cfg.horizon + 1))
+                    continue
+                spd = max(state[b][0], predict_speed)
+                moving.append(_predict_along_path(
+                    bpath, (bpose[0], bpose[1]), spd, cfg.dt, cfg.horizon, rr))
+            (v, omega), us = mpc_command(
+                pose, state[a][0], state[a][1], local_goal,
+                static_obs, world, cfg, warm[a], moving=moving)
+            # Hard safety shield: if executing this command would bring the
+            # robot within the collision distance of another robot's current
+            # position, brake. The soft penalty steers smoothly; the shield
+            # guarantees the reciprocal case never actually collides.
+            d_safe = 2.0 * rr + 0.05
+            nxt = unicycle_step(pose, v, omega, cfg.dt)
+            for b in ids:
+                if b == a:
+                    continue
+                bx, by = world.robots[b].pose[0], world.robots[b].pose[1]
+                if math.hypot(nxt[0] - bx, nxt[1] - by) < d_safe:
+                    v, omega = 0.0, 0.0
+                    break
+            warm[a] = us[1:] + [us[-1]]
             state[a] = (v, omega)
             cmds[a] = (v, omega)
         return cmds

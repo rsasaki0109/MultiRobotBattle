@@ -35,6 +35,7 @@ _POLICIES = [
     ("Hybrid A* (kinodynamic)", "kinodynamic"),
     ("grid A* + DWA", "dwa"),
     ("Hybrid A* + DWA", "dwa_kino"),
+    ("grid A* + MPC (iLQR)", "mpc"),
     ("grid A* + ORCA", "orca"),
 ]
 
@@ -43,6 +44,7 @@ def _build(policy: str):
     from mrn_sim.benchmark import (
         dwa_policy,
         kinodynamic_policy,
+        mpc_policy,
         navigate_policy,
         orca_policy,
     )
@@ -51,6 +53,7 @@ def _build(policy: str):
         "kinodynamic": kinodynamic_policy,
         "dwa": dwa_policy,
         "dwa_kino": lambda s: dwa_policy(s, planner="kino"),
+        "mpc": mpc_policy,
         "orca": orca_policy,
     }[policy]
 
@@ -221,7 +224,11 @@ def build_report() -> str:
         "paths (often fewer steps and more clearance to follow). DWA decides "
         "speed and avoidance by forward-simulating accel-limited velocities, so "
         "it tracks tighter and reacts to the other robots as moving obstacles, "
-        "at a higher per-tick compute cost.",
+        "at a higher per-tick compute cost. MPC (iLQR) goes further still: it "
+        "*optimizes* a whole receding-horizon trajectory each tick — smooth and "
+        "far-sighted (often the shortest makespan) — predicting the other robots "
+        "along their paths to avoid them in space-time, with a hard safety brake "
+        "guaranteeing the reciprocal case stays collision-free.",
         "",
         "## MAPF solvers (MovingAI example)",
         "",

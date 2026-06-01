@@ -40,6 +40,8 @@ jobs:
           ros2 run mrn_coord mrn_coverage_demo
           ros2 run mrn_coord mrn_coverage_demo --method greedy
           ros2 run mrn_coord mrn_lifelong_demo --frames 0
+          # the local controllers as drop-in benchmark policies
+          ros2 run mrn_sim mrn_sim_bench around_obstacle --policy mpc --max-steps 200
       - name: Benchmark gate
         run: |
           . /opt/ros/jazzy/setup.sh

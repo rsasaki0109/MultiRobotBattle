@@ -13,9 +13,21 @@ import argparse
 import json
 import os
 
-from .benchmark import load_scenario, navigate_policy, orca_policy, run_scenario
+from .benchmark import (
+    dwa_policy,
+    load_scenario,
+    mpc_policy,
+    navigate_policy,
+    orca_policy,
+    run_scenario,
+)
 
-_POLICIES = {"navigate": navigate_policy, "orca": orca_policy}
+_POLICIES = {
+    "navigate": navigate_policy,
+    "orca": orca_policy,
+    "dwa": dwa_policy,
+    "mpc": mpc_policy,
+}
 
 
 def _builtin_scenario_path(name: str) -> str:
@@ -36,8 +48,9 @@ def main() -> None:
         "(around_obstacle / crossing / doorway)",
     )
     parser.add_argument("--policy", choices=sorted(_POLICIES), default="navigate",
-                        help="navigate (A* + pursuit + repulsion) or orca "
-                        "(A* + pursuit + ORCA reciprocal avoidance)")
+                        help="navigate (A* + pursuit + repulsion), orca (A* + "
+                        "pursuit + ORCA), dwa (A* + dynamic window), or mpc "
+                        "(A* + iLQR receding-horizon optimization)")
     parser.add_argument("--max-steps", type=int, default=600)
     parser.add_argument("--dt", type=float, default=0.1)
     args = parser.parse_args()
