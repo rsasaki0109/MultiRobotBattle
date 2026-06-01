@@ -246,6 +246,71 @@ enters the obstacle).
   <img src="media/replan_demo.gif" alt="A robot replanning its path around a moving obstacle to reach its goal" width="640">
 </p>
 
+## Kinodynamic planning (`kinodynamic.py`)
+
+The grid A\* above is fast but **blind to the robot's heading and turn radius**:
+it returns axis-aligned, 4-connected paths that a unicycle can only follow by
+pivoting in place at every corner. `kinodynamic.plan_kinodynamic` plans in the
+continuous `(x, y, theta)` state space instead, with a **bounded turning
+radius**, so the path is kinematically feasible — smooth, forward-only, with
+headings the pure-pursuit follower can actually track.
+
+It is **Hybrid A\***: the open set is keyed by a discretized `(x, y, theta)`
+lattice, each expansion rolls out a constant-curvature motion primitive
+(`|kappa| <= 1 / turn_radius`) and collision-checks the arc against the world,
+and the heuristic combines a holonomic obstacle-aware grid distance (Dijkstra to
+the goal cell) with the obstacle-free **Dubins** length — the kinematic lower
+bound. Every few expansions the planner also attempts a closed-form Dubins
+*analytic-expansion* shot straight to the goal pose, which collapses the search
+near the goal and lets it match a requested final heading (`goal_yaw_tol`).
+
+`dubins_path` is the standalone shortest bounded-curvature curve between two
+oriented poses (the six words `LSL RSR LSR RSL RLR LRL`); it is the kinematic
+primitive both the heuristic and the analytic expansion stand on. Both are pure
+and deterministic, depending only on `world` (no `mrn_coord`), and unit-tested:
+the Dubins math is checked by *sampling each curve and asserting it lands on the
+requested goal pose*, the planned paths are asserted obstacle-free and within
+the curvature bound, and an end-to-end test drives the carrot follower along a
+planned path to the goal. `plan_kinodynamic(...).waypoints` is a drop-in for the
+same pure-pursuit follower the grid planner feeds.
+
+## Local control: DWA (`dwa.py`)
+
+Pure-pursuit steers blindly at the carrot and leans on a separate repulsion term
+to dodge obstacles. The **Dynamic Window Approach** (`dwa.dwa_command`) instead
+chooses the command by *forward-simulating candidate velocities*: each tick it
+samples `(v, omega)` pairs from the **dynamic window** — the velocities
+reachable from the current command within one step given the acceleration limits
+— rolls each out over a short horizon, discards rollouts that hit an obstacle or
+leave the world, and scores the survivors by a weighted sum of goal **heading**,
+obstacle **clearance**, and **velocity**. So obstacle avoidance and goal progress
+are decided together, under the robot's accel limits.
+
+DWA is a *local* controller: aimed straight at a distant goal behind a symmetric
+obstacle it stalls in a local minimum (a documented limitation), so it is paired
+with a global planner — feed the carrot on a planned path as its local goal and
+it handles smooth, accel-limited, obstacle-reactive tracking, including obstacles
+that were not in the plan. Pure and deterministic, depending only on `world` /
+`kinematics`; unit-tested for the accel window, obstacle reaction, a braking
+fallback when boxed in, and an end-to-end planner-tracking run to the goal.
+
+## Benchmark comparison
+
+The benchmark environment ships these as drop-in policies — `navigate_policy`
+(grid A\* + pursuit), `kinodynamic_policy` (Hybrid A\*), `dwa_policy`
+(`planner="grid"|"kino"` + DWA, with the other robots injected as moving
+obstacles), and `orca_policy` — all sharing the `policy(world) -> {id: (v,
+omega)}` contract, so they are directly comparable. `scripts/compare_planners.py`
+runs every policy on every bundled scenario (and CBS vs. prioritized on the
+MovingAI example) and writes a Markdown report to
+[`benchmarks/comparison.md`](../benchmarks/comparison.md). It is pure and
+deterministic; the same metrics are regression-gated by
+`scripts/benchmark_gate.py`, so a row that changes is a row the gate guards. The
+report shows, for instance, that the kinodynamic planner reaches the goal in
+fewer steps over a shorter, smoother path than grid A\* at equal-or-better
+clearance, while DWA tracks tighter and ORCA finishes fastest but with the
+thinnest clearance.
+
 ## Roadmap
 
 This is the world core, its ROS node, the localization integration, and a

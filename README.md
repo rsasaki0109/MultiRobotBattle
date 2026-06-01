@@ -34,10 +34,12 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   models. It emits the localization message contract and accepts `cmd_vel`, so
   it is the plant the rest of the stack drives. An optional **Gazebo** adapter
   (`mrn_gazebo`) runs the same contract on a 3D physics world.
-- **Navigation** (`mrn_sim.navigate`) — point-to-point navigation: occupancy
-  grid from the obstacles, grid A* planning, pure-pursuit following, with
-  **reciprocal multi-robot collision avoidance** and **replanning around
-  dynamic obstacles**.
+- **Navigation** (`mrn_sim.navigate`, `mrn_sim.kinodynamic`) — point-to-point
+  navigation: occupancy grid from the obstacles, grid A* planning, pure-pursuit
+  following, with **reciprocal multi-robot collision avoidance** and
+  **replanning around dynamic obstacles** — plus a continuous-space
+  **Hybrid A\*** kinodynamic planner (bounded turning radius, Dubins curves +
+  analytic expansion) for smooth, feasibly-followable paths.
 - **Coordination** (`mrn_coord`) — multi-agent path finding (Conflict-Based
   Search / prioritized planning), **ORCA** reciprocal local collision avoidance,
   decentralized formation control, cooperative coverage (frontier +
@@ -46,7 +48,11 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   leader following).
 - **Benchmark environment** (`mrn_sim.benchmark`) — plug your own multi-robot
   policy into a `Scenario` and get comparable metrics (success, makespan, path
-  length, clearance, inter-robot distance, collisions). `ros2 run mrn_sim
+  length, clearance, inter-robot distance, collisions). Four baseline policies
+  ship for comparison — grid A* + pursuit, **Hybrid A\*** kinodynamic, **DWA**
+  local control (others as moving obstacles), and **ORCA** — and
+  `scripts/compare_planners.py` tabulates them all across the bundled scenarios
+  ([`benchmarks/comparison.md`](benchmarks/comparison.md)). `ros2 run mrn_sim
   mrn_sim_bench crossing` runs a bundled scenario with a baseline policy. MAPF
   also loads the standard **MovingAI** `.map`/`.scen` format
   (`ros2 run mrn_coord mrn_mapf_bench`), so the planners can be evaluated on the

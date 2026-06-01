@@ -295,3 +295,134 @@ def orca_policy(scenario: Scenario, *, lookahead: float = 1.2,
         return cmds
 
     return policy
+
+
+def _plan_for(scenario: Scenario, world0: World, planner: str, *,
+              turn_radius: float, inflation: float):
+    """Plan every robot's path once with the chosen global planner.
+
+    ``planner`` is ``"grid"`` (4-connected A*) or ``"kino"`` (continuous-space
+    Hybrid A* with a bounded turning radius). Returns ``{id: [(x, y), ...]}``;
+    a kino plan falls back to the grid plan if it finds nothing.
+    """
+    from .navigate import plan_world_path
+
+    paths = {}
+    for a, g in scenario.goals.items():
+        pose = world0.robots[a].pose
+        start = (pose[0], pose[1])
+        if planner == "kino":
+            from .kinodynamic import plan_kinodynamic
+            goal_yaw = math.atan2(g[1] - start[1], g[0] - start[0])
+            res = plan_kinodynamic(
+                world0, (start[0], start[1], pose[2]), (g[0], g[1], goal_yaw),
+                turn_radius=turn_radius, robot_radius=scenario.robot_radius,
+                clearance=max(0.0, inflation - scenario.robot_radius))
+            paths[a] = res.waypoints if res is not None else \
+                plan_world_path(world0, start, g, cell_size=0.5, inflation=inflation)
+        else:
+            paths[a] = plan_world_path(world0, start, g, cell_size=0.5,
+                                       inflation=inflation)
+    return paths
+
+
+def kinodynamic_policy(scenario: Scenario, *, turn_radius: float = 1.0,
+                       lookahead: float = 0.9, max_speed: float = 1.6,
+                       w_mutual: float = 1.6, mutual_radius: float = 1.6,
+                       inflation: float = 0.4):
+    """Policy: continuous-space **Hybrid A\\*** plan + pursuit with avoidance.
+
+    The drop-in kinodynamic counterpart of :func:`navigate_policy`: each robot's
+    route is a bounded-curvature, kinematically feasible path
+    (:func:`mrn_sim.kinodynamic.plan_kinodynamic`) instead of a 4-connected grid
+    path. Same carrot pursuit + obstacle / reciprocal avoidance on top, so the
+    two are directly comparable in the benchmark.
+    """
+    from mrn_coord.flocking import (
+        mutual_avoidance,
+        obstacle_avoidance,
+        velocity_to_unicycle,
+    )
+    from mrn_coord.mapf.path_follower import carrot_point
+
+    world0 = scenario.world()
+    paths = _plan_for(scenario, world0, "kino",
+                      turn_radius=turn_radius, inflation=inflation)
+
+    def policy(world):
+        ids = list(world.robots)
+        positions = [(world.robots[a].pose[0], world.robots[a].pose[1]) for a in ids]
+        obs = obstacle_avoidance(
+            positions, [(o.x, o.y, o.radius) for o in world.obstacles],
+            influence=1.5, strength=2.0)
+        mut = mutual_avoidance(positions, radius=mutual_radius)
+        cmds = {}
+        for i, a in enumerate(ids):
+            path = paths.get(a)
+            pose = world.robots[a].pose
+            if not path:
+                cmds[a] = (0.0, 0.0)
+                continue
+            gx, gy = path[-1]
+            if math.hypot(gx - pose[0], gy - pose[1]) <= 0.3:
+                cmds[a] = (0.0, 0.0)
+                continue
+            cx, cy = carrot_point(pose, path, lookahead)
+            d = math.hypot(cx - pose[0], cy - pose[1]) or 1.0
+            vx = (cx - pose[0]) / d * max_speed + 1.2 * obs[i][0] + w_mutual * mut[i][0]
+            vy = (cy - pose[1]) / d * max_speed + 1.2 * obs[i][1] + w_mutual * mut[i][1]
+            cmds[a] = velocity_to_unicycle(pose[2], vx, vy, max_v=max_speed, max_omega=3.0)
+        return cmds
+
+    return policy
+
+
+def dwa_policy(scenario: Scenario, *, planner: str = "grid",
+               turn_radius: float = 1.0, lookahead: float = 1.0,
+               inflation: float = 0.4, cfg=None):
+    """Policy: global plan + **DWA** local control, others as moving obstacles.
+
+    Plans each robot's route once (``planner`` = ``"grid"`` or ``"kino"``), then
+    each tick tracks the path carrot with the Dynamic Window Approach
+    (:func:`mrn_sim.dwa.dwa_command`) — sampling accel-limited velocities,
+    forward-simulating, and scoring for goal progress and clearance. The *other
+    robots* are injected into DWA's obstacle set each tick (as discs), so
+    avoidance is reactive and respects the robots' acceleration limits, unlike
+    the instantaneous repulsion of :func:`navigate_policy`.
+    """
+    from mrn_coord.mapf.path_follower import carrot_point
+
+    from .dwa import DWAConfig, dwa_command
+
+    cfg = cfg or DWAConfig(robot_radius=scenario.robot_radius)
+    world0 = scenario.world()
+    paths = _plan_for(scenario, world0, planner,
+                      turn_radius=turn_radius, inflation=inflation)
+    ids = list(world0.robots)
+    state = {a: (0.0, 0.0) for a in ids}            # last (v, omega) per robot
+    static_obs = [(o.x, o.y, o.radius) for o in world0.obstacles]
+
+    def policy(world):
+        cmds = {}
+        for a in ids:
+            pose = world.robots[a].pose
+            path = paths.get(a)
+            if not path:
+                cmds[a] = (0.0, 0.0)
+                state[a] = (0.0, 0.0)
+                continue
+            gx, gy = path[-1]
+            if math.hypot(gx - pose[0], gy - pose[1]) <= cfg.goal_tolerance:
+                cmds[a] = (0.0, 0.0)
+                state[a] = (0.0, 0.0)
+                continue
+            local_goal = carrot_point(pose, path, lookahead)
+            others = [(world.robots[b].pose[0], world.robots[b].pose[1],
+                       scenario.robot_radius) for b in ids if b != a]
+            v, omega = dwa_command(pose, state[a][0], state[a][1], local_goal,
+                                   static_obs + others, world, cfg)
+            state[a] = (v, omega)
+            cmds[a] = (v, omega)
+        return cmds
+
+    return policy

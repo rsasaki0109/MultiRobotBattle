@@ -32,13 +32,21 @@ _FLOAT_TOL = 0.05
 
 def _run_sim_scenario(name: str, policy: str = "navigate") -> dict:
     from mrn_sim.benchmark import (
+        dwa_policy,
+        kinodynamic_policy,
         load_scenario,
         navigate_policy,
         orca_policy,
         run_scenario,
     )
 
-    builders = {"navigate": navigate_policy, "orca": orca_policy}
+    builders = {
+        "navigate": navigate_policy,
+        "orca": orca_policy,
+        "kinodynamic": kinodynamic_policy,
+        "dwa": dwa_policy,                                  # grid plan + DWA
+        "dwa_kino": lambda s: dwa_policy(s, planner="kino"),  # kino plan + DWA
+    }
     scenario = load_scenario(os.path.join(_REPO, "mrn_sim", "scenarios", name + ".yaml"))
     result = run_scenario(scenario, builders[policy](scenario), dt=0.1, max_steps=600)
     out = result.as_dict()
@@ -64,6 +72,13 @@ SUITE = [
     ("sim_doorway", lambda: _run_sim_scenario("doorway")),
     ("sim_crossing_orca", lambda: _run_sim_scenario("crossing", "orca")),
     ("sim_doorway_orca", lambda: _run_sim_scenario("doorway", "orca")),
+    # continuous-space Hybrid A* planner (kinodynamic)
+    ("sim_around_obstacle_kino", lambda: _run_sim_scenario("around_obstacle", "kinodynamic")),
+    ("sim_crossing_kino", lambda: _run_sim_scenario("crossing", "kinodynamic")),
+    ("sim_doorway_kino", lambda: _run_sim_scenario("doorway", "kinodynamic")),
+    # DWA local controller (grid plan + dynamic-window tracking)
+    ("sim_around_obstacle_dwa", lambda: _run_sim_scenario("around_obstacle", "dwa")),
+    ("sim_doorway_dwa", lambda: _run_sim_scenario("doorway", "dwa")),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
 ]
