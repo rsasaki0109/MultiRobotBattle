@@ -139,6 +139,17 @@ library — same scenarios, same velocity to ~1e-5
   <img src="docs/media/orca_demo.gif" alt="Two crowds of agents walk into each other and pass through collision-free via ORCA reciprocal avoidance" width="560">
 </p>
 
+**Warehouse AMR fleet** — lifelong (online) MAPF: a fleet of autonomous mobile
+robots takes an endless stream of pickup/dropoff tasks through a shelf-and-aisle
+warehouse, stepped collision-free by **PIBT** with cost-aware task allocation.
+The running counter tracks **throughput** (tasks served per timestep) — the
+metric a real fleet is judged on (`mrn_coord.lifelong`, regenerate with
+`scripts/make_warehouse_gif.py`):
+
+<p align="center">
+  <img src="docs/media/warehouse_demo.gif" alt="Twelve autonomous mobile robots stream endless pickup/dropoff tasks through a shelf-and-aisle warehouse, collision-free via PIBT, while a counter shows the throughput per timestep" width="560">
+</p>
+
 **3D physics — Gazebo** — the demo at the top of this README runs in the
 `mrn_gazebo` (`gz sim`, Harmonic) **3D** world: three robots cross the obstacle
 arena under the repo's own A\* grid planning + pure-pursuit + reciprocal
@@ -150,14 +161,16 @@ the deterministic 2D demos, driven by the same algorithms.
 
 The same offscreen seam runs the other layers in 3D too — **ORCA** crowds passing
 through each other, **Boids** swarming past obstacles (with the flock's LiDAR
-point cloud), and **CBS + formation** funneling through a doorway — each driven by
+point cloud), **CBS + formation** funneling through a doorway, and a **warehouse
+AMR fleet** working a lifelong-MAPF schedule around the racking — each driven by
 the matching `mrn_coord` algorithm and sharing one recording harness
-(`scripts/_gz_record.py`, `scripts/record_gazebo_{orca,swarm,coord}_gif.py`):
+(`scripts/_gz_record.py`, `scripts/record_gazebo_{orca,swarm,coord,warehouse}_gif.py`):
 
 <p align="center">
   <img src="docs/media/gazebo_orca_demo.gif" alt="Two streams of robots in a 3D Gazebo world pass through each other collision-free via ORCA" width="265">
   <img src="docs/media/gazebo_swarm_demo.gif" alt="Twelve robots flock through a 3D Gazebo arena past obstacles via Boids rules, their LiDAR returns drawn as a point cloud" width="265">
   <img src="docs/media/gazebo_coord_demo.gif" alt="Three robots funnel through a doorway via Conflict-Based Search then assemble a formation in 3D Gazebo, their LiDAR tracing the wall" width="265">
+  <img src="docs/media/gazebo_warehouse_demo.gif" alt="Six autonomous mobile robots work a 3D Gazebo shelf-and-aisle warehouse on a lifelong-MAPF schedule, their 360-degree LiDAR tracing the racking" width="265">
 </p>
 
 ## Packages

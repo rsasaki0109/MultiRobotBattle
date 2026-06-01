@@ -125,9 +125,16 @@ and driven by the matching `mrn_coord` algorithm (the 3D counterparts of the 2D
   through a doorway on a Conflict-Based-Search schedule, then assemble a
   formation; the CBS + formation trajectory is precomputed by `mrn_coord` and
   replayed by tracking each robot's waypoint, LiDAR tracing the wall.
+- `record_gazebo_warehouse_gif.py` (`worlds/warehouse_demo.sdf`) — six
+  autonomous mobile robots work a shelf-and-aisle warehouse on a lifelong-MAPF
+  (PIBT) schedule precomputed by `mrn_coord.lifelong`, replayed by waypoint
+  tracking, their 360° LiDAR tracing the racking. Unlike the others its world
+  and bridge are **generated** from the same `make_warehouse` grid the algorithm
+  runs on (a 2×3-block warehouse is too much SDF to hand-write), so the scene and
+  the plan can never drift apart.
 
-The swarm and coordination robots also carry a `gpu_lidar`, so all three
-companions can overlay scans too — `Scenario.use_lidar` (with `lidar_rays` /
+The swarm, coordination, and warehouse robots also carry a `gpu_lidar`, so all
+the companions can overlay scans too — `Scenario.use_lidar` (with `lidar_rays` /
 `lidar_step`) toggles it in the shared harness.
 
 Being wall-clock-paced 3D, the result is **not bit-for-bit deterministic**

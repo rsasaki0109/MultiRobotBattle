@@ -244,6 +244,14 @@ hits when a forced-to-wait agent sits in a cell another already claimed;
 priorities rise the longer a task goes unfinished, so nothing starves. Pure and
 deterministic, so the throughput is reproducible and CI-gated.
 
+<p align="center">
+  <img src="media/warehouse_demo.gif" alt="A fleet of twelve autonomous mobile robots streams endless pickup/dropoff tasks through a shelf-and-aisle warehouse, never colliding, while a running counter shows the tasks served and the throughput per timestep" width="640">
+</p>
+
+<p align="center">
+  <em>A warehouse AMR fleet: twelve robots take an endless stream of pick/drop tasks, stepped collision-free by PIBT with cost-aware allocation, and the counter tracks throughput (tasks/step) — the metric a real fleet is judged on. Deterministic; regenerate with <code>python3 scripts/make_warehouse_gif.py</code>.</em>
+</p>
+
 ```bash
 ros2 run mrn_coord mrn_lifelong_demo                       # 6 robots, prints throughput + frames
 ros2 run mrn_coord mrn_lifelong_demo --agents 8 --steps 200

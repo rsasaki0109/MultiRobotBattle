@@ -53,6 +53,7 @@ class LifelongResult:
     avg_service_time: float              # mean steps from assignment to completion
     max_wait: int                        # longest a single task took
     history: list = field(default_factory=list)   # [ {id: cell} per step ] if kept
+    goal_history: list = field(default_factory=list)  # [ {id: goal cell} per step ]
 
     def as_dict(self) -> dict:
         return {
@@ -172,6 +173,7 @@ def run_lifelong(
     per_agent = {a: 0 for a in ids}
     service_times: list = []
     history: list = []
+    goal_history: list = []
 
     # --- task assignment: round-robin stream, or cost-aware pool allocator ---
     if allocator == "stream":
@@ -235,6 +237,8 @@ def run_lifelong(
 
         if keep_history:
             history.append(dict(pos))
+            goal_history.append({a: (goal[a] if has_task[a] else pos[a])
+                                 for a in ids})
 
         # 2. PIBT step. Priority: longest-unfinished task first, tie-break by id.
         pibt = _Pibt(grid, pos, goal, {a: dist_to(goal[a]) for a in ids})
@@ -255,6 +259,7 @@ def run_lifelong(
             service_times.append(max_steps - assigned_at[a])
     if keep_history:
         history.append(dict(pos))
+        goal_history.append({a: (goal[a] if has_task[a] else pos[a]) for a in ids})
 
     avg_service = (sum(service_times) / len(service_times)) if service_times else 0.0
     return LifelongResult(
@@ -266,6 +271,7 @@ def run_lifelong(
         avg_service_time=avg_service,
         max_wait=(max(service_times) if service_times else 0),
         history=history,
+        goal_history=goal_history,
     )
 
 

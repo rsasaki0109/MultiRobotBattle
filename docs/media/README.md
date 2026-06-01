@@ -15,10 +15,12 @@ algorithms** — regenerate any of them with the matching script:
 | `recip_nav_demo.gif` | `make_recip_nav_gif.py` | multi-robot navigation with reciprocal avoidance |
 | `replan_demo.gif` | `make_replan_gif.py` | replanning around a moving obstacle |
 | `orca_demo.gif` | `make_orca_gif.py` | ORCA reciprocal avoidance: two crowds pass through each other |
+| `warehouse_demo.gif` | `make_warehouse_gif.py` | warehouse AMR fleet: lifelong MAPF / PIBT, twelve robots streaming endless pick/drop tasks, with live throughput |
 | `gazebo_demo.gif` | `record_gazebo_gif.py` | **3D Gazebo**: three robots cross an obstacle arena via A\* + pure-pursuit + reciprocal avoidance, with live 360° LiDAR overlaid |
 | `gazebo_orca_demo.gif` | `record_gazebo_orca_gif.py` | **3D Gazebo**: two robot streams pass through each other collision-free via ORCA |
 | `gazebo_swarm_demo.gif` | `record_gazebo_swarm_gif.py` | **3D Gazebo**: twelve robots flock past obstacles via Boids, with their LiDAR point cloud |
 | `gazebo_coord_demo.gif` | `record_gazebo_coord_gif.py` | **3D Gazebo**: three robots funnel through a doorway via CBS then form up, LiDAR tracing the wall |
+| `gazebo_warehouse_demo.gif` | `record_gazebo_warehouse_gif.py` | **3D Gazebo**: six AMRs work a shelf-and-aisle warehouse on a lifelong-MAPF (PIBT) schedule, LiDAR tracing the racking |
 
 ```bash
 python3 scripts/make_<name>_gif.py     # writes docs/media/<name>_demo.gif
