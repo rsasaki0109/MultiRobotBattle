@@ -59,6 +59,34 @@ ros2 run mrn_sim mrn_sim_bench crossing --policy navigate
 Because both are pure and deterministic, a benchmark result is reproducible and
 CI-checkable.
 
+### Validated against the reference RVO2
+
+Our ORCA is a from-scratch Python port of the reference RVO2 C++ library, so the
+obvious question is whether the port is *faithful*. `scripts/compare_orca_rvo2.py`
+answers it by measurement: it runs identical agents-only scenarios through both
+our `mrn_coord.orca` and the reference (`Python-RVO2`, imported as `rvo2`) and
+checks that, fed the same state every tick, the two return the same velocity (to
+~1e-5 across the suite) and reach the same safety outcome. The checked-in numbers
+and the caveats (why a near-symmetric head-on legitimately drifts in trajectory
+while staying collision-free; why static obstacles are out of scope) live in
+[`benchmarks/orca_rvo2.md`](../benchmarks/orca_rvo2.md).
+
+RVO2 is not on PyPI, so it is an *optional* dependency built from source into a
+venv — the core build and test suite never touch it (the equivalence test skips
+cleanly when `rvo2` is absent). To run the check locally:
+
+```bash
+python3 -m venv /tmp/rvo2-venv && . /tmp/rvo2-venv/bin/activate
+pip install --upgrade pip cython setuptools wheel numpy
+git clone https://github.com/sybrenstuvel/Python-RVO2.git /tmp/Python-RVO2
+pip install --no-build-isolation /tmp/Python-RVO2
+python3 scripts/compare_orca_rvo2.py --check       # gated equivalence contract
+python3 scripts/compare_orca_rvo2.py --write        # refresh benchmarks/orca_rvo2.md
+```
+
+The `orca-rvo2-equivalence` CI job does exactly this on every push, so the port
+staying faithful is a guarded contract, not a claim.
+
 ### Regression gate
 
 `scripts/benchmark_gate.py` makes that reproducibility a guarded contract. It

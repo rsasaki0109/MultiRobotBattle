@@ -131,7 +131,9 @@ multi-robot avoidance and replanning around a moving obstacle:
 **ORCA** — Optimal Reciprocal Collision Avoidance: two crowds walk straight at
 each other and pass through, collision-free, each picking the velocity closest
 to its goal that stays provably safe (`mrn_coord.orca`, regenerate with
-`scripts/make_orca_gif.py`):
+`scripts/make_orca_gif.py`). Our port is checked against the reference RVO2
+library — same scenarios, same velocity to ~1e-5
+([`benchmarks/orca_rvo2.md`](benchmarks/orca_rvo2.md)):
 
 <p align="center">
   <img src="docs/media/orca_demo.gif" alt="Two crowds of agents walk into each other and pass through collision-free via ORCA reciprocal avoidance" width="560">
