@@ -79,7 +79,8 @@ def _mapf_rows():
     grid = load_map(os.path.join(bench, "example.map"))
     tasks = load_scen(os.path.join(bench, "example.scen"))
     rows = []
-    for solver in ("cbs", "ecbs", "lacam", "prioritized", "prioritized_sipp"):
+    for solver in ("cbs", "ecbs", "lacam", "lns", "prioritized",
+                   "prioritized_sipp"):
         res = run_mapf_benchmark(grid, tasks, solver=solver, max_expansions=50_000)
         rows.append((solver, res))
     return rows
@@ -167,6 +168,51 @@ def _ecbs_scaling_rows():
                      ecbs_exp / paired if paired else 0.0,
                      ratio / paired if paired else 1.0))
     return rows, weight, budget, k
+
+
+def _lns_rows():
+    """MAPF-LNS anytime improvement: initial -> LNS-final vs. CBS-optimal.
+
+    Seeded random instances per team size on the fixed pillared arena (those CBS
+    can still solve, for the optimal reference). Reports the mean initial cost
+    (the feasible solution LNS starts from), the mean cost after a fixed LNS
+    budget, and the mean CBS optimum — showing LNS closes most of the gap.
+    Deterministic.
+    """
+    import random
+
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.grid import GridWorld
+    from mrn_coord.mapf.lns import mapf_lns
+
+    width, height = 6, 5
+    pillars = frozenset({(2, 2), (3, 2)})
+    grid = GridWorld(width, height, pillars)
+    free = [(x, y) for x in range(width) for y in range(height)
+            if grid.is_free((x, y))]
+    iters = 60
+    k = 20
+    rows = []
+    for n in (4, 6, 8):
+        rng = random.Random(2000 + n)
+        init_sum = final_sum = opt_sum = 0.0
+        paired = 0
+        for _ in range(k):
+            pts = rng.sample(free, 2 * n)
+            agents = {str(i): (pts[2 * i], pts[2 * i + 1]) for i in range(n)}
+            opt = cbs(grid, agents, max_expansions=2000)
+            if opt is None:
+                continue
+            stats = {}
+            mapf_lns(grid, agents, iterations=iters, seed=1, stats=stats)
+            init_sum += stats["initial_cost"]
+            final_sum += stats["final_cost"]
+            opt_sum += opt.cost
+            paired += 1
+        if paired:
+            rows.append((n, paired, init_sum / paired, final_sum / paired,
+                         opt_sum / paired))
+    return rows, iters
 
 
 def _lifelong_rows():
@@ -268,7 +314,9 @@ def build_report() -> str:
         "whole configurations (PIBT successors + lazy constraints): not "
         "cost-optimal in general — though it also matches the optimum here — but "
         "it keeps finding solutions for large teams where the search-tree "
-        "solvers blow up. "
+        "solvers blow up. `lns` is anytime large-neighborhood search: it polishes "
+        "a feasible solution toward the optimum by destroy-and-repair (next "
+        "tables). "
         "`prioritized` and `prioritized_sipp` are the same high-level planner "
         "with two interchangeable low-level planners — time-expanded A\\* and "
         "**SIPP** (safe-interval). They find equal-cost solutions; SIPP just "
@@ -313,6 +361,27 @@ def build_report() -> str:
         lines.append(
             f"| {n} | {cbs_s}/{k} | {ecbs_s}/{k} | {cbs_e:.0f} | {ecbs_e:.0f} | "
             f"{ratio:.3f} |")
+
+    lns_rows, lns_iters = _lns_rows()
+    lines += [
+        "",
+        "## Anytime improvement: MAPF-LNS",
+        "",
+        f"Seeded random instances per team size on the same arena, each given a "
+        f"feasible starting solution and then {lns_iters} rounds of "
+        "destroy-and-repair by LNS. `initial` is the mean cost of the starting "
+        "solution (prioritized planning, or complete LaCAM where that fails), "
+        "`LNS` the mean cost after the budget, and `optimal` the mean CBS "
+        "sum-of-costs. LNS polishes the rough initial solution down toward the "
+        "optimum — replanning only a few agents per round, so it keeps working "
+        "at team sizes the optimal search cannot reach.",
+        "",
+        "| agents | initial cost | LNS cost | optimal (CBS) |",
+        "| --: | --: | --: | --: |",
+    ]
+    for n, paired, init_c, final_c, opt_c in lns_rows:
+        lines.append(
+            f"| {n} | {init_c:.1f} | {final_c:.1f} | {opt_c:.1f} |")
 
     lines += [
         "",

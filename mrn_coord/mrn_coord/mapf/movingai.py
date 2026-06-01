@@ -23,6 +23,7 @@ from .cbs import cbs
 from .ecbs import ecbs
 from .grid import Cell, GridWorld
 from .lacam import lacam
+from .lns import mapf_lns
 from .prioritized import prioritized_planning
 from .sipp import plan_sipp
 from .solution import makespan, sum_of_costs
@@ -106,6 +107,7 @@ def run_mapf_benchmark(
     ``solver`` is ``"cbs"`` (optimal, small teams), ``"ecbs"`` (bounded-
     suboptimal, ``cost <= weight * optimal``; scales further), ``"lacam"``
     (complete satisficing search over configurations; scales to large teams),
+    ``"lns"`` (anytime large-neighborhood search, polishing toward the optimum),
     ``"prioritized"`` (fast, incomplete), or ``"prioritized_sipp"`` (the same,
     but with the safe-interval low-level planner). Returns a dict with
     ``solved`` / ``num_agents`` / and, when solved, ``makespan`` and
@@ -119,6 +121,8 @@ def run_mapf_benchmark(
         solution = ecbs(grid, agents, w=weight, max_expansions=max_expansions)
     elif solver == "lacam":
         solution = lacam(grid, agents, max_iterations=max_expansions)
+    elif solver == "lns":
+        solution = mapf_lns(grid, agents, iterations=100, seed=0)
     elif solver == "prioritized":
         solution = prioritized_planning(grid, agents)
     elif solver == "prioritized_sipp":

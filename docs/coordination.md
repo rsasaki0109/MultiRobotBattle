@@ -122,6 +122,23 @@ in random tests it solves every instance CBS solves, and it matches the optimum
 on the bundled example. Run `mrn_mapf_demo --solver lacam` or
 `mrn_mapf_bench --solver lacam`.
 
+### High level: MAPF-LNS (`lns.py`)
+
+`mapf_lns(grid, agents, iterations=...)` is *anytime*: rather than searching for
+a good solution from scratch, it takes any feasible one (prioritized planning,
+falling back to complete LaCAM) and repeatedly **destroys** a small
+neighborhood — rips out a handful of agents' paths — then **repairs** it by
+replanning just those agents around everyone else's frozen paths, keeping the
+repair whenever it doesn't raise the sum-of-costs. Each round is cheap (a few
+agents, not all), the cost decreases monotonically, and you stop on a budget —
+so a rough initial solution is polished toward the optimum, on teams far beyond
+CBS's reach. Two destroy heuristics are mixed at random each round: a **random**
+agent set, and a **worst** set built from the most-delayed agent plus the agents
+whose paths cross it. Repair is collision-free by construction, so every
+accepted solution stays valid; `benchmarks/comparison.md` shows it closing most
+of the gap to the CBS optimum. Run `mrn_mapf_demo --solver lns` or
+`mrn_mapf_bench --solver lns`.
+
 ### High level: prioritized planning (`prioritized.py`)
 
 `prioritized_planning(grid, agents, order)` is the fast, **incomplete**
@@ -164,14 +181,16 @@ ros2 run mrn_coord mrn_mapf_bench                       # bundled example (CBS)
 ros2 run mrn_coord mrn_mapf_bench my.map my.scen -n 8   # first 8 agents
 ros2 run mrn_coord mrn_mapf_bench --solver ecbs -w 1.3  # bounded-suboptimal
 ros2 run mrn_coord mrn_mapf_bench --solver lacam        # complete, satisficing
+ros2 run mrn_coord mrn_mapf_bench --solver lns          # anytime, destroy & repair
 ros2 run mrn_coord mrn_mapf_bench --solver prioritized
 ```
 
 CBS is optimal but scales to small teams; for many agents use **ECBS**
 (`--solver ecbs`, bounded-suboptimal — much further reach for a small cost
 premium), **LaCAM** (`--solver lacam`, complete and satisficing — solves large
-teams when the search trees blow up), or the prioritized solver (fast,
-incomplete).
+teams when the search trees blow up), **MAPF-LNS** (`--solver lns`, anytime —
+polishes a feasible solution toward the optimum), or the prioritized solver
+(fast, incomplete).
 
 ### Lifelong / online MAPF (`lifelong/`)
 

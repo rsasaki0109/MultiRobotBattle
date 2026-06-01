@@ -45,12 +45,17 @@ def prioritized_planning(
 
     for agent in order:
         start, goal = agents[agent]
+        # Cap the path at the reservation horizon: a path longer than the window
+        # over which higher-priority agents hold their goals could slip *past*
+        # that window and collide with a settled agent. Within the horizon, the
+        # goal holds cover every timestep, so the result is genuinely conflict-free.
         path = low_level(
             grid,
             start,
             goal,
             frozenset(vertex_reservations),
             frozenset(edge_reservations),
+            max_time=horizon,
         )
         if path is None:
             return None

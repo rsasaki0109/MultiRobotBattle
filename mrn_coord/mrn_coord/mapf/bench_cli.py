@@ -31,7 +31,7 @@ def main() -> None:
     parser.add_argument("scen", nargs="?", help="MovingAI .scen (default: bundled example)")
     parser.add_argument("-n", "--num-agents", type=int, default=None)
     parser.add_argument("--solver",
-                        choices=["cbs", "ecbs", "lacam", "prioritized",
+                        choices=["cbs", "ecbs", "lacam", "lns", "prioritized",
                                  "prioritized_sipp"],
                         default="cbs")
     parser.add_argument("-w", "--weight", type=float, default=1.5,

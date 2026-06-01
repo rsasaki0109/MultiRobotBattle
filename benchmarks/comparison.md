@@ -38,10 +38,11 @@ Conflict-Based Search (optimal sum-of-costs) vs. prioritized planning (fast, inc
 | cbs | ✓ | 14 | 42 |
 | ecbs | ✓ | 14 | 42 |
 | lacam | ✓ | 14 | 42 |
+| lns | ✓ | 14 | 42 |
 | prioritized | ✓ | 14 | 42 |
 | prioritized_sipp | ✓ | 14 | 42 |
 
-`ecbs` is bounded-suboptimal (cost ≤ `w`·optimal, here `w=1.5`); on this small example it happens to match the optimum. Its payoff shows as the team grows (next table). `lacam` is a *complete* satisficing search over whole configurations (PIBT successors + lazy constraints): not cost-optimal in general — though it also matches the optimum here — but it keeps finding solutions for large teams where the search-tree solvers blow up. `prioritized` and `prioritized_sipp` are the same high-level planner with two interchangeable low-level planners — time-expanded A\* and **SIPP** (safe-interval). They find equal-cost solutions; SIPP just reaches them while expanding far fewer states (next table).
+`ecbs` is bounded-suboptimal (cost ≤ `w`·optimal, here `w=1.5`); on this small example it happens to match the optimum. Its payoff shows as the team grows (next table). `lacam` is a *complete* satisficing search over whole configurations (PIBT successors + lazy constraints): not cost-optimal in general — though it also matches the optimum here — but it keeps finding solutions for large teams where the search-tree solvers blow up. `lns` is anytime large-neighborhood search: it polishes a feasible solution toward the optimum by destroy-and-repair (next tables). `prioritized` and `prioritized_sipp` are the same high-level planner with two interchangeable low-level planners — time-expanded A\* and **SIPP** (safe-interval). They find equal-cost solutions; SIPP just reaches them while expanding far fewer states (next table).
 
 ## Low-level planner: SIPP vs. time-expanded A\*
 
@@ -65,6 +66,16 @@ Single-agent query where a parked obstacle reserves a one-cell chokepoint for th
 | 6 | 24/25 | 25/25 | 21 | 2 | 1.030 |
 | 8 | 22/25 | 25/25 | 152 | 4 | 1.032 |
 | 10 | 10/25 | 24/25 | 231 | 5 | 1.065 |
+
+## Anytime improvement: MAPF-LNS
+
+Seeded random instances per team size on the same arena, each given a feasible starting solution and then 60 rounds of destroy-and-repair by LNS. `initial` is the mean cost of the starting solution (prioritized planning, or complete LaCAM where that fails), `LNS` the mean cost after the budget, and `optimal` the mean CBS sum-of-costs. LNS polishes the rough initial solution down toward the optimum — replanning only a few agents per round, so it keeps working at team sizes the optimal search cannot reach.
+
+| agents | initial cost | LNS cost | optimal (CBS) |
+| --: | --: | --: | --: |
+| 4 | 17.4 | 17.1 | 16.7 |
+| 6 | 26.5 | 25.6 | 24.4 |
+| 8 | 35.7 | 33.9 | 31.1 |
 
 ## Lifelong MAPF throughput (PIBT)
 

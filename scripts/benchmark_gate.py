@@ -105,6 +105,8 @@ SUITE = [
     ("mapf_example_ecbs", lambda: _run_mapf_example("ecbs", weight=1.5)),
     # complete satisficing LaCAM (configuration-space search via PIBT)
     ("mapf_example_lacam", lambda: _run_mapf_example("lacam")),
+    # anytime large-neighborhood search (destroy & repair)
+    ("mapf_example_lns", lambda: _run_mapf_example("lns")),
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
     # same prioritized planner, safe-interval (SIPP) low level
     ("mapf_example_prioritized_sipp", lambda: _run_mapf_example("prioritized_sipp")),
