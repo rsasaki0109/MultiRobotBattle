@@ -35,3 +35,16 @@ Conflict-Based Search (optimal sum-of-costs) vs. prioritized planning (fast, inc
 | cbs | ✓ | 14 | 42 |
 | prioritized | ✓ | 14 | 42 |
 
+## Lifelong MAPF throughput (PIBT)
+
+Online/lifelong MAPF on a shelf-and-aisle warehouse (`mrn_coord.lifelong.make_warehouse`): tasks never run out, so the metric is **throughput** (tasks completed per timestep), not makespan. Stepped collision-free by PIBT over 150 ticks; service time is the mean ticks from a task's assignment to its completion.
+
+| agents | grid | completed | throughput (tasks/step) | avg service (steps) | max wait |
+| --: | --- | --: | --: | --: | --: |
+| 2 | 10×7 | 47 | 0.313 | 6.2 | 9 |
+| 4 | 10×7 | 81 | 0.540 | 7.3 | 18 |
+| 6 | 10×7 | 114 | 0.760 | 7.8 | 20 |
+| 8 | 10×7 | 132 | 0.880 | 8.9 | 27 |
+
+Throughput rises with the team size until aisle congestion starts to lengthen service times — the warehouse-capacity trade-off lifelong MAPF exists to study.
+

@@ -82,6 +82,20 @@ def _mapf_rows():
     return rows
 
 
+def _lifelong_rows():
+    from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
+
+    grid, endpoints = make_warehouse(rows=2, cols=3)
+    rows = []
+    for n in (2, 4, 6, 8):
+        n = min(n, len(endpoints))
+        starts = {f"r{i}": endpoints[i] for i in range(n)}
+        res = run_lifelong(grid, starts, TaskStream(list(endpoints)),
+                           max_steps=150)
+        rows.append((n, grid, res))
+    return rows
+
+
 def _fmt(report_lines):
     return "\n".join(report_lines) + "\n"
 
@@ -139,7 +153,35 @@ def build_report() -> str:
         soc = res.get("sum_of_costs", "—")
         lines.append(
             f"| {solver} | {'✓' if solved else '✗'} | {mk} | {soc} |")
-    lines.append("")
+
+    lines += [
+        "",
+        "## Lifelong MAPF throughput (PIBT)",
+        "",
+        "Online/lifelong MAPF on a shelf-and-aisle warehouse "
+        "(`mrn_coord.lifelong.make_warehouse`): tasks never run out, so the "
+        "metric is **throughput** (tasks completed per timestep), not makespan. "
+        "Stepped collision-free by PIBT over 150 ticks; service time is the mean "
+        "ticks from a task's assignment to its completion.",
+        "",
+        "| agents | grid | completed | throughput (tasks/step) | "
+        "avg service (steps) | max wait |",
+        "| --: | --- | --: | --: | --: | --: |",
+    ]
+    for n, grid, res in _lifelong_rows():
+        d = res.as_dict()
+        lines.append(
+            f"| {n} | {grid.width}×{grid.height} | {d['completed']} | "
+            f"{d['throughput']:.3f} | {d['avg_service_time']:.1f} | "
+            f"{d['max_wait']} |"
+        )
+    lines += [
+        "",
+        "Throughput rises with the team size until aisle congestion starts to "
+        "lengthen service times — the warehouse-capacity trade-off lifelong MAPF "
+        "exists to study.",
+        "",
+    ]
     return _fmt(lines)
 
 

@@ -36,6 +36,7 @@ jobs:
           ros2 run mrn_coord mrn_formation_demo
           ros2 run mrn_coord mrn_coverage_demo
           ros2 run mrn_coord mrn_coverage_demo --method greedy
+          ros2 run mrn_coord mrn_lifelong_demo --frames 0
       - name: Benchmark gate
         run: |
           . /opt/ros/jazzy/setup.sh

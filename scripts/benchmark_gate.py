@@ -65,6 +65,17 @@ def _run_mapf_example(solver: str) -> dict:
     return res
 
 
+def _run_lifelong(agents: int = 6, steps: int = 120) -> dict:
+    from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
+
+    grid, endpoints = make_warehouse(rows=2, cols=3)
+    starts = {f"r{i}": endpoints[i] for i in range(min(agents, len(endpoints)))}
+    res = run_lifelong(grid, starts, TaskStream(list(endpoints)), max_steps=steps)
+    out = res.as_dict()
+    out["case"] = "mapf_lifelong"
+    return out
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -81,6 +92,8 @@ SUITE = [
     ("sim_doorway_dwa", lambda: _run_sim_scenario("doorway", "dwa")),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
+    # lifelong / online MAPF throughput (PIBT)
+    ("mapf_lifelong", _run_lifelong),
 ]
 
 

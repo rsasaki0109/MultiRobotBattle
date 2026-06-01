@@ -114,6 +114,38 @@ ros2 run mrn_coord mrn_mapf_bench --solver prioritized
 CBS is optimal but scales to small teams; use the prioritized solver (fast,
 incomplete) for many agents.
 
+### Lifelong / online MAPF (`lifelong/`)
+
+CBS and prioritized planning solve a **one-shot** instance: a fixed set of
+start→goal pairs, solved once, done when everyone arrives. Real fleets
+(warehouse robots) never stop — a robot that reaches its goal is immediately
+given the next task, so the team must plan *while moving*, indefinitely. That is
+**lifelong (online) MAPF**, and its figure of merit is **throughput** (tasks
+completed per timestep), not makespan.
+
+`run_lifelong(grid, starts, stream, max_steps=...)` runs it. Tasks come from a
+deterministic, endless `TaskStream` (round-robin over a pool of endpoints);
+`make_warehouse(rows, cols)` builds a shelf-and-aisle grid with its endpoint
+stations. The per-timestep move is computed by **PIBT** (Priority Inheritance
+with Backtracking): agents step along an obstacle-aware distance gradient toward
+their goals in priority order, and when a high-priority agent wants a cell held
+by a lower one it *pushes* it — recursively, backtracking to its next-best cell
+if the push fails. PIBT yields a collision-free configuration every step (no
+vertex sharing, no swaps) and sidesteps the deadlock plain reservation planning
+hits when a forced-to-wait agent sits in a cell another already claimed;
+priorities rise the longer a task goes unfinished, so nothing starves. Pure and
+deterministic, so the throughput is reproducible and CI-gated.
+
+```bash
+ros2 run mrn_coord mrn_lifelong_demo                       # 6 robots, prints throughput + frames
+ros2 run mrn_coord mrn_lifelong_demo --agents 8 --steps 200
+```
+
+`scripts/compare_planners.py` tabulates throughput vs. team size
+([`benchmarks/comparison.md`](../benchmarks/comparison.md)): it climbs with the
+fleet until aisle congestion lengthens service times — the warehouse-capacity
+trade-off lifelong MAPF exists to study.
+
 ### ROS node
 
 `mrn_mapf_planner` is a thin ROS wrapper around the MAPF core. It reads a

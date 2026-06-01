@@ -41,11 +41,12 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   **Hybrid A\*** kinodynamic planner (bounded turning radius, Dubins curves +
   analytic expansion) for smooth, feasibly-followable paths.
 - **Coordination** (`mrn_coord`) — multi-agent path finding (Conflict-Based
-  Search / prioritized planning), **ORCA** reciprocal local collision avoidance,
-  decentralized formation control, cooperative coverage (frontier +
-  greedy/Hungarian allocation), and swarm flocking (Boids: separation /
-  alignment / cohesion + obstacle avoidance + migration + predator evasion +
-  leader following).
+  Search / prioritized planning, plus **lifelong / online MAPF** stepped by
+  **PIBT** for warehouse-style endless-task throughput), **ORCA** reciprocal
+  local collision avoidance, decentralized formation control, cooperative
+  coverage (frontier + greedy/Hungarian allocation), and swarm flocking (Boids:
+  separation / alignment / cohesion + obstacle avoidance + migration + predator
+  evasion + leader following).
 - **Benchmark environment** (`mrn_sim.benchmark`) — plug your own multi-robot
   policy into a `Scenario` and get comparable metrics (success, makespan, path
   length, clearance, inter-robot distance, collisions). Four baseline policies

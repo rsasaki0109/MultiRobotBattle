@@ -28,6 +28,7 @@ setup(
             "mrn_mapf_demo = mrn_coord.mapf.demo:main",
             "mrn_formation_demo = mrn_coord.formation.demo:main",
             "mrn_coverage_demo = mrn_coord.coverage.demo:main",
+            "mrn_lifelong_demo = mrn_coord.lifelong.demo:main",
             "mrn_mapf_bench = mrn_coord.mapf.bench_cli:main",
             "mrn_mapf_planner = mrn_coord.mapf.planner_node:main",
             "mrn_path_follower = mrn_coord.mapf.follower_node:main",
