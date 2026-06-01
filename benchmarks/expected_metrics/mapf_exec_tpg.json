@@ -1,0 +1,10 @@
+{
+  "case": "mapf_exec_tpg",
+  "continuous_steps": 162,
+  "discrete_makespan": 10,
+  "makespan_sec": 16.2,
+  "max_path_deviation": 0.219,
+  "robot_collisions": 0,
+  "solved": true,
+  "success": true
+}

@@ -363,6 +363,35 @@ fewer steps over a shorter, smoother path than grid A\* at equal-or-better
 clearance, that DWA tracks tighter, that MPC's optimized trajectories give the
 shortest makespan, and that ORCA finishes fast but with the thinnest clearance.
 
+## Executing a MAPF plan: plan vs. reality (`mapf_exec.py`)
+
+`mapf_exec.execute_mapf_plan(grid, agents, controller=...)` closes the loop
+between the discrete coordination layer (`mrn_coord.mapf`) and this continuous
+world. A MAPF solver returns paths that are collision-free *on the grid, in
+discrete time*; the executor turns them into continuous waypoints, drops the
+agents into the world (grid obstacles → circular ones), and drives each robot
+along its own planned path — then measures whether the discrete guarantee
+survives real discs and unicycle kinematics. Three executions of the *same*
+plan:
+
+- `"pursuit"` — free-running pure pursuit that keeps the spatial route but
+  drops the *schedule*: robots reach a shared cell at the same wall-clock moment
+  and the discs collide. This is the gap the discrete guarantee leaves.
+- `"tpg"` — pursuit gated by a **Temporal Plan Graph**: from the plan, for every
+  cell, the order agents occupy it; a robot may enter its next cell only once
+  the previous occupant has left. The discrete coordination then transfers
+  exactly — collision-free by construction (cell size ≥ 2·radius) — at the cost
+  of makespan stretch while robots wait out kinematics.
+- `"dwa"` — keep the route but treat the other robots as moving obstacles, a
+  reactive recovery without the schedule.
+
+`benchmarks/comparison.md` runs all three on a 4-way crossing: pursuit collides
+and stalls, while TPG and DWA both finish collision-free. Try it with
+`ros2 run mrn_sim mrn_mapf_sim --solver lacam`. The lesson is the headline of the
+whole stack: the discrete plan is necessary but not sufficient — bridging it to
+the moving robots takes either a schedule-aware executor or a reactive
+controller, both of which live here.
+
 ## Roadmap
 
 This is the world core, its ROS node, the localization integration, and a

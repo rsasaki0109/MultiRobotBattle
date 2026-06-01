@@ -217,6 +217,22 @@ def _lns_rows():
     return rows, iters
 
 
+def _mapf_exec_rows():
+    """Execute the SAME discrete MAPF plan in the continuous world three ways."""
+    from mrn_coord.mapf import GridWorld
+    from mrn_sim.mapf_exec import execute_mapf_plan
+
+    grid = GridWorld(7, 7)
+    agents = {"0": ((0, 3), (6, 3)), "1": ((6, 3), (0, 3)),
+              "2": ((3, 0), (3, 6)), "3": ((3, 6), (3, 0))}
+    rows = []
+    for controller in ("pursuit", "tpg", "dwa"):
+        res = execute_mapf_plan(grid, agents, solver="lacam",
+                                controller=controller)
+        rows.append((controller, res))
+    return rows
+
+
 def _lifelong_rows():
     from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
 
@@ -446,6 +462,35 @@ def build_report() -> str:
         "regret auction are close; over the lifelong horizon the auction's "
         "round-by-round greediness can even edge ahead, since one-shot optimality "
         "is not the same as long-run optimality.",
+        "",
+        "## MAPF plan execution: plan vs. reality",
+        "",
+        "The *same* LaCAM plan for a 4-way crossing, executed in the continuous "
+        "world three ways. The plan is collision-free on the grid in discrete "
+        "time, but the robots are discs with unicycle kinematics. `pursuit` "
+        "follows the spatial route but ignores the *schedule*, so the discs reach "
+        "the shared centre together and collide. `tpg` gates each robot with a "
+        "**Temporal Plan Graph** — enter your next cell only once its previous "
+        "occupant has left — so the discrete coordination transfers exactly: "
+        "collision-free, at the cost of makespan stretch while robots wait. `dwa` "
+        "keeps the route but reacts to the others as moving obstacles. "
+        "`coll` = robot-robot overlap steps; `cont./disc.` = continuous vs. grid "
+        "makespan; `dev` = furthest a robot strayed from its planned line (m).",
+        "",
+        "| execution | success | coll | disc. makespan | cont. steps | dev (m) |",
+        "| --- | :-: | :-: | --: | --: | --: |",
+    ]
+    for controller, res in _mapf_exec_rows():
+        d = res.as_dict()
+        lines.append(
+            f"| {controller} | {'✓' if d['success'] else '✗'} | "
+            f"{d['robot_collisions']} | {d['discrete_makespan']} | "
+            f"{d['continuous_steps']} | {d['max_path_deviation']:.2f} |")
+    lines += [
+        "",
+        "The discrete guarantee is necessary but not sufficient: it takes either "
+        "a schedule-aware executor (TPG) or a reactive controller (DWA) to keep "
+        "it collision-free once the robots are real.",
         "",
     ]
     return _fmt(lines)

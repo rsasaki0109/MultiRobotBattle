@@ -60,6 +60,9 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   ship for comparison — grid A* + pursuit, **Hybrid A\*** kinodynamic, **DWA**
   local control, **MPC** (iLQR receding-horizon optimization, space-time
   avoidance), and **ORCA** — and
+  and an **end-to-end MAPF executor** (`mrn_sim.mapf_exec`) runs a discrete
+  grid plan in the continuous world — exposing where the discrete guarantee
+  breaks down and bridging it with a Temporal-Plan-Graph schedule —
   `scripts/compare_planners.py` tabulates them all across the bundled scenarios
   ([`benchmarks/comparison.md`](benchmarks/comparison.md)). `ros2 run mrn_sim
   mrn_sim_bench crossing` runs a bundled scenario with a baseline policy. MAPF

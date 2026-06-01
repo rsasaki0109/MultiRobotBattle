@@ -27,6 +27,7 @@ setup(
         "console_scripts": [
             "mrn_sim_world = mrn_sim.sim_node:main",
             "mrn_sim_bench = mrn_sim.bench_cli:main",
+            "mrn_mapf_sim = mrn_sim.mapf_sim_cli:main",
         ],
     },
 )

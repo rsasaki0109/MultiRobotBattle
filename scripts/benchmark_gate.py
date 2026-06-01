@@ -69,6 +69,19 @@ def _run_mapf_example(solver: str, **kwargs) -> dict:
     return res
 
 
+def _run_mapf_exec(controller: str) -> dict:
+    from mrn_coord.mapf import GridWorld
+    from mrn_sim.mapf_exec import execute_mapf_plan
+
+    grid = GridWorld(7, 7)
+    agents = {"0": ((0, 3), (6, 3)), "1": ((6, 3), (0, 3)),
+              "2": ((3, 0), (3, 6)), "3": ((3, 6), (3, 0))}
+    res = execute_mapf_plan(grid, agents, solver="lacam", controller=controller)
+    out = res.as_dict()
+    out["case"] = "mapf_exec_" + controller
+    return out
+
+
 def _run_lifelong(agents: int = 6, steps: int = 120,
                   allocator: str = "stream") -> dict:
     from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
@@ -118,6 +131,9 @@ SUITE = [
     ("mapf_lifelong", _run_lifelong),
     ("mapf_lifelong_auction", lambda: _run_lifelong(allocator="auction")),
     ("mapf_lifelong_hungarian", lambda: _run_lifelong(allocator="hungarian")),
+    # executing a discrete MAPF plan in the continuous world (plan vs reality)
+    ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
+    ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),
 ]
 
 

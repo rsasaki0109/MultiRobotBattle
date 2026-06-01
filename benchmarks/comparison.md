@@ -105,3 +105,15 @@ Same warehouse and 6 robots over 150 ticks, varying only *how* a freed robot is 
 
 Cost-aware allocation roughly doubles throughput and halves service time here. The optimal one-shot matching (Hungarian) and the cheaper regret auction are close; over the lifelong horizon the auction's round-by-round greediness can even edge ahead, since one-shot optimality is not the same as long-run optimality.
 
+## MAPF plan execution: plan vs. reality
+
+The *same* LaCAM plan for a 4-way crossing, executed in the continuous world three ways. The plan is collision-free on the grid in discrete time, but the robots are discs with unicycle kinematics. `pursuit` follows the spatial route but ignores the *schedule*, so the discs reach the shared centre together and collide. `tpg` gates each robot with a **Temporal Plan Graph** — enter your next cell only once its previous occupant has left — so the discrete coordination transfers exactly: collision-free, at the cost of makespan stretch while robots wait. `dwa` keeps the route but reacts to the others as moving obstacles. `coll` = robot-robot overlap steps; `cont./disc.` = continuous vs. grid makespan; `dev` = furthest a robot strayed from its planned line (m).
+
+| execution | success | coll | disc. makespan | cont. steps | dev (m) |
+| --- | :-: | :-: | --: | --: | --: |
+| pursuit | ✗ | 8 | 10 | 271 | 0.83 |
+| tpg | ✓ | 0 | 10 | 162 | 0.22 |
+| dwa | ✓ | 0 | 10 | 105 | 0.78 |
+
+The discrete guarantee is necessary but not sufficient: it takes either a schedule-aware executor (TPG) or a reactive controller (DWA) to keep it collision-free once the robots are real.
+

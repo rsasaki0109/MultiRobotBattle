@@ -48,6 +48,8 @@ jobs:
           # the local controllers as drop-in benchmark policies
           ros2 run mrn_sim mrn_sim_bench around_obstacle --policy mpc --max-steps 200
           ros2 run mrn_sim mrn_sim_bench doorway --policy mpc_cbf --max-steps 200
+          # execute a discrete MAPF plan in the continuous world (plan vs reality)
+          ros2 run mrn_sim mrn_mapf_sim --solver lacam
       - name: Benchmark gate
         run: |
           . /opt/ros/jazzy/setup.sh

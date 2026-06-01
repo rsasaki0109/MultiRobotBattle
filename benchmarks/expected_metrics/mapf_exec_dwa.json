@@ -1,0 +1,10 @@
+{
+  "case": "mapf_exec_dwa",
+  "continuous_steps": 105,
+  "discrete_makespan": 10,
+  "makespan_sec": 10.5,
+  "max_path_deviation": 0.783,
+  "robot_collisions": 0,
+  "solved": true,
+  "success": true
+}
