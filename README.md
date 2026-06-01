@@ -209,6 +209,14 @@ checked-in expectations in `benchmarks/expected_metrics/`, so a regression that
 drops a goal, introduces a collision, or worsens a makespan / sum-of-costs fails
 the build — the benchmarks are a guarded contract, not decoration.
 
+Two further jobs check our implementations against the **reference libraries**
+they reproduce, each built from source so the core build never depends on it: our
+ORCA against [RVO2](https://github.com/snape/RVO2) (same velocity to ~1e-5,
+[`benchmarks/orca_rvo2.md`](benchmarks/orca_rvo2.md)) and our CBS against
+[libMultiRobotPlanning](https://github.com/whoenig/libMultiRobotPlanning) (the
+identical optimal sum-of-costs, [`benchmarks/mapf_libmrp.md`](benchmarks/mapf_libmrp.md)).
+"Faithful port" and "optimal solver" are measured contracts, not claims.
+
 ## License
 
 Apache-2.0.

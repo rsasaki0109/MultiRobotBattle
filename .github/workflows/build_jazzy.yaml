@@ -94,3 +94,34 @@ jobs:
           # safety outcome matches. Diverge beyond tolerance and the build fails.
           python3 scripts/compare_orca_rvo2.py --check
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest mrn_coord/test_mrn_coord/test_orca_rvo2.py -v
+
+  # Independent of the ROS build: validate that our from-scratch CBS computes the
+  # same optimal sum-of-costs as the reference libMultiRobotPlanning. The C++
+  # `cbs` binary is built from source here so the core build never depends on it.
+  mapf-libmrp-equivalence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential git \
+            libboost-program-options-dev libyaml-cpp-dev python3-pytest
+      - name: Build the reference libMultiRobotPlanning cbs
+        run: |
+          # Pin the reference to a known-good commit for reproducibility.
+          git clone https://github.com/whoenig/libMultiRobotPlanning.git /tmp/libMultiRobotPlanning
+          git -C /tmp/libMultiRobotPlanning checkout 4c75fa20c435c440d8b6bd6dc81668ddc7296ba0
+          cmake -S /tmp/libMultiRobotPlanning -B /tmp/libMultiRobotPlanning/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/libMultiRobotPlanning/build --target cbs -j2
+          test -x /tmp/libMultiRobotPlanning/build/cbs && echo "cbs OK"
+      - name: CBS == reference libMultiRobotPlanning
+        env:
+          LIBMRP_CBS: /tmp/libMultiRobotPlanning/build/cbs
+        run: |
+          # The guarded contract: the same instances through our CBS and the
+          # reference must yield the identical optimal sum-of-costs (the unique
+          # optimum) and agree on solvability. A mismatch fails the build.
+          python3 scripts/compare_mapf_libmrp.py --check
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest mrn_coord/test_mrn_coord/test_mapf_libmrp.py -v

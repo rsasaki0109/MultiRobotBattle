@@ -86,6 +86,36 @@ each add one constraint to one of the two agents and replan only that agent.
 The first conflict-free node popped is optimal. Returns a `Solution` or `None`
 (infeasible, or the expansion budget is exhausted).
 
+#### Validated against the reference libMultiRobotPlanning
+
+"Optimal" is a strong word, so we hold it to the canonical reference:
+`scripts/compare_mapf_libmrp.py` solves identical instances with our `cbs.py`
+and with Wolfgang Hönig's [`libMultiRobotPlanning`](https://github.com/whoenig/libMultiRobotPlanning)
+C++ `cbs`, then checks they agree. Both run the same discrete model (4-connected
+grid, wait actions, unit cost, vertex + edge-swap conflicts, no
+`--disappear-at-goal`) and minimize **sum-of-costs** — whose optimum is a single
+number, so a correct optimal solver must reproduce the reference's value
+*exactly*, with no tolerance. The checked-in numbers (and why `makespan` is
+reported but not gated — many solutions share the optimal cost) live in
+[`benchmarks/mapf_libmrp.md`](../benchmarks/mapf_libmrp.md).
+
+The reference is an *optional* dependency built from source — the core build and
+test suite never touch it (the equivalence test skips cleanly when the binary is
+absent). To run the check locally (needs `cmake`, a C++ compiler, Boost
+program-options, and yaml-cpp):
+
+```bash
+git clone https://github.com/whoenig/libMultiRobotPlanning.git /tmp/libMultiRobotPlanning
+cmake -S /tmp/libMultiRobotPlanning -B /tmp/libMultiRobotPlanning/build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/libMultiRobotPlanning/build --target cbs
+export LIBMRP_CBS=/tmp/libMultiRobotPlanning/build/cbs
+python3 scripts/compare_mapf_libmrp.py --check       # gated equivalence contract
+python3 scripts/compare_mapf_libmrp.py --write        # refresh benchmarks/mapf_libmrp.md
+```
+
+The `mapf-libmrp-equivalence` CI job does exactly this on every push, so CBS
+computing the true optimum is a guarded contract, not a claim.
+
 ### High level: Enhanced CBS (`ecbs.py`)
 
 `ecbs(grid, agents, w=1.5)` is the **bounded-suboptimal** solver: it returns
