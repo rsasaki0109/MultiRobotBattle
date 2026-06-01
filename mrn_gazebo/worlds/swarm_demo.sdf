@@ -1,0 +1,221 @@
+<?xml version="1.0" ?>
+<!--
+  Gazebo (gz sim, Harmonic) swarm demo world: 12 robots flock across an open
+  arena past a few obstacles, driven over cmd_vel by mrn_coord.flocking Boids
+  (separation/alignment/cohesion + migration + obstacle avoidance) via
+  scripts/record_gazebo_swarm_gif.py, each moving with the kinematic
+  VelocityControl system. Rendered fully offscreen. Media-only; not in CI.
+-->
+<sdf version="1.8">
+  <world name="swarm_demo">
+    <physics name="1ms" type="ignored"><max_step_size>0.001</max_step_size><real_time_factor>1.0</real_time_factor></physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors"><render_engine>ogre2</render_engine><background_color>0.043 0.055 0.078 1</background_color></plugin>
+    <scene><ambient>0.5 0.5 0.55 1</ambient><background>0.043 0.055 0.078 1</background><grid>false</grid><shadows>true</shadows></scene>
+    <light type="directional" name="sun"><cast_shadows>true</cast_shadows><pose>0 0 10 0 0 0</pose><diffuse>0.9 0.9 0.9 1</diffuse><specular>0.25 0.25 0.25 1</specular><direction>-0.4 0.3 -0.9</direction></light>
+    <model name="ground_plane"><static>true</static><link name="link">
+      <collision name="c"><geometry><plane><normal>0 0 1</normal><size>60 60</size></plane></geometry></collision>
+      <visual name="v"><geometry><plane><normal>0 0 1</normal><size>60 60</size></plane></geometry><material><ambient>0.05 0.07 0.10 1</ambient><diffuse>0.07 0.09 0.13 1</diffuse></material></visual></link></model>
+
+    <model name="o1"><static>true</static><pose>12 5 0.5 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><cylinder><radius>1.1</radius><length>1</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>1.1</radius><length>1</length></cylinder></geometry>
+        <material><ambient>0.29 0.33 0.40 1</ambient><diffuse>0.33 0.37 0.44 1</diffuse></material></visual></link></model>
+    <model name="o2"><static>true</static><pose>13.5 9.5 0.5 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><cylinder><radius>0.9</radius><length>1</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.9</radius><length>1</length></cylinder></geometry>
+        <material><ambient>0.29 0.33 0.40 1</ambient><diffuse>0.33 0.37 0.44 1</diffuse></material></visual></link></model>
+    <model name="o3"><static>true</static><pose>17 6.5 0.5 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><cylinder><radius>0.8</radius><length>1</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.8</radius><length>1</length></cylinder></geometry>
+        <material><ambient>0.29 0.33 0.40 1</ambient><diffuse>0.33 0.37 0.44 1</diffuse></material></visual></link></model>
+
+    <model name="a0">
+      <pose>1.8 4.5 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a0/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a1">
+      <pose>1.8 5.9 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a1/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a2">
+      <pose>1.8 7.3 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a2/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a3">
+      <pose>1.8 8.7 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a3/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a4">
+      <pose>2.8 4.5 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a4/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a5">
+      <pose>2.8 5.9 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a5/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a6">
+      <pose>2.8 7.3 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a6/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a7">
+      <pose>2.8 8.7 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a7/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a8">
+      <pose>3.8 4.5 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a8/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a9">
+      <pose>3.8 5.9 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a9/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a10">
+      <pose>3.8 7.3 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a10/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="a11">
+      <pose>3.8 8.7 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.45 0.3 0.18</size></box></geometry>
+          <material><ambient>0.18 0.62 0.86 1</ambient><diffuse>0.30 0.78 0.98 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.2 0 0.16 0 0 0</pose><geometry><box><size>0.1 0.14 0.08</size></box></geometry>
+          <material><ambient>0.85 0.95 1 1</ambient><diffuse>0.85 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/a11/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+
+    <model name="rec_camera"><static>true</static><pose>11 -3.5 13.5 0 0.82 1.5707</pose>
+      <link name="link"><sensor name="rec" type="camera">
+        <camera><horizontal_fov>1.05</horizontal_fov><image><width>1000</width><height>620</height></image><clip><near>0.1</near><far>140</far></clip></camera>
+        <always_on>1</always_on><update_rate>30</update_rate><topic>rec_camera</topic></sensor></link></model>
+  </world>
+</sdf>

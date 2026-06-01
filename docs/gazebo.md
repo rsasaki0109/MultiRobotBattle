@@ -110,10 +110,18 @@ python3 scripts/record_gazebo_gif.py
 python3 scripts/record_gazebo_gif.py --duration 16 --fps 15 --width 720
 ```
 
-A companion script, `scripts/record_gazebo_orca_gif.py`, records the same way
-from `worlds/orca_demo.sdf`: two streams of holonomic robots on near-head-on
-lanes pass *through* each other collision-free, driven by `mrn_coord.orca`
-reciprocal avoidance (the 3D counterpart of `make_orca_gif.py`).
+Companion scripts record the other layers the same way, each from its own world
+and driven by the matching `mrn_coord` algorithm (the 3D counterparts of the 2D
+`make_*_gif.py` demos):
+
+- `record_gazebo_orca_gif.py` (`worlds/orca_demo.sdf`) — two streams of holonomic
+  robots on near-head-on lanes pass *through* each other via `mrn_coord.orca`.
+- `record_gazebo_swarm_gif.py` (`worlds/swarm_demo.sdf`) — twelve robots flock
+  past obstacles via `mrn_coord.flocking` Boids + a migration pull.
+- `record_gazebo_coord_gif.py` (`worlds/coord_demo.sdf`) — three robots funnel
+  through a doorway on a Conflict-Based-Search schedule, then assemble a
+  formation; the CBS + formation trajectory is precomputed by `mrn_coord` and
+  replayed by tracking each robot's waypoint.
 
 Being wall-clock-paced 3D, the result is **not bit-for-bit deterministic**
 (unlike the 2D `make_*_gif.py` demos) — it is media-generation only and, like the

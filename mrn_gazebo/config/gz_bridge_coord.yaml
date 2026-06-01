@@ -1,0 +1,32 @@
+# ros_gz_bridge for coord_demo.sdf: cmd_vel ROS->gz, pose gz->ROS (r1..r3).
+# record_gazebo_coord_gif.py. Media-only; not CI.
+- ros_topic_name: "/model/r1/cmd_vel"
+  gz_topic_name: "/model/r1/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+- ros_topic_name: "/model/r1/pose"
+  gz_topic_name: "/model/r1/pose"
+  ros_type_name: "geometry_msgs/msg/PoseStamped"
+  gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/r2/cmd_vel"
+  gz_topic_name: "/model/r2/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+- ros_topic_name: "/model/r2/pose"
+  gz_topic_name: "/model/r2/pose"
+  ros_type_name: "geometry_msgs/msg/PoseStamped"
+  gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS
+- ros_topic_name: "/model/r3/cmd_vel"
+  gz_topic_name: "/model/r3/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+- ros_topic_name: "/model/r3/pose"
+  gz_topic_name: "/model/r3/pose"
+  ros_type_name: "geometry_msgs/msg/PoseStamped"
+  gz_type_name: "gz.msgs.Pose"
+  direction: GZ_TO_ROS

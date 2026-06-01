@@ -1,0 +1,99 @@
+<?xml version="1.0" ?>
+<!--
+  Gazebo (gz sim, Harmonic) coordination demo world: three robots funnel through
+  a one-cell doorway in a wall, then assemble a formation. The collision-free
+  doorway schedule (Conflict-Based Search) and the formation assembly are
+  precomputed by mrn_coord (CBS + formation control) and replayed in 3D by
+  scripts/record_gazebo_coord_gif.py, each robot tracking its path via the
+  kinematic VelocityControl system. Rendered fully offscreen. Media-only; not CI.
+-->
+<sdf version="1.8">
+  <world name="coord_demo">
+    <physics name="1ms" type="ignored"><max_step_size>0.001</max_step_size><real_time_factor>1.0</real_time_factor></physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors"><render_engine>ogre2</render_engine><background_color>0.043 0.055 0.078 1</background_color></plugin>
+    <scene><ambient>0.5 0.5 0.55 1</ambient><background>0.043 0.055 0.078 1</background><grid>false</grid><shadows>true</shadows></scene>
+    <light type="directional" name="sun"><cast_shadows>true</cast_shadows><pose>0 0 10 0 0 0</pose><diffuse>0.9 0.9 0.9 1</diffuse><specular>0.25 0.25 0.25 1</specular><direction>-0.4 0.3 -0.9</direction></light>
+    <model name="ground_plane"><static>true</static><link name="link">
+      <collision name="c"><geometry><plane><normal>0 0 1</normal><size>60 60</size></plane></geometry></collision>
+      <visual name="v"><geometry><plane><normal>0 0 1</normal><size>60 60</size></plane></geometry><material><ambient>0.05 0.07 0.10 1</ambient><diffuse>0.07 0.09 0.13 1</diffuse></material></visual></link></model>
+
+    <model name="wall_0"><static>true</static><pose>7.0 0.0 0.4 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><box><size>1.4 1.4 0.8</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>1.4 1.4 0.8</size></box></geometry>
+        <material><ambient>0.26 0.30 0.37 1</ambient><diffuse>0.30 0.34 0.42 1</diffuse></material></visual></link></model>
+    <model name="wall_1"><static>true</static><pose>7.0 1.4 0.4 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><box><size>1.4 1.4 0.8</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>1.4 1.4 0.8</size></box></geometry>
+        <material><ambient>0.26 0.30 0.37 1</ambient><diffuse>0.30 0.34 0.42 1</diffuse></material></visual></link></model>
+    <model name="wall_2"><static>true</static><pose>7.0 2.8 0.4 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><box><size>1.4 1.4 0.8</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>1.4 1.4 0.8</size></box></geometry>
+        <material><ambient>0.26 0.30 0.37 1</ambient><diffuse>0.30 0.34 0.42 1</diffuse></material></visual></link></model>
+    <model name="wall_3"><static>true</static><pose>7.0 5.6 0.4 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><box><size>1.4 1.4 0.8</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>1.4 1.4 0.8</size></box></geometry>
+        <material><ambient>0.26 0.30 0.37 1</ambient><diffuse>0.30 0.34 0.42 1</diffuse></material></visual></link></model>
+    <model name="wall_4"><static>true</static><pose>7.0 7.0 0.4 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><box><size>1.4 1.4 0.8</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>1.4 1.4 0.8</size></box></geometry>
+        <material><ambient>0.26 0.30 0.37 1</ambient><diffuse>0.30 0.34 0.42 1</diffuse></material></visual></link></model>
+    <model name="wall_5"><static>true</static><pose>7.0 8.399999999999999 0.4 0 0 0</pose><link name="link">
+      <collision name="c"><geometry><box><size>1.4 1.4 0.8</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>1.4 1.4 0.8</size></box></geometry>
+        <material><ambient>0.26 0.30 0.37 1</ambient><diffuse>0.30 0.34 0.42 1</diffuse></material></visual></link></model>
+
+    <model name="r1">
+      <pose>1.4 1.4 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.5 0.34 0.2</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.5 0.34 0.2</size></box></geometry>
+          <material><ambient>0.13 0.55 0.77 1</ambient><diffuse>0.22 0.74 0.93 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.22 0 0.17 0 0 0</pose><geometry><box><size>0.1 0.16 0.09</size></box></geometry>
+          <material><ambient>0.9 0.95 1 1</ambient><diffuse>0.9 0.95 1 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/r1/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="r2">
+      <pose>1.4 4.199999999999999 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.5 0.34 0.2</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.5 0.34 0.2</size></box></geometry>
+          <material><ambient>0.78 0.30 0.55 1</ambient><diffuse>0.96 0.45 0.71 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.22 0 0.17 0 0 0</pose><geometry><box><size>0.1 0.16 0.09</size></box></geometry>
+          <material><ambient>1 0.95 0.97 1</ambient><diffuse>1 0.95 0.97 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/r2/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+    <model name="r3">
+      <pose>1.4 7.0 0.1 0 0 0</pose>
+      <link name="base">
+        <inertial><mass>1.5</mass><inertia><ixx>0.03</ixx><iyy>0.03</iyy><izz>0.05</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
+        <collision name="c"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.5 0.34 0.2</size></box></geometry></collision>
+        <visual name="v"><pose>0 0 0.1 0 0 0</pose><geometry><box><size>0.5 0.34 0.2</size></box></geometry>
+          <material><ambient>0.51 0.74 0.16 1</ambient><diffuse>0.64 0.90 0.21 1</diffuse><specular>0.3 0.3 0.3 1</specular></material></visual>
+        <visual name="nose"><pose>0.22 0 0.17 0 0 0</pose><geometry><box><size>0.1 0.16 0.09</size></box></geometry>
+          <material><ambient>0.97 1 0.92 1</ambient><diffuse>0.97 1 0.92 1</diffuse></material></visual>
+      </link>
+      <plugin filename="gz-sim-velocity-control-system" name="gz::sim::systems::VelocityControl"><topic>/model/r3/cmd_vel</topic></plugin>
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+        <publish_link_pose>false</publish_link_pose><publish_model_pose>true</publish_model_pose>
+        <use_pose_vector_msg>false</use_pose_vector_msg><static_publisher>false</static_publisher><update_frequency>30</update_frequency></plugin>
+    </model>
+
+    <model name="rec_camera"><static>true</static><pose>7.699999999999999 -4.6000000000000005 12.0 0 0.78 1.5707</pose>
+      <link name="link"><sensor name="rec" type="camera">
+        <camera><horizontal_fov>0.92</horizontal_fov><image><width>1000</width><height>660</height></image><clip><near>0.1</near><far>120</far></clip></camera>
+        <always_on>1</always_on><update_rate>30</update_rate><topic>rec_camera</topic></sensor></link></model>
+  </world>
+</sdf>

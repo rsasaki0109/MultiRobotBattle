@@ -17,6 +17,8 @@ algorithms** — regenerate any of them with the matching script:
 | `orca_demo.gif` | `make_orca_gif.py` | ORCA reciprocal avoidance: two crowds pass through each other |
 | `gazebo_demo.gif` | `record_gazebo_gif.py` | **3D Gazebo**: three robots cross an obstacle arena via A\* + pure-pursuit + reciprocal avoidance, with live 360° LiDAR overlaid |
 | `gazebo_orca_demo.gif` | `record_gazebo_orca_gif.py` | **3D Gazebo**: two robot streams pass through each other collision-free via ORCA |
+| `gazebo_swarm_demo.gif` | `record_gazebo_swarm_gif.py` | **3D Gazebo**: twelve robots flock past obstacles via Boids (separation/alignment/cohesion + migration) |
+| `gazebo_coord_demo.gif` | `record_gazebo_coord_gif.py` | **3D Gazebo**: three robots funnel through a doorway via CBS, then assemble a formation |
 
 ```bash
 python3 scripts/make_<name>_gif.py     # writes docs/media/<name>_demo.gif
