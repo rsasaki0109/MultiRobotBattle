@@ -30,7 +30,9 @@ def main() -> None:
     parser.add_argument("map", nargs="?", help="MovingAI .map (default: bundled example)")
     parser.add_argument("scen", nargs="?", help="MovingAI .scen (default: bundled example)")
     parser.add_argument("-n", "--num-agents", type=int, default=None)
-    parser.add_argument("--solver", choices=["cbs", "prioritized"], default="cbs")
+    parser.add_argument("--solver",
+                        choices=["cbs", "prioritized", "prioritized_sipp"],
+                        default="cbs")
     parser.add_argument("--max-expansions", type=int, default=100000)
     args = parser.parse_args()
 

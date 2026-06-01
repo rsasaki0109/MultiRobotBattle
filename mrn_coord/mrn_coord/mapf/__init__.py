@@ -7,6 +7,9 @@ The pieces compose bottom-up:
 - :mod:`space_time_astar` — the low-level single-agent planner over
   ``(cell, time)`` states, honoring vertex and edge constraints (including a
   wait action). This is what both high-level planners call.
+- :mod:`sipp` — Safe Interval Path Planning: a drop-in low-level planner that
+  searches ``(cell, safe interval)`` states instead, collapsing long waits into
+  a single state for the same minimal-time path.
 - :mod:`conflicts` — vertex and edge (swap) conflict detection between planned
   paths, with stay-at-goal semantics.
 - :mod:`cbs` — Conflict-Based Search: an optimal (sum-of-costs) two-level
@@ -26,6 +29,7 @@ from .conflicts import (
 from .grid import Cell, GridWorld, manhattan
 from .path_follower import pure_pursuit
 from .prioritized import prioritized_planning
+from .sipp import plan_sipp
 from .solution import Solution, makespan, pad_paths, render_ascii, sum_of_costs
 from .space_time_astar import plan_path
 
@@ -34,6 +38,7 @@ __all__ = [
     "GridWorld",
     "manhattan",
     "plan_path",
+    "plan_sipp",
     "VertexConflict",
     "EdgeConflict",
     "cell_at",

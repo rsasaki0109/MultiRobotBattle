@@ -22,13 +22,18 @@ def _reservation_horizon(grid: GridWorld, agents: dict) -> int:
 
 
 def prioritized_planning(
-    grid: GridWorld, agents: dict, order=None, *, horizon: int | None = None
+    grid: GridWorld, agents: dict, order=None, *, horizon: int | None = None,
+    low_level=plan_path,
 ):
     """Plan agents in ``order`` (default: insertion order), reserving paths.
 
     ``agents`` maps agent id to ``(start, goal)``. Returns a :class:`Solution`
     or ``None`` if some agent cannot be routed around the higher-priority
-    reservations.
+    reservations. ``low_level`` is the single-agent planner each agent calls
+    with ``(grid, start, goal, vertex_constraints, edge_constraints)``; the
+    default is time-expanded A* (:func:`plan_path`), but
+    :func:`mrn_coord.mapf.sipp.plan_sipp` is a drop-in alternative that explores
+    far fewer states on wait-heavy instances.
     """
     order = list(order) if order is not None else list(agents)
     if horizon is None:
@@ -40,7 +45,7 @@ def prioritized_planning(
 
     for agent in order:
         start, goal = agents[agent]
-        path = plan_path(
+        path = low_level(
             grid,
             start,
             goal,

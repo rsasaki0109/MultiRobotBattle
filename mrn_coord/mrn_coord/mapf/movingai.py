@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from .cbs import cbs
 from .grid import Cell, GridWorld
 from .prioritized import prioritized_planning
+from .sipp import plan_sipp
 from .solution import makespan, sum_of_costs
 
 # MovingAI passable terrain: '.' and 'G' (ground); everything else is blocked.
@@ -99,9 +100,10 @@ def run_mapf_benchmark(
 ) -> dict:
     """Solve the first ``num_agents`` tasks and return benchmark metrics.
 
-    ``solver`` is ``"cbs"`` (optimal, small teams) or ``"prioritized"`` (fast,
-    incomplete). Returns a dict with ``solved`` / ``num_agents`` / and, when
-    solved, ``makespan`` and ``sum_of_costs``.
+    ``solver`` is ``"cbs"`` (optimal, small teams), ``"prioritized"`` (fast,
+    incomplete), or ``"prioritized_sipp"`` (the same, but with the safe-interval
+    low-level planner). Returns a dict with ``solved`` / ``num_agents`` / and,
+    when solved, ``makespan`` and ``sum_of_costs``.
     """
     chosen = tasks if num_agents is None else tasks[:num_agents]
     agents = {str(i): (t.start, t.goal) for i, t in enumerate(chosen)}
@@ -109,6 +111,8 @@ def run_mapf_benchmark(
         solution = cbs(grid, agents, max_expansions=max_expansions)
     elif solver == "prioritized":
         solution = prioritized_planning(grid, agents)
+    elif solver == "prioritized_sipp":
+        solution = prioritized_planning(grid, agents, low_level=plan_sipp)
     else:
         raise ValueError(f"unknown solver: {solver!r}")
 

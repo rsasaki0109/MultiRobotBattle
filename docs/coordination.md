@@ -53,6 +53,23 @@ goal is vertex-constrained, so a returned path can be safely held at the goal
 forever (an agent waits at its goal after arrival). It returns a list of cells
 indexed by timestep, or `None` if no path exists within a finite time horizon.
 
+### Low level alternative: SIPP (`sipp.py`)
+
+`plan_sipp(grid, start, goal, vertex_constraints, edge_constraints)` is a
+**drop-in** for `plan_path` with the same signature, the same constraint
+vocabulary, and the same minimal-time path — but a much smaller search space.
+Time-expanded A* keeps one state per `(cell, time)`, so an agent forced to wait
+out a long reservation re-expands a near-identical state every tick. **Safe
+Interval Path Planning** (Phillips & Likhachev 2011) instead partitions each
+cell's timeline into *safe intervals* — maximal runs of collision-free
+timesteps — and keeps one state per `(cell, interval)`, letting the agent wait
+*anywhere* in an interval for free. A chokepoint reserved for 200 ticks costs
+SIPP one state, not 200 (`benchmarks/comparison.md` sweeps this: A* expansions
+grow with the wait, SIPP's stay flat). Pass it as the `low_level` of
+`prioritized_planning`, or run `mrn_mapf_bench --solver prioritized_sipp`; it
+finds equal-cost solutions. Edge (swap) constraints are handled by skipping the
+single forbidden arrival time into a successor interval.
+
 ### Conflicts (`conflicts.py`)
 
 `detect_first_conflict(paths)` returns the earliest **vertex** conflict (same

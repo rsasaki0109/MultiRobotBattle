@@ -34,6 +34,20 @@ Conflict-Based Search (optimal sum-of-costs) vs. prioritized planning (fast, inc
 | --- | :-: | --: | --: |
 | cbs | ✓ | 14 | 42 |
 | prioritized | ✓ | 14 | 42 |
+| prioritized_sipp | ✓ | 14 | 42 |
+
+`prioritized` and `prioritized_sipp` are the same high-level planner with two interchangeable low-level planners — time-expanded A\* and **SIPP** (safe-interval). They find equal-cost solutions; SIPP just reaches them while expanding far fewer states (next table).
+
+## Low-level planner: SIPP vs. time-expanded A\*
+
+Single-agent query where a parked obstacle reserves a one-cell chokepoint for the first `N` ticks, forcing an `N`-tick wait. Both planners return the same minimal-time path, but time-expanded A\* expands roughly one `(cell, time)` state per waited tick while SIPP collapses the wait into a single `(cell, interval)` state — so its expansions stay flat as `N` grows. On open instances with little waiting the two are comparable; this is where SIPP pays off.
+
+| wait N | path length | A\* expansions | SIPP expansions |
+| --: | --: | --: | --: |
+| 10 | 17 | 18 | 8 |
+| 40 | 47 | 48 | 8 |
+| 160 | 167 | 168 | 8 |
+| 640 | 647 | 648 | 8 |
 
 ## Lifelong MAPF throughput (PIBT)
 

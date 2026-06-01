@@ -33,6 +33,7 @@ jobs:
           # end-to-end on every push.
           ros2 run mrn_coord mrn_mapf_demo
           ros2 run mrn_coord mrn_mapf_demo --solver prioritized
+          ros2 run mrn_coord mrn_mapf_bench --solver prioritized_sipp
           ros2 run mrn_coord mrn_formation_demo
           ros2 run mrn_coord mrn_coverage_demo
           ros2 run mrn_coord mrn_coverage_demo --method greedy

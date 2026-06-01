@@ -76,9 +76,41 @@ def _mapf_rows():
     grid = load_map(os.path.join(bench, "example.map"))
     tasks = load_scen(os.path.join(bench, "example.scen"))
     rows = []
-    for solver in ("cbs", "prioritized"):
+    for solver in ("cbs", "prioritized", "prioritized_sipp"):
         res = run_mapf_benchmark(grid, tasks, solver=solver, max_expansions=50_000)
         rows.append((solver, res))
+    return rows
+
+
+def _sipp_rows():
+    """Low-level planner expansions: time-expanded A* vs SIPP, vs. wait length.
+
+    SIPP's advantage is forced *waiting*: a state per waited timestep for A*, a
+    single ``(cell, interval)`` state for SIPP. To isolate it, an agent must
+    cross a one-cell chokepoint that a parked obstacle reserves for the first
+    ``N`` ticks, forcing an ``N``-tick wait. We sweep ``N`` and report the states
+    each planner expands — A* grows with ``N``, SIPP stays flat.
+    """
+    from mrn_coord.mapf.grid import GridWorld
+    from mrn_coord.mapf.sipp import plan_sipp
+    from mrn_coord.mapf.space_time_astar import plan_path
+
+    grid = GridWorld(8, 1)            # a straight corridor (0,0)..(7,0)
+    start, goal = (0, 0), (7, 0)
+    rows = []
+    for n in (10, 40, 160, 640):
+        # Park an obstacle on (1,0) for ticks 1..N: the agent must wait it out.
+        vertex = frozenset(((1, 0), t) for t in range(1, n + 1))
+        astar_stats: dict = {}
+        sipp_stats: dict = {}
+        a = plan_path(grid, start, goal, vertex, stats=astar_stats,
+                      max_time=n + 50)
+        b = plan_sipp(grid, start, goal, vertex, stats=sipp_stats,
+                      max_time=n + 50)
+        assert a is not None and b is not None
+        assert len(a) == len(b)       # identical minimal-time path
+        rows.append((n, len(a) - 1, astar_stats["expansions"],
+                     sipp_stats["expansions"]))
     return rows
 
 
@@ -153,6 +185,29 @@ def build_report() -> str:
         soc = res.get("sum_of_costs", "—")
         lines.append(
             f"| {solver} | {'✓' if solved else '✗'} | {mk} | {soc} |")
+
+    lines += [
+        "",
+        "`prioritized` and `prioritized_sipp` are the same high-level planner "
+        "with two interchangeable low-level planners — time-expanded A\\* and "
+        "**SIPP** (safe-interval). They find equal-cost solutions; SIPP just "
+        "reaches them while expanding far fewer states (next table).",
+        "",
+        "## Low-level planner: SIPP vs. time-expanded A\\*",
+        "",
+        "Single-agent query where a parked obstacle reserves a one-cell "
+        "chokepoint for the first `N` ticks, forcing an `N`-tick wait. Both "
+        "planners return the same minimal-time path, but time-expanded A\\* "
+        "expands roughly one `(cell, time)` state per waited tick while SIPP "
+        "collapses the wait into a single `(cell, interval)` state — so its "
+        "expansions stay flat as `N` grows. On open instances with little "
+        "waiting the two are comparable; this is where SIPP pays off.",
+        "",
+        "| wait N | path length | A\\* expansions | SIPP expansions |",
+        "| --: | --: | --: | --: |",
+    ]
+    for n, plen, astar_exp, sipp_exp in _sipp_rows():
+        lines.append(f"| {n} | {plen} | {astar_exp} | {sipp_exp} |")
 
     lines += [
         "",

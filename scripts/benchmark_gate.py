@@ -92,6 +92,8 @@ SUITE = [
     ("sim_doorway_dwa", lambda: _run_sim_scenario("doorway", "dwa")),
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
+    # same prioritized planner, safe-interval (SIPP) low level
+    ("mapf_example_prioritized_sipp", lambda: _run_mapf_example("prioritized_sipp")),
     # lifelong / online MAPF throughput (PIBT)
     ("mapf_lifelong", _run_lifelong),
 ]

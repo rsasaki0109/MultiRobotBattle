@@ -42,13 +42,16 @@ def plan_path(
     edge_constraints=frozenset(),
     *,
     max_time: int | None = None,
+    stats: dict | None = None,
 ) -> list[Cell] | None:
     """Find a minimal-time path from ``start`` to ``goal``.
 
     ``vertex_constraints`` is a set of ``(cell, time)``; ``edge_constraints`` is
     a set of ``(frm, to, time)``. Returns the path as a list of cells indexed by
     timestep (``path[t]`` is the cell at time ``t``), or ``None`` if no path
-    exists within the time horizon.
+    exists within the time horizon. If ``stats`` is given, ``stats["expansions"]``
+    is set to the number of ``(cell, time)`` states expanded — for comparison
+    against the safe-interval planner (:func:`mrn_coord.mapf.sipp.plan_sipp`).
     """
     if not grid.is_free(start) or not grid.is_free(goal):
         return None
@@ -76,6 +79,8 @@ def plan_path(
         visited.add(state)
 
         if cell == goal and t >= last_goal_time:
+            if stats is not None:
+                stats["expansions"] = len(visited)
             return _reconstruct(came_from, state)
 
         if t >= max_time:
@@ -95,6 +100,8 @@ def plan_path(
             f = nt + manhattan(ncell, goal)
             heapq.heappush(open_heap, (f, nt, counter, ncell, nt))
 
+    if stats is not None:
+        stats["expansions"] = len(visited)
     return None
 
 
