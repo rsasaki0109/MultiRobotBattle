@@ -42,9 +42,10 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   analytic expansion) for smooth, feasibly-followable paths, and **DWA** /
   **MPC (iLQR)** optimizing local controllers for accel-limited tracking.
 - **Coordination** (`mrn_coord`) — multi-agent path finding (optimal
-  Conflict-Based Search, **bounded-suboptimal ECBS** that scales further,
-  prioritized planning, all over a **space-time A\*** or drop-in **SIPP**
-  safe-interval low level, plus **lifelong / online MAPF** stepped by
+  Conflict-Based Search, **bounded-suboptimal ECBS** and **complete satisficing
+  LaCAM** that scale further, prioritized planning, all over a **space-time
+  A\*** or drop-in **SIPP** safe-interval low level, plus **lifelong / online
+  MAPF** stepped by
   **PIBT** with **auction / Hungarian** task allocation for warehouse-style
   endless-task throughput), **ORCA** reciprocal
   local collision avoidance, decentralized formation control, cooperative

@@ -1,0 +1,8 @@
+{
+  "case": "mapf_example_lacam",
+  "makespan": 14,
+  "num_agents": 3,
+  "solved": true,
+  "solver": "lacam",
+  "sum_of_costs": 42
+}

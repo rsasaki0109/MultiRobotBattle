@@ -79,7 +79,7 @@ def _mapf_rows():
     grid = load_map(os.path.join(bench, "example.map"))
     tasks = load_scen(os.path.join(bench, "example.scen"))
     rows = []
-    for solver in ("cbs", "ecbs", "prioritized", "prioritized_sipp"):
+    for solver in ("cbs", "ecbs", "lacam", "prioritized", "prioritized_sipp"):
         res = run_mapf_benchmark(grid, tasks, solver=solver, max_expansions=50_000)
         rows.append((solver, res))
     return rows
@@ -264,7 +264,11 @@ def build_report() -> str:
         "",
         "`ecbs` is bounded-suboptimal (cost ≤ `w`·optimal, here `w=1.5`); on this "
         "small example it happens to match the optimum. Its payoff shows as the "
-        "team grows (next table). "
+        "team grows (next table). `lacam` is a *complete* satisficing search over "
+        "whole configurations (PIBT successors + lazy constraints): not "
+        "cost-optimal in general — though it also matches the optimum here — but "
+        "it keeps finding solutions for large teams where the search-tree "
+        "solvers blow up. "
         "`prioritized` and `prioritized_sipp` are the same high-level planner "
         "with two interchangeable low-level planners — time-expanded A\\* and "
         "**SIPP** (safe-interval). They find equal-cost solutions; SIPP just "

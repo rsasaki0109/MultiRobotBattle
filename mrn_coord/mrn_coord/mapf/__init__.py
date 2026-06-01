@@ -17,6 +17,9 @@ The pieces compose bottom-up:
 - :mod:`ecbs` — Enhanced CBS: bounded-suboptimal (``cost <= w * optimal``) via
   focal search at both levels; expands far fewer nodes than CBS for a little
   cost slack, so it scales to more agents.
+- :mod:`lacam` — LaCAM: complete satisficing search over whole configurations
+  using PIBT as a successor generator with lazy constraints; scales to large
+  teams (not cost-optimal).
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
@@ -24,6 +27,7 @@ The pieces compose bottom-up:
 
 from .cbs import cbs
 from .ecbs import ecbs
+from .lacam import lacam
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -49,6 +53,7 @@ __all__ = [
     "detect_first_conflict",
     "cbs",
     "ecbs",
+    "lacam",
     "prioritized_planning",
     "pure_pursuit",
     "Solution",

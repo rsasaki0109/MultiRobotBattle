@@ -37,10 +37,11 @@ Conflict-Based Search (optimal sum-of-costs) vs. prioritized planning (fast, inc
 | --- | :-: | --: | --: |
 | cbs | ✓ | 14 | 42 |
 | ecbs | ✓ | 14 | 42 |
+| lacam | ✓ | 14 | 42 |
 | prioritized | ✓ | 14 | 42 |
 | prioritized_sipp | ✓ | 14 | 42 |
 
-`ecbs` is bounded-suboptimal (cost ≤ `w`·optimal, here `w=1.5`); on this small example it happens to match the optimum. Its payoff shows as the team grows (next table). `prioritized` and `prioritized_sipp` are the same high-level planner with two interchangeable low-level planners — time-expanded A\* and **SIPP** (safe-interval). They find equal-cost solutions; SIPP just reaches them while expanding far fewer states (next table).
+`ecbs` is bounded-suboptimal (cost ≤ `w`·optimal, here `w=1.5`); on this small example it happens to match the optimum. Its payoff shows as the team grows (next table). `lacam` is a *complete* satisficing search over whole configurations (PIBT successors + lazy constraints): not cost-optimal in general — though it also matches the optimum here — but it keeps finding solutions for large teams where the search-tree solvers blow up. `prioritized` and `prioritized_sipp` are the same high-level planner with two interchangeable low-level planners — time-expanded A\* and **SIPP** (safe-interval). They find equal-cost solutions; SIPP just reaches them while expanding far fewer states (next table).
 
 ## Low-level planner: SIPP vs. time-expanded A\*
 

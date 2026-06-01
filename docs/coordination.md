@@ -105,6 +105,23 @@ it starts exhausting its budget while ECBS stays in a handful of nodes for a
 few-percent cost premium. Run `mrn_mapf_demo --solver ecbs` or
 `mrn_mapf_bench --solver ecbs -w 1.3`.
 
+### High level: LaCAM (`lacam.py`)
+
+`lacam(grid, agents)` takes a different tack from the CBS family: instead of
+searching a constraint tree and replanning single agents, it searches the
+**configuration space** — a node is the joint position of *all* agents — with
+**PIBT** as the successor generator (one collision-free joint move in
+near-linear time). PIBT alone is greedy and incomplete, so LaCAM hangs a tree of
+**lazy constraints** off each configuration: low-level nodes pin successive
+agents to successive candidate cells, each yielding a PIBT successor under those
+pins. Because the constraints eventually enumerate *every* successor and the
+configuration space is finite, LaCAM is **complete** — it finds a solution
+whenever one exists — while scaling to teams the search-tree solvers cannot
+touch. It is satisficing (any valid collision-free solution, not cost-optimal);
+in random tests it solves every instance CBS solves, and it matches the optimum
+on the bundled example. Run `mrn_mapf_demo --solver lacam` or
+`mrn_mapf_bench --solver lacam`.
+
 ### High level: prioritized planning (`prioritized.py`)
 
 `prioritized_planning(grid, agents, order)` is the fast, **incomplete**
@@ -146,12 +163,15 @@ bundled (`mrn_coord/benchmarks/example.{map,scen}`).
 ros2 run mrn_coord mrn_mapf_bench                       # bundled example (CBS)
 ros2 run mrn_coord mrn_mapf_bench my.map my.scen -n 8   # first 8 agents
 ros2 run mrn_coord mrn_mapf_bench --solver ecbs -w 1.3  # bounded-suboptimal
+ros2 run mrn_coord mrn_mapf_bench --solver lacam        # complete, satisficing
 ros2 run mrn_coord mrn_mapf_bench --solver prioritized
 ```
 
 CBS is optimal but scales to small teams; for many agents use **ECBS**
 (`--solver ecbs`, bounded-suboptimal — much further reach for a small cost
-premium) or the prioritized solver (fast, incomplete).
+premium), **LaCAM** (`--solver lacam`, complete and satisficing — solves large
+teams when the search trees blow up), or the prioritized solver (fast,
+incomplete).
 
 ### Lifelong / online MAPF (`lifelong/`)
 

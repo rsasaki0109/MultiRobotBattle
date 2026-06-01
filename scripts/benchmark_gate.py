@@ -103,6 +103,8 @@ SUITE = [
     ("mapf_example_cbs", lambda: _run_mapf_example("cbs")),
     # bounded-suboptimal ECBS (cost <= w * optimal)
     ("mapf_example_ecbs", lambda: _run_mapf_example("ecbs", weight=1.5)),
+    # complete satisficing LaCAM (configuration-space search via PIBT)
+    ("mapf_example_lacam", lambda: _run_mapf_example("lacam")),
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
     # same prioritized planner, safe-interval (SIPP) low level
     ("mapf_example_prioritized_sipp", lambda: _run_mapf_example("prioritized_sipp")),
