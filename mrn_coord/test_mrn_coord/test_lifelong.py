@@ -84,6 +84,26 @@ class TestLifelong(unittest.TestCase):
         few, many = run(2), run(6)
         self.assertGreaterEqual(many, few)
 
+    def test_fleet_allocator_beats_round_robin(self):
+        # At fleet scale (40 AMRs in a 4x6 warehouse, the README hero), routing
+        # idle robots to *near* tasks is the whole game: a cost-aware allocator
+        # must clear far more tasks than geometry-blind round-robin. This guards
+        # the contrast itself, so a change that quietly neutralizes the allocator
+        # fails even if every per-case throughput baseline is also nudged.
+        grid, endpoints = make_warehouse(rows=4, cols=6, aisle=1)
+        starts = {f"r{i}": endpoints[i] for i in range(40)}
+
+        def run(allocator):
+            return run_lifelong(grid, dict(starts), TaskStream(list(endpoints)),
+                                max_steps=60, allocator=allocator).completed
+
+        stream = run("stream")
+        for allocator in ("hungarian", "auction"):
+            served = run(allocator)
+            # a comfortable margin below the observed ~6.5x, not a tight latch
+            self.assertGreater(served, 3 * stream,
+                               f"{allocator} lost its lead over round-robin")
+
     def test_warehouse_layout(self):
         grid, endpoints = make_warehouse(rows=2, cols=2, aisle=1)
         self.assertTrue(len(endpoints) > 0)

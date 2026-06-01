@@ -231,8 +231,9 @@ pure algorithm cores), then exercises the coordination CLI demos end-to-end. A
 final **benchmark gate** (`scripts/benchmark_gate.py`) runs the bundled
 scenarios and the MovingAI MAPF example and compares their metrics against
 checked-in expectations in `benchmarks/expected_metrics/`, so a regression that
-drops a goal, introduces a collision, or worsens a makespan / sum-of-costs fails
-the build — the benchmarks are a guarded contract, not decoration.
+drops a goal, introduces a collision, worsens a makespan / sum-of-costs, or cuts
+the 40-AMR fleet's throughput fails the build — the benchmarks are a guarded
+contract, not decoration.
 
 Three further jobs check our implementations against the **reference libraries**
 they reproduce, each built from source so the core build never depends on it: our

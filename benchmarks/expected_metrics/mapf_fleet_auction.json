@@ -1,0 +1,9 @@
+{
+  "agents": 40,
+  "avg_service_time": 3.499,
+  "case": "mapf_fleet_auction",
+  "completed": 635,
+  "max_wait": 19,
+  "steps": 60,
+  "throughput": 10.5833
+}

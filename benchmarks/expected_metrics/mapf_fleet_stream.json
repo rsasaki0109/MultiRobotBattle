@@ -1,0 +1,9 @@
+{
+  "agents": 40,
+  "avg_service_time": 17.636,
+  "case": "mapf_fleet_stream",
+  "completed": 99,
+  "max_wait": 48,
+  "steps": 60,
+  "throughput": 1.65
+}

@@ -105,17 +105,19 @@ def _run_shield_reciprocal() -> dict:
     return certify_reciprocal(seed=0, trials=150, n_robots=4)
 
 
-def _run_lifelong(agents: int = 6, steps: int = 120,
-                  allocator: str = "stream") -> dict:
+def _run_lifelong(agents: int = 6, steps: int = 120, allocator: str = "stream",
+                  rows: int = 2, cols: int = 3, case: str | None = None) -> dict:
     from mrn_coord.lifelong import TaskStream, make_warehouse, run_lifelong
 
-    grid, endpoints = make_warehouse(rows=2, cols=3)
+    grid, endpoints = make_warehouse(rows=rows, cols=cols)
     starts = {f"r{i}": endpoints[i] for i in range(min(agents, len(endpoints)))}
     res = run_lifelong(grid, starts, TaskStream(list(endpoints)),
                        max_steps=steps, allocator=allocator)
     out = res.as_dict()
-    suffix = "" if allocator == "stream" else "_" + allocator
-    out["case"] = "mapf_lifelong" + suffix
+    if case is None:
+        suffix = "" if allocator == "stream" else "_" + allocator
+        case = "mapf_lifelong" + suffix
+    out["case"] = case
     return out
 
 
@@ -159,6 +161,20 @@ SUITE = [
     ("mapf_lifelong", _run_lifelong),
     ("mapf_lifelong_auction", lambda: _run_lifelong(allocator="auction")),
     ("mapf_lifelong_hungarian", lambda: _run_lifelong(allocator="hungarian")),
+    # fleet scale (40 AMRs in a 4x6 warehouse, the README hero): throughput is
+    # the metric that actually matters, and the contract is that the cost-aware
+    # allocators keep their large lead over geometry-blind round-robin. A change
+    # that silently degrades fleet throughput (or neutralizes the allocator)
+    # fails here, where the small 6-AMR cases above are too easy to show it.
+    ("mapf_fleet_stream",
+     lambda: _run_lifelong(agents=40, steps=60, rows=4, cols=6,
+                           case="mapf_fleet_stream")),
+    ("mapf_fleet_hungarian",
+     lambda: _run_lifelong(agents=40, steps=60, rows=4, cols=6,
+                           allocator="hungarian", case="mapf_fleet_hungarian")),
+    ("mapf_fleet_auction",
+     lambda: _run_lifelong(agents=40, steps=60, rows=4, cols=6,
+                           allocator="auction", case="mapf_fleet_auction")),
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),

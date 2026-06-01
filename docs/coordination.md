@@ -351,6 +351,14 @@ one-shot Hungarian match and the cheaper auction are close — and over the
 lifelong horizon the auction's round-by-round greediness can even edge ahead,
 since one-shot optimality is not long-run optimality.
 
+The lead widens with scale, and the benchmark gate now pins it at fleet size.
+The 40-AMR `mapf_fleet_*` cases (`scripts/benchmark_gate.py`, a 4×6 warehouse)
+clear **~10.8 tasks/step** under either cost-aware allocator versus **1.65** for
+round-robin — a ~6.5× gap. CI checks the exact task count of all three, and a
+`test_lifelong` invariant requires the cost-aware allocators to keep clearing
+well over 3× round-robin, so a change that quietly neutralizes the allocator
+fails the build even if the per-case baselines are also nudged to match.
+
 ### ROS node
 
 `mrn_mapf_planner` is a thin ROS wrapper around the MAPF core. It reads a
