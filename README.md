@@ -1,11 +1,11 @@
 # multirobot-navigation
 
 <p align="center">
-  <img src="docs/media/coordination_demo.gif" alt="Three robots funnel through a one-cell doorway without colliding via Conflict-Based Search, then converge into a triangle via decentralized formation control" width="720">
+  <img src="docs/media/gazebo_demo.gif" alt="Three robots cross a 3D Gazebo arena of cylindrical obstacles via the repo's A* grid planning, pure pursuit, and reciprocal avoidance, each sweeping a 360-degree LiDAR whose returns trace the obstacles" width="720">
 </p>
 
 <p align="center">
-  <em>Conflict-Based Search plans a collision-free doorway crossing, then a consensus controller assembles a formation — driven by the real algorithms. Regenerate with <code>scripts/make_coordination_gif.py</code>.</em>
+  <em>Three robots cross a 3D Gazebo arena — A* planning, pure pursuit, and reciprocal avoidance, all driven by the real <code>mrn_coord</code>/<code>mrn_sim</code> code, each sweeping a 360° LiDAR. Rendered fully offscreen on the GPU; regenerate with <code>scripts/record_gazebo_gif.py</code>.</em>
 </p>
 
 [![build-jazzy](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml)
@@ -139,18 +139,14 @@ library — same scenarios, same velocity to ~1e-5
   <img src="docs/media/orca_demo.gif" alt="Two crowds of agents walk into each other and pass through collision-free via ORCA reciprocal avoidance" width="560">
 </p>
 
-**3D physics — Gazebo** — the same navigation, but in the `mrn_gazebo` (`gz sim`,
-Harmonic) **3D** world: three robots cross an obstacle arena under the repo's own
-A\* grid planning + pure-pursuit + reciprocal avoidance, driven over `cmd_vel`.
-Each carries a **360° LiDAR** whose live returns are overlaid on the render, so
-you can watch the lasers trace the obstacles and the other robots. Rendered and
-recorded **fully offscreen on the GPU** (no GUI, no desktop window) by
-`scripts/record_gazebo_gif.py` — the 3D counterpart to the deterministic 2D
-demos, driven by the same algorithms:
-
-<p align="center">
-  <img src="docs/media/gazebo_demo.gif" alt="Three robots cross a 3D Gazebo arena of cylindrical obstacles via the repo's A* + pure-pursuit + reciprocal-avoidance navigation, each sweeping a 360-degree LiDAR whose returns trace the obstacles" width="660">
-</p>
+**3D physics — Gazebo** — the demo at the top of this README runs in the
+`mrn_gazebo` (`gz sim`, Harmonic) **3D** world: three robots cross the obstacle
+arena under the repo's own A\* grid planning + pure-pursuit + reciprocal
+avoidance, driven over `cmd_vel`. Each carries a **360° LiDAR** whose live returns
+are overlaid on the render, so you can watch the lasers trace the obstacles and
+the other robots. It is rendered and recorded **fully offscreen on the GPU** (no
+GUI, no desktop window) by `scripts/record_gazebo_gif.py` — the 3D counterpart to
+the deterministic 2D demos, driven by the same algorithms.
 
 The same offscreen seam runs the other layers in 3D too — **ORCA** crowds passing
 through each other, **Boids** swarming past obstacles (with the flock's LiDAR

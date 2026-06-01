@@ -1,11 +1,11 @@
 # Coordination Layer (`mrn_coord`)
 
 <p align="center">
-  <img src="media/coordination_demo.gif" alt="Three robots funnel through a one-cell doorway without colliding (Conflict-Based Search), then converge into a triangle (formation control)" width="640">
+  <img src="media/gazebo_coord_demo.gif" alt="Three robots funnel through a doorway via Conflict-Based Search then assemble a formation in a 3D Gazebo world, their 360-degree LiDAR tracing the walls" width="640">
 </p>
 
 <p align="center">
-  <em>Driven by the real algorithms: CBS plans the collision-free doorway crossing, then the consensus controller assembles the formation. Regenerate with <code>python3 scripts/make_coordination_gif.py</code>.</em>
+  <em>Driven by the real algorithms in the 3D Gazebo world: CBS plans the collision-free doorway crossing, then the consensus controller assembles the formation, each robot sweeping a 360° LiDAR. Rendered fully offscreen on the GPU; regenerate with <code>python3 scripts/record_gazebo_coord_gif.py</code>.</em>
 </p>
 
 `mrn_coord` is the **coordination / navigation** half of the project — the
