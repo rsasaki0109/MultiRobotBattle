@@ -359,6 +359,62 @@ round-robin — a ~6.5× gap. CI checks the exact task count of all three, and a
 well over 3× round-robin, so a change that quietly neutralizes the allocator
 fails the build even if the per-case baselines are also nudged to match.
 
+#### Rolling-Horizon Collision Resolution — RHCR (`lifelong/rhcr.py`)
+
+PIBT steps the team one greedy, collision-free move at a time. **RHCR** (Li,
+Tinka, Kiesel, Durham, Kumar & Koenig, *Lifelong MAPF in Large-Scale
+Warehouses*, AAAI 2021) is the *planning* alternative — `run_rhcr(...)`
+decomposes the endless run into a sequence of **Windowed MAPF** instances: every
+`replan_period` (`h`) steps it re-plans full paths toward the current goals, the
+windowed solver resolves collisions only within the next `window` (`w ≥ h`)
+timesteps and ignores everything beyond, and the team commits the next `h` steps
+before repeating. Bounding resolution to a window is what keeps each solve cheap;
+the lookahead is what lets it sidestep traps a one-step stepper walks into.
+
+The windowed solver is pluggable. The default is **PBS** (Priority-Based Search,
+Ma, Harabor, Stuckey, Li & Koenig, AAAI 2019; `mrn_coord.mapf.pbs`) — a new
+solver in its own right, two-level like CBS but branching on *priority orderings*
+instead of constraints, with prioritized planning at the low level. PBS resolves
+the head-on, order-sensitive deadlocks that fixed-order prioritized planning
+cannot: where one priority order parks an agent on another's only corridor and
+fails, PBS reorders and finds the plan (`test_pbs`). Also available: fixed-order
+prioritized planning (`"pp"`) and a PIBT rollout (`"pibt"`). PBS and PP fall back
+to a PIBT rollout for any window they cannot fully resolve, so **a run is always
+collision-free and live** regardless of solver.
+
+What the gate actually pins — and what it honestly shows — is that **on this
+cramped, single-aisle warehouse, greedy PIBT wins**, and RHCR is the more
+interesting object for *where* it loses:
+
+- **The commit horizon `h` trades throughput for bounded compute.** A robot that
+  finishes mid-window idles until the next replanning boundary, so throughput is
+  non-increasing in `h` (gated by a `test_rhcr` invariant). At `h = 1` with the
+  PIBT-rollout window, RHCR degenerates *exactly* to the one-step PIBT engine —
+  it reproduces `run_lifelong` metric-for-metric for every allocator
+  (`test_rhcr`), the framework's sanity anchor. As `h` grows the bounded-replan
+  cost shows: the 40-AMR fleet case clears **9.73 tasks/step** at `h = 2` versus
+  the PIBT engine's 10.85.
+- **Windowed PBS does not scale to extreme density.** In the 1-wide aisles at
+  fleet size (40 AMRs over 48 endpoints, ~83% occupancy) PBS's priority search
+  explodes — tens of seconds per run — and largely defers to the PIBT fallback
+  anyway. This is consistent with the literature (PBS is a moderate-density
+  solver; the field uses PIBT/LaCAM at extreme density). So the gate pins PBS and
+  PP only on the small warehouse (`mapf_rhcr`, `mapf_rhcr_pp`,
+  `mapf_rhcr_hungarian`), and exercises the *framework* at fleet scale with the
+  fast PIBT-rollout window (`mapf_rhcr_fleet`).
+
+The honest takeaway: RHCR's value is bounded, predictable planning time and
+lookahead conflict resolution — not peak throughput on a tiny, congested map,
+where immediate-reassignment PIBT is hard to beat. The benchmark records exactly
+where our reproduction does and doesn't win, which is the point of a guarded
+contract.
+
+```bash
+ros2 run mrn_coord mrn_lifelong_demo --engine rhcr                       # PBS window, default w=8/h=4
+ros2 run mrn_coord mrn_lifelong_demo --engine rhcr --solver pp --replan 2
+ros2 run mrn_coord mrn_mapf_demo --solver pbs                            # PBS as a standalone MAPF solver
+```
+
 ### ROS node
 
 `mrn_mapf_planner` is a thin ROS wrapper around the MAPF core. It reads a

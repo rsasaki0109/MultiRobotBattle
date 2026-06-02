@@ -1,0 +1,9 @@
+{
+  "agents": 6,
+  "avg_service_time": 4.0,
+  "case": "mapf_rhcr_hungarian",
+  "completed": 124,
+  "max_wait": 14,
+  "steps": 120,
+  "throughput": 1.0333
+}

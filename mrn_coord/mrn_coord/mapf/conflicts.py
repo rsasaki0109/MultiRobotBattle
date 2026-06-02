@@ -42,17 +42,24 @@ def cell_at(path: list[Cell], t: int) -> Cell:
     return path[-1]
 
 
-def detect_first_conflict(paths: dict):
+def detect_first_conflict(paths: dict, *, window: int | None = None):
     """Return the earliest conflict between any pair of paths, or ``None``.
 
     Scans time forward and, within a timestep, all agent pairs; returns a
     :class:`VertexConflict` or :class:`EdgeConflict` for the first collision
     found. Determinism comes from the insertion order of ``paths``.
+
+    ``window`` bounds the resolution horizon: when given, only conflicts at
+    times ``t <= window`` are reported and anything beyond is ignored. This is
+    what Rolling-Horizon Collision Resolution (RHCR) needs — resolve collisions
+    inside the lookahead window, leave the rest for the next replan.
     """
     agents = list(paths)
     if len(agents) < 2:
         return None
     horizon = max(len(p) for p in paths.values())
+    if window is not None:
+        horizon = min(horizon, window + 1)
 
     for t in range(horizon):
         # vertex conflicts at time t

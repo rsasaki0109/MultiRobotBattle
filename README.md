@@ -49,11 +49,12 @@ unit-tested in CI, with thin ROS/CLI wiring on top.
   (`scripts/certify_shield.py`).
 - **Coordination** (`mrn_coord`) — multi-agent path finding (optimal
   Conflict-Based Search, **bounded-suboptimal ECBS**, **complete satisficing
-  LaCAM**, and **anytime MAPF-LNS** that scale further, prioritized planning,
-  all over a **space-time A\*** or drop-in **SIPP** safe-interval low level,
-  plus **lifelong / online MAPF** stepped by
-  **PIBT** with **auction / Hungarian** task allocation for warehouse-style
-  endless-task throughput), **ORCA** reciprocal
+  LaCAM**, and **anytime MAPF-LNS** that scale further, prioritized planning and
+  **Priority-Based Search** that reorders to break head-on deadlocks, all over a
+  **space-time A\*** or drop-in **SIPP** safe-interval low level,
+  plus **lifelong / online MAPF** — stepped by **PIBT** or planned on a
+  **rolling horizon (RHCR)** — with **auction / Hungarian** task allocation for
+  warehouse-style endless-task throughput), **ORCA** reciprocal
   local collision avoidance, decentralized formation control, cooperative
   coverage (frontier + greedy/Hungarian allocation), and swarm flocking (Boids:
   separation / alignment / cohesion + obstacle avoidance + migration + predator

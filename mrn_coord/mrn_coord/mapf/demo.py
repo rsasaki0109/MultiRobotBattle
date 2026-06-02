@@ -14,6 +14,7 @@ from .ecbs import ecbs
 from .grid import GridWorld
 from .lacam import lacam
 from .lns import mapf_lns
+from .pbs import pbs
 from .prioritized import prioritized_planning
 from .solution import pad_paths, render_ascii
 
@@ -56,7 +57,7 @@ def _print_solution(title, grid, agents, solver_name, solution):
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--solver", choices=["cbs", "ecbs", "lacam", "lns", "prioritized"],
+        "--solver", choices=["cbs", "ecbs", "lacam", "lns", "pbs", "prioritized"],
         default="cbs", help="high-level solver to run",
     )
     parser.add_argument(
@@ -69,6 +70,7 @@ def main() -> None:
         "ecbs": lambda grid, agents: ecbs(grid, agents, w=args.weight),
         "lacam": lacam,
         "lns": lambda grid, agents: mapf_lns(grid, agents, iterations=100),
+        "pbs": pbs,
         "prioritized": prioritized_planning,
     }
     solve = solvers[args.solver]

@@ -121,6 +121,22 @@ def _run_lifelong(agents: int = 6, steps: int = 120, allocator: str = "stream",
     return out
 
 
+def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
+              rows: int = 2, cols: int = 3, window: int = 8,
+              replan_period: int = 4, solver: str = "pbs",
+              case: str = "mapf_rhcr") -> dict:
+    from mrn_coord.lifelong import TaskStream, make_warehouse, run_rhcr
+
+    grid, endpoints = make_warehouse(rows=rows, cols=cols)
+    starts = {f"r{i}": endpoints[i] for i in range(min(agents, len(endpoints)))}
+    res = run_rhcr(grid, starts, TaskStream(list(endpoints)), max_steps=steps,
+                   window=window, replan_period=replan_period, solver=solver,
+                   allocator=allocator)
+    out = res.as_dict()
+    out["case"] = case
+    return out
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -175,6 +191,19 @@ SUITE = [
     ("mapf_fleet_auction",
      lambda: _run_lifelong(agents=40, steps=60, rows=4, cols=6,
                            allocator="auction", case="mapf_fleet_auction")),
+    # RHCR (Rolling-Horizon Collision Resolution, Li et al. 2021): lifelong MAPF
+    # by windowed *planning* (commit h steps, resolve conflicts w steps ahead)
+    # instead of one-step PIBT. Pins the PBS and PP windowed solvers on the small
+    # warehouse, plus the framework at fleet scale (where the planning solver
+    # yields to a PIBT rollout in the cramped aisles — see docs/coordination.md).
+    ("mapf_rhcr", lambda: _run_rhcr(case="mapf_rhcr")),
+    ("mapf_rhcr_pp", lambda: _run_rhcr(solver="pp", case="mapf_rhcr_pp")),
+    ("mapf_rhcr_hungarian",
+     lambda: _run_rhcr(allocator="hungarian", case="mapf_rhcr_hungarian")),
+    ("mapf_rhcr_fleet",
+     lambda: _run_rhcr(agents=40, steps=60, rows=4, cols=6, window=10,
+                       replan_period=2, solver="pibt", allocator="hungarian",
+                       case="mapf_rhcr_fleet")),
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),

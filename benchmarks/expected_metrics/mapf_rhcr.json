@@ -1,0 +1,9 @@
+{
+  "agents": 6,
+  "avg_service_time": 6.404,
+  "case": "mapf_rhcr",
+  "completed": 89,
+  "max_wait": 13,
+  "steps": 120,
+  "throughput": 0.7417
+}

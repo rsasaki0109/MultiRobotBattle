@@ -17,12 +17,14 @@ which lifts throughput by sending the *nearest* free robot to each task.
 
 from .allocation import auction, hungarian
 from .lifelong import LifelongResult, TaskStream, make_warehouse, run_lifelong
+from .rhcr import run_rhcr
 
 __all__ = [
     "LifelongResult",
     "TaskStream",
     "make_warehouse",
     "run_lifelong",
+    "run_rhcr",
     "auction",
     "hungarian",
 ]

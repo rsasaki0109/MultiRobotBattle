@@ -36,6 +36,7 @@ jobs:
           ros2 run mrn_coord mrn_mapf_demo --solver ecbs
           ros2 run mrn_coord mrn_mapf_demo --solver lacam
           ros2 run mrn_coord mrn_mapf_demo --solver lns
+          ros2 run mrn_coord mrn_mapf_demo --solver pbs
           ros2 run mrn_coord mrn_mapf_bench --solver prioritized_sipp
           ros2 run mrn_coord mrn_mapf_bench --solver ecbs
           ros2 run mrn_coord mrn_mapf_bench --solver lacam
@@ -45,6 +46,9 @@ jobs:
           ros2 run mrn_coord mrn_coverage_demo --method greedy
           ros2 run mrn_coord mrn_lifelong_demo --frames 0
           ros2 run mrn_coord mrn_lifelong_demo --frames 0 --allocator auction
+          # lifelong on a rolling horizon (RHCR) with the PBS / PP windowed solvers
+          ros2 run mrn_coord mrn_lifelong_demo --frames 0 --engine rhcr
+          ros2 run mrn_coord mrn_lifelong_demo --frames 0 --engine rhcr --solver pp --allocator hungarian
           # the local controllers as drop-in benchmark policies
           ros2 run mrn_sim mrn_sim_bench around_obstacle --policy mpc --max-steps 200
           ros2 run mrn_sim mrn_sim_bench doorway --policy mpc_cbf --max-steps 200

@@ -25,6 +25,9 @@ The pieces compose bottom-up:
   optimum at scale.
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
+- :mod:`pbs` — Priority-Based Search: searches over priority *orderings* (PP at
+  the low level), resolving the head-on deadlocks fixed-order PP cannot; the
+  windowed solver behind lifelong RHCR.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -32,6 +35,7 @@ from .cbs import cbs
 from .ecbs import ecbs
 from .lacam import lacam
 from .lns import mapf_lns
+from .pbs import pbs, pbs_paths
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -59,6 +63,8 @@ __all__ = [
     "ecbs",
     "lacam",
     "mapf_lns",
+    "pbs",
+    "pbs_paths",
     "prioritized_planning",
     "pure_pursuit",
     "Solution",

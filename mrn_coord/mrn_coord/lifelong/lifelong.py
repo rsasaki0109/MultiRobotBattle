@@ -80,6 +80,69 @@ def _bfs_dist(grid: GridWorld, goal: Cell) -> dict:
     return dist
 
 
+def make_assigner(grid, ids, stream, allocator, open_tasks, dist_to,
+                  goal, has_task, assigned_at, elapsed):
+    """Build the ``assign(free, step, pos)`` closure shared by both lifelong engines.
+
+    Mutates the supplied ``goal`` / ``has_task`` / ``assigned_at`` / ``elapsed``
+    dicts in place when it hands ``free`` agents tasks at timestep ``step`` (with
+    the team's current positions ``pos``). Factored out of :func:`run_lifelong`
+    so the PIBT engine and the RHCR engine (:mod:`mrn_coord.lifelong.rhcr`) match
+    each other task-for-task.
+
+    - ``"stream"`` — round-robin: deal out the next task in the stream's cycle,
+      geometry-blind.
+    - ``"auction"`` / ``"hungarian"`` — keep a pool of ``open_tasks`` open tasks
+      (default: one per agent) and match free robots to them by obstacle-aware
+      travel distance (:mod:`mrn_coord.lifelong.allocation`).
+    """
+    if allocator == "stream":
+        def assign(free, step, pos):
+            for a in free:
+                goal[a] = stream.next_goal(avoid=pos[a])
+                has_task[a] = True
+                assigned_at[a] = step
+                elapsed[a] = 0
+        return assign
+
+    from .allocation import ALLOCATORS
+
+    if allocator not in ALLOCATORS:
+        raise ValueError(f"unknown allocator: {allocator!r}")
+    allocate = ALLOCATORS[allocator]
+    pool_size = open_tasks if open_tasks is not None else len(ids)
+    pending: list = []
+
+    def refill():
+        while len(pending) < pool_size:
+            pending.append(stream.next_goal())
+
+    def assign(free, step, pos):
+        refill()
+        rows = list(free)
+        if not rows or not pending:
+            return
+        big = grid.width * grid.height + 1
+        cost = [[(dist_to(t).get(pos[a], big) if t != pos[a] else big)
+                 for t in pending] for a in rows]
+        matched = allocate(cost)
+        for ri in sorted(matched):
+            ci = matched[ri]
+            if cost[ri][ci] >= big:
+                continue                       # unreachable / would self-assign
+            a = rows[ri]
+            goal[a] = pending[ci]
+            has_task[a] = True
+            assigned_at[a] = step
+            elapsed[a] = 0
+        for ci in sorted({matched[ri] for ri in matched
+                          if cost[ri][matched[ri]] < big}, reverse=True):
+            pending.pop(ci)
+        refill()
+
+    return assign
+
+
 class _Pibt:
     """One PIBT timestep over the current configuration."""
 
@@ -175,53 +238,13 @@ def run_lifelong(
     history: list = []
     goal_history: list = []
 
-    # --- task assignment: round-robin stream, or cost-aware pool allocator ---
-    if allocator == "stream":
-        def assign(free, step):
-            for a in free:
-                goal[a] = stream.next_goal(avoid=pos[a])
-                has_task[a] = True
-                assigned_at[a] = step
-                elapsed[a] = 0
-    else:
-        from .allocation import ALLOCATORS
-
-        if allocator not in ALLOCATORS:
-            raise ValueError(f"unknown allocator: {allocator!r}")
-        allocate = ALLOCATORS[allocator]
-        pool_size = open_tasks if open_tasks is not None else len(ids)
-        pending: list = []
-
-        def refill():
-            while len(pending) < pool_size:
-                pending.append(stream.next_goal())
-
-        def assign(free, step):
-            refill()
-            rows = list(free)
-            if not rows or not pending:
-                return
-            big = grid.width * grid.height + 1
-            cost = [[(dist_to(t).get(pos[a], big) if t != pos[a] else big)
-                     for t in pending] for a in rows]
-            matched = allocate(cost)
-            for ri in sorted(matched):
-                ci = matched[ri]
-                if cost[ri][ci] >= big:
-                    continue                       # unreachable / would self-assign
-                a = rows[ri]
-                goal[a] = pending[ci]
-                has_task[a] = True
-                assigned_at[a] = step
-                elapsed[a] = 0
-            for ci in sorted({matched[ri] for ri in matched
-                              if cost[ri][matched[ri]] < big}, reverse=True):
-                pending.pop(ci)
-            refill()
+    # task assignment: round-robin stream, or cost-aware pool allocator
+    assign = make_assigner(grid, ids, stream, allocator, open_tasks, dist_to,
+                           goal, has_task, assigned_at, elapsed)
 
     for a in ids:
         goal[a] = pos[a]                  # default: hold position until tasked
-    assign(ids, 0)
+    assign(ids, 0, pos)
 
     for step in range(max_steps):
         # 1. completions + reassignment.
@@ -233,7 +256,7 @@ def run_lifelong(
             has_task[a] = False
             goal[a] = pos[a]
         if done:
-            assign(done, step)
+            assign(done, step, pos)
 
         if keep_history:
             history.append(dict(pos))
