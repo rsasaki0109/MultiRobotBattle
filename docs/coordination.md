@@ -228,6 +228,7 @@ ros2 run mrn_coord mrn_mapf_bench my.map my.scen -n 8   # first 8 agents
 ros2 run mrn_coord mrn_mapf_bench --solver ecbs -w 1.3  # bounded-suboptimal
 ros2 run mrn_coord mrn_mapf_bench --solver lacam        # complete, satisficing
 ros2 run mrn_coord mrn_mapf_bench --solver lns          # anytime, destroy & repair
+ros2 run mrn_coord mrn_mapf_bench --solver pbs          # priority-ordering search
 ros2 run mrn_coord mrn_mapf_bench --solver prioritized
 ```
 
@@ -235,7 +236,9 @@ CBS is optimal but scales to small teams; for many agents use **ECBS**
 (`--solver ecbs`, bounded-suboptimal — much further reach for a small cost
 premium), **LaCAM** (`--solver lacam`, complete and satisficing — solves large
 teams when the search trees blow up), **MAPF-LNS** (`--solver lns`, anytime —
-polishes a feasible solution toward the optimum), or the prioritized solver
+polishes a feasible solution toward the optimum), **PBS** (`--solver pbs`,
+priority-ordering search — suboptimal, but reorders past the head-on deadlocks
+fixed-order prioritized planning hits; see RHCR below), or the prioritized solver
 (fast, incomplete).
 
 ### Lifelong / online MAPF (`lifelong/`)

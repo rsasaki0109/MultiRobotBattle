@@ -170,6 +170,8 @@ SUITE = [
     ("mapf_example_lacam", lambda: _run_mapf_example("lacam")),
     # anytime large-neighborhood search (destroy & repair)
     ("mapf_example_lns", lambda: _run_mapf_example("lns")),
+    # priority-ordering search (PBS): suboptimal but reorders past deadlocks
+    ("mapf_example_pbs", lambda: _run_mapf_example("pbs")),
     ("mapf_example_prioritized", lambda: _run_mapf_example("prioritized")),
     # same prioritized planner, safe-interval (SIPP) low level
     ("mapf_example_prioritized_sipp", lambda: _run_mapf_example("prioritized_sipp")),
