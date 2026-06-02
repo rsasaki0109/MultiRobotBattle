@@ -402,12 +402,23 @@ interesting object for *where* it loses:
   PP only on the small warehouse (`mapf_rhcr`, `mapf_rhcr_pp`,
   `mapf_rhcr_hungarian`), and exercises the *framework* at fleet scale with the
   fast PIBT-rollout window (`mapf_rhcr_fleet`).
+- **…but lookahead wins once the aisles open up — and that is the paper's
+  regime.** Widen the warehouse aisles (`aisle=2`) and the congestion that lets
+  a greedy stepper win relaxes: with the same immediate reassignment (`h = 1`, to
+  isolate the lookahead from the commit-horizon penalty), windowed PBS clears
+  **strictly more** tasks than one-step PIBT — **327 vs 310** on the gated
+  `mapf_rhcr_open` case — and PBS is fast again (no congestion explosion: ~1 s vs
+  the tight map's tens of seconds). A `test_rhcr` invariant pins this crossover
+  (`RHCR-PBS > PIBT` on the open map), so the planning advantage cannot silently
+  regress.
 
-The honest takeaway: RHCR's value is bounded, predictable planning time and
-lookahead conflict resolution — not peak throughput on a tiny, congested map,
-where immediate-reassignment PIBT is hard to beat. The benchmark records exactly
-where our reproduction does and doesn't win, which is the point of a guarded
-contract.
+The honest takeaway is a **crossover**, and the gate records both sides of it: in
+a corridor with no room to be clever, greedy immediate-reassignment PIBT wins; as
+the map opens up, planning a few steps ahead (RHCR + PBS) pulls ahead — which is
+exactly the regime RHCR was designed for, so reproducing the *win*, not just the
+mechanism, is what tells us the implementation is faithful. RHCR's standing value
+is also bounded, predictable planning time (the `h` knob), independent of which
+side of the crossover a given map sits on.
 
 ```bash
 ros2 run mrn_coord mrn_lifelong_demo --engine rhcr                       # PBS window, default w=8/h=4

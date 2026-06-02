@@ -122,12 +122,12 @@ def _run_lifelong(agents: int = 6, steps: int = 120, allocator: str = "stream",
 
 
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
-              rows: int = 2, cols: int = 3, window: int = 8,
+              rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
               case: str = "mapf_rhcr") -> dict:
     from mrn_coord.lifelong import TaskStream, make_warehouse, run_rhcr
 
-    grid, endpoints = make_warehouse(rows=rows, cols=cols)
+    grid, endpoints = make_warehouse(rows=rows, cols=cols, aisle=aisle)
     starts = {f"r{i}": endpoints[i] for i in range(min(agents, len(endpoints)))}
     res = run_rhcr(grid, starts, TaskStream(list(endpoints)), max_steps=steps,
                    window=window, replan_period=replan_period, solver=solver,
@@ -204,6 +204,15 @@ SUITE = [
      lambda: _run_rhcr(agents=40, steps=60, rows=4, cols=6, window=10,
                        replan_period=2, solver="pibt", allocator="hungarian",
                        case="mapf_rhcr_fleet")),
+    # the other side of the crossover: widen the aisles (aisle=2) and the
+    # congestion that lets greedy PIBT win on the cramped map relaxes, so RHCR's
+    # windowed PBS lookahead clears *more* tasks than PIBT (327 vs 310 here, a
+    # contract gated alongside in test_rhcr). This is the paper's regime — RHCR
+    # winning on a reasonable map — and where PBS is also fast again.
+    ("mapf_rhcr_open",
+     lambda: _run_rhcr(agents=16, steps=80, rows=3, cols=4, aisle=2, window=10,
+                       replan_period=1, solver="pbs", allocator="hungarian",
+                       case="mapf_rhcr_open")),
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),

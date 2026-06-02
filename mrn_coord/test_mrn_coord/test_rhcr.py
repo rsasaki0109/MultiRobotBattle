@@ -91,6 +91,25 @@ class TestRHCR(unittest.TestCase):
         self.assertGreaterEqual(served(1), served(4))
         self.assertGreaterEqual(served(4), served(8))
 
+    def test_lookahead_wins_when_aisles_open_up(self):
+        # The crossover that makes RHCR worth having. On the cramped 1-wide
+        # warehouse greedy PIBT wins (lookahead can't help in a corridor with no
+        # room to be clever). Widen the aisles (aisle=2) and the congestion
+        # relaxes: windowed PBS, planning a few steps ahead, clears strictly more
+        # tasks than one-step PIBT with the same immediate reassignment (h=1
+        # isolates the lookahead from the commit-horizon penalty). Guards that the
+        # planning advantage is real and does not silently regress.
+        grid, endpoints = make_warehouse(rows=3, cols=4, aisle=2)
+        starts = {f"r{i}": endpoints[i] for i in range(16)}
+        common = dict(max_steps=80, allocator="hungarian")
+
+        pibt = run_lifelong(grid, dict(starts), TaskStream(list(endpoints)),
+                            **common).completed
+        rhcr = run_rhcr(grid, dict(starts), TaskStream(list(endpoints)),
+                        window=10, replan_period=1, solver="pbs", **common).completed
+        self.assertGreater(rhcr, pibt,
+                           "RHCR-PBS lookahead lost its edge on the open map")
+
     def test_rejects_bad_horizon(self):
         grid, endpoints = make_warehouse(rows=2, cols=3)
         starts = {"r0": endpoints[0]}
