@@ -306,10 +306,15 @@ theorem relies on a *random* tie-break, which `pypibt` has (`rng.shuffle`) and o
   livelock escape: when the team's summed distance-to-goal stalls, it bumps a
   per-step *salt* that deterministically scrambles equal-distance candidate ties
   until the symmetry breaks — the random tie-break's effect, reproduced with zero
-  randomness (a pure-arithmetic hash, no `PYTHONHASHSEED` dependence). On a random
-  open-grid battery convergence climbs from **~0.63 to ~0.99** while every step
-  stays collision-free, gated by the `pibt_escape_convergence` benchmark case
-  (60/60 converge and collision-free) and `test_pibt_escape`. The escape is
+  randomness (a pure-arithmetic hash, no `PYTHONHASHSEED` dependence). The stall is
+  measured against the *running-minimum* distance, not the previous step: a
+  livelock oscillates the summed distance up and down, so a step-to-step test
+  resets on every transient dip and the escape silently disengages — that subtlety
+  is exactly what stranded the last ~1%. Beating the best-ever is the honest
+  progress signal, and with it open-grid convergence climbs from **~0.63 to 1.0**
+  while every step stays collision-free, gated by the `pibt_escape_convergence`
+  benchmark case (600/600 converge and collision-free; bare PIBT clears 356/600)
+  and `test_pibt_escape`. The escape is
   `salt=0`-off in the lifelong/RHCR engines, so it changes nothing there — every
   throughput baseline is untouched — it is opt-in for the one-shot solver where
   completeness, not bit-identical demos, is what matters.

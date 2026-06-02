@@ -126,8 +126,13 @@ def _run_pibt_convergence() -> dict:
     # livelocks on a chunk of random instances (the price of a reproducible
     # tie-break vs the completeness theorem's random one). A stall-triggered,
     # per-step scramble of equal-distance candidate ties breaks the symmetry with
-    # zero randomness. The contract: on a fixed open-grid battery every instance
-    # both converges *and* stays collision-free (bare PIBT clears only ~45/60).
+    # zero randomness. The contract pins the *gap*: on a fixed 600-instance
+    # open-grid battery the escape converges on *every* instance and stays
+    # collision-free throughout, while bare deterministic PIBT livelocks on a
+    # measurable slice (``bare_converged < instances``). Measuring the stall
+    # against the running-minimum distance (not the previous step) is what closes
+    # the last ~1% the step-to-step detector left on the table — an oscillation
+    # can no longer fool the escape into disengaging.
     import random
 
     from mrn_coord.lifelong import pibt_solve
@@ -143,10 +148,10 @@ def _run_pibt_convergence() -> dict:
                         return False
         return True
 
-    converged = collision_free = instances = 0
+    converged = collision_free = bare_converged = instances = 0
     for w, h, n in ((8, 8, 16), (10, 10, 20), (12, 12, 30)):
         grid = GridWorld(w, h)
-        for seed in range(20):
+        for seed in range(200):
             rng = random.Random(seed)
             cells = [(x, y) for x in range(w) for y in range(h)]
             starts, goals = rng.sample(cells, n), rng.sample(cells, n)
@@ -154,8 +159,10 @@ def _run_pibt_convergence() -> dict:
             instances += 1
             converged += int(ok)
             collision_free += int(_collision_free(cfgs))
+            bare_converged += int(pibt_solve(grid, starts, goals, escape=False)[1])
     return {"case": "pibt_escape_convergence", "instances": instances,
-            "converged": converged, "collision_free": collision_free}
+            "converged": converged, "collision_free": collision_free,
+            "bare_converged": bare_converged}
 
 
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",

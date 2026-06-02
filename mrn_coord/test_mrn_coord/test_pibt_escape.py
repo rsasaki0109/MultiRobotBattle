@@ -49,6 +49,20 @@ class TestPibtEscape(unittest.TestCase):
         self.assertLess(base, total, "bare PIBT unexpectedly converged everywhere")
         self.assertGreater(esc - base, 5, "escape barely helped")
 
+    def test_converges_on_known_limit_cycle_seeds(self):
+        # These exact instances livelock under a step-to-step stall detector: the
+        # team's summed distance oscillates, so a previous-step comparison resets
+        # the stall counter on every transient dip and the escape never engages
+        # (or disengages mid-recovery). Measuring the stall against the running
+        # *minimum* distance is immune to the oscillation and clears all of them.
+        for w, h, n, seed in ((8, 8, 16, 27), (8, 8, 16, 31),
+                              (10, 10, 20, 71), (12, 12, 30, 101)):
+            grid = GridWorld(w, h)
+            starts, goals = _instance(w, h, n, seed)
+            cfgs, converged = pibt_solve(grid, starts, goals, escape=True)
+            self.assertTrue(converged, f"limit cycle unbroken at {w}x{h} seed={seed}")
+            self.assertTrue(_collision_free(cfgs), f"{w}x{h} seed={seed}")
+
     def test_always_collision_free(self):
         # Whatever the tie-break, PIBT yields a collision-free configuration every
         # step — the load-bearing guarantee must survive the perturbation.
