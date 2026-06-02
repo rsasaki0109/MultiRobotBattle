@@ -214,7 +214,12 @@ CBS's reach. Two destroy heuristics are mixed at random each round: a **random**
 agent set, and a **worst** set built from the most-delayed agent plus the agents
 whose paths cross it. Repair is collision-free by construction, so every
 accepted solution stays valid; `benchmarks/comparison.md` shows it closing most
-of the gap to the CBS optimum. Run `mrn_mapf_demo --solver lns` or
+of the gap to the CBS optimum. The "on teams far beyond CBS's reach" half of that
+claim is now guarded too: the `lns_scaling_improvement` gate runs LNS on a
+16–20-agent open-grid battery and pins the aggregate destroy-repair gain — total
+sum-of-costs falling from ~1.23× to ~1.14× the lower bound (the unit tests only
+reach 5×5 / 4 agents, where CBS itself is cheap). This is the cost optimizer at
+scale, where LaCAM\* (above) stops improving. Run `mrn_mapf_demo --solver lns` or
 `mrn_mapf_bench --solver lns`.
 
 ### High level: prioritized planning (`prioritized.py`)

@@ -258,6 +258,58 @@ def _run_lacam_optimality() -> dict:
             "optimal": optimal, "below_cbs": below}
 
 
+def _run_lns_scaling_improvement() -> dict:
+    # LNS's selling point is anytime cost improvement "on team sizes far beyond
+    # CBS's reach" -- but the only other LNS gate pins a single 3-agent example's
+    # final cost, never the *improvement* and never at scale. (The unit tests cover
+    # <=5x5 / <=5 agents only.) Same gap-pattern LaCAM's scaling claim had: a true
+    # claim with no guard. This battery is the regime the claim lives in -- 16-20
+    # agents on open grids -- and pins the aggregate destroy-repair gain: total SOC
+    # must fall from `sum_initial` to `sum_final` (here ~1.23x -> ~1.14x the
+    # lower bound), improving most instances. If repair silently stops accepting or
+    # the worst-neighborhood heuristic degrades, sum_final rises and the gate trips.
+    import random
+    from collections import deque
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.lns import mapf_lns
+
+    def _lb(grid, starts, goals, n):
+        total = 0
+        for i in range(n):
+            dist = {goals[i]: 0}
+            q = deque([goals[i]])
+            while q:
+                c = q.popleft()
+                for nb in grid.neighbors(c):
+                    if nb not in dist:
+                        dist[nb] = dist[c] + 1
+                        q.append(nb)
+            total += dist.get(starts[i], 0)
+        return total
+
+    instances = improved = sum_initial = sum_final = sum_lower_bound = 0
+    for w, h, n in ((8, 8, 16), (10, 10, 20)):
+        grid = GridWorld(w, h)
+        cells = [(x, y) for x in range(w) for y in range(h)]
+        for seed in range(8):
+            rng = random.Random(seed)
+            starts, goals = rng.sample(cells, n), rng.sample(cells, n)
+            agents = {i: (starts[i], goals[i]) for i in range(n)}
+            stats: dict = {}
+            sol = mapf_lns(grid, agents, iterations=100, seed=0, stats=stats)
+            if sol is None:
+                continue
+            instances += 1
+            improved += int(stats["final_cost"] < stats["initial_cost"])
+            sum_initial += stats["initial_cost"]
+            sum_final += stats["final_cost"]
+            sum_lower_bound += _lb(grid, starts, goals, n)
+    return {"case": "lns_scaling_improvement", "instances": instances,
+            "improved": improved, "sum_initial": sum_initial,
+            "sum_final": sum_final, "sum_lower_bound": sum_lower_bound}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -358,6 +410,8 @@ SUITE = [
     ("lacam_scaling_convergence", _run_lacam_convergence),
     # LaCAM* anytime mode reaches the CBS optimum on small instances
     ("lacam_optimality", _run_lacam_optimality),
+    # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
+    ("lns_scaling_improvement", _run_lns_scaling_improvement),
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),

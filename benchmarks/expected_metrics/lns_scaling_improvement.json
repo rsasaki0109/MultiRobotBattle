@@ -1,0 +1,8 @@
+{
+  "case": "lns_scaling_improvement",
+  "improved": 11,
+  "instances": 16,
+  "sum_final": 2062,
+  "sum_initial": 2230,
+  "sum_lower_bound": 1807
+}
