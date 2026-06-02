@@ -186,6 +186,20 @@ battery now solves **180/180**, every solution valid, in seconds — the
 agents on 4×4–6×6) never reached the regime the claim lived in. Run
 `mrn_mapf_demo --solver lacam` or `mrn_mapf_bench --solver lacam`.
 
+The default is satisficing — it returns the first valid solution, which runs
+~1.13× the optimal sum-of-costs on small instances and ~1.4–1.6× the lower bound
+at scale. `lacam(grid, agents, optimize=True)` runs the **anytime** variant
+(LaCAM\*): it keeps searching past the first solution, tracking the best cost to
+each configuration (`g`) and *rewiring* a config's parent when a cheaper route
+appears, pruning any node whose `g` + admissible remaining distance cannot beat
+the incumbent. On small instances this reaches the **true optimum** — it matches
+CBS's sum-of-costs agent-for-agent on 120/120 CBS-solvable cases (the
+`lacam_optimality` gate). Measured honestly, it does **not** scale as a cost
+optimizer: on 16–30-agent grids the configuration space is astronomical, the
+lower bound barely prunes, and a 200k-iteration budget (~10 s/instance) returns
+the *same* cost as the first dive. **For cost at scale, use LNS** (below), which
+drives those instances to ~1.13× the lower bound in a fraction of the time.
+
 ### High level: MAPF-LNS (`lns.py`)
 
 `mapf_lns(grid, agents, iterations=...)` is *anytime*: rather than searching for

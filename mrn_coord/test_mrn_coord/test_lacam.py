@@ -90,6 +90,75 @@ class TestLacamCompleteness(unittest.TestCase):
         b = lacam(grid, agents)
         self.assertEqual(a.paths, b.paths)
 
+
+def _soc(paths) -> int:
+    # standard sum-of-costs: per-agent arrival time, ignoring trailing rest at goal
+    # (LaCAM pads every path to the makespan, which `sum_of_costs` would over-count).
+    total = 0
+    for p in paths.values():
+        goal, arrival = p[-1], 0
+        for t, c in enumerate(p):
+            if c != goal:
+                arrival = t + 1
+        total += arrival
+    return total
+
+
+class TestLacamOptimize(unittest.TestCase):
+    def test_matches_cbs_optimum_on_small_instances(self):
+        # The satisficing default is cost-blind; `optimize=True` runs the anytime
+        # LaCAM* (g-tracking + parent rewiring + lower-bound pruning) and, given a
+        # generous budget, must reach the *optimum* — checked agent-for-agent
+        # against CBS, which minimizes sum-of-costs. (It can never beat CBS; a
+        # cheaper-than-CBS result would mean the cost accounting is wrong.)
+        rng = random.Random(1)
+        checked = optimal = 0
+        for _ in range(120):
+            w = h = rng.randint(4, 6)
+            grid = GridWorld(w, h)
+            free = [(x, y) for x in range(w) for y in range(h)
+                    if grid.is_free((x, y))]
+            n = rng.randint(2, 4)
+            if len(free) < 2 * n:
+                continue
+            pts = rng.sample(free, 2 * n)
+            agents = {str(i): (pts[2 * i], pts[2 * i + 1]) for i in range(n)}
+            opt = cbs(grid, agents, max_expansions=20_000)
+            if opt is None:
+                continue
+            sol = lacam(grid, agents, optimize=True, max_iterations=200_000)
+            self.assertTrue(_valid(grid, agents, sol))
+            self.assertGreaterEqual(_soc(sol.paths), _soc(opt.paths),
+                                    msg=f"below the CBS optimum?! {agents}")
+            checked += 1
+            optimal += int(_soc(sol.paths) == _soc(opt.paths))
+        self.assertGreater(checked, 60)
+        self.assertEqual(optimal, checked,
+                         msg=f"LaCAM* missed the optimum on {checked - optimal} of {checked}")
+
+    def test_optimize_never_costs_more_than_satisficing(self):
+        # The anytime search keeps the best found, so it can only match or beat the
+        # first (satisficing) solution — never regress.
+        grid = GridWorld(8, 8)
+        cells = [(x, y) for x in range(8) for y in range(8)]
+        for seed in range(8):
+            rng = random.Random(seed)
+            starts, goals = rng.sample(cells, 12), rng.sample(cells, 12)
+            agents = {i: (starts[i], goals[i]) for i in range(12)}
+            sat = lacam(grid, agents)
+            opt = lacam(grid, agents, optimize=True, max_iterations=50_000)
+            self.assertTrue(_valid(grid, agents, opt))
+            self.assertLessEqual(_soc(opt.paths), _soc(sat.paths),
+                                 msg=f"optimize regressed at seed={seed}")
+
+    def test_optimize_is_deterministic(self):
+        grid = GridWorld(6, 6, blocked={(3, 3), (2, 3)})
+        agents = {"a": ((0, 0), (5, 5)), "b": ((5, 0), (0, 5)),
+                  "c": ((0, 5), (5, 0))}
+        a = lacam(grid, agents, optimize=True, max_iterations=100_000)
+        b = lacam(grid, agents, optimize=True, max_iterations=100_000)
+        self.assertEqual(a.paths, b.paths)
+
     def test_scales_past_the_toy_regime(self):
         # The completeness test above only ever stresses 2-4 agents on 4x4-6x6
         # grids — a regime where the greedy dive almost always reaches the goal, so

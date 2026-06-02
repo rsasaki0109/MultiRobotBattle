@@ -204,6 +204,60 @@ def _run_lacam_convergence() -> dict:
             "solved": solved, "valid": valid}
 
 
+def _run_lacam_optimality() -> dict:
+    # LaCAM's anytime mode (optimize=True / LaCAM*) keeps searching past the first
+    # solution -- g-tracking + parent rewiring + lower-bound pruning -- and on small
+    # instances reaches the true optimum. The contract checks it agent-for-agent
+    # against CBS (which minimizes sum-of-costs): on this fixed battery it must match
+    # the optimum on *every* CBS-solvable instance, and never undercut it (a
+    # cheaper-than-CBS result would mean the cost accounting is broken). Pins the
+    # win; the docstring records the boundary (it does not scale -- LNS owns cost at
+    # scale), and `test_optimize_never_costs_more_than_satisficing` guards the rest.
+    import random
+
+    from mrn_coord.mapf import GridWorld, cbs, lacam
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.solution import pad_paths
+
+    def _soc(paths) -> int:
+        total = 0
+        for p in paths.values():
+            goal, arrival = p[-1], 0
+            for t, c in enumerate(p):
+                if c != goal:
+                    arrival = t + 1
+            total += arrival
+        return total
+
+    def _valid(grid, agents, sol) -> bool:
+        if sol is None or detect_first_conflict(pad_paths(sol.paths)) is not None:
+            return False
+        return all(sol.paths[a][0] == agents[a][0] and sol.paths[a][-1] == agents[a][1]
+                   for a in agents)
+
+    rng = random.Random(1)
+    checked = optimal = valid = below = 0
+    for _ in range(120):
+        w = h = rng.randint(4, 6)
+        grid = GridWorld(w, h)
+        free = [(x, y) for x in range(w) for y in range(h) if grid.is_free((x, y))]
+        n = rng.randint(2, 4)
+        if len(free) < 2 * n:
+            continue
+        pts = rng.sample(free, 2 * n)
+        agents = {str(i): (pts[2 * i], pts[2 * i + 1]) for i in range(n)}
+        opt = cbs(grid, agents, max_expansions=20_000)
+        if opt is None:
+            continue
+        sol = lacam(grid, agents, optimize=True, max_iterations=200_000)
+        checked += 1
+        valid += int(_valid(grid, agents, sol))
+        optimal += int(_soc(sol.paths) == _soc(opt.paths))
+        below += int(_soc(sol.paths) < _soc(opt.paths))
+    return {"case": "lacam_optimality", "checked": checked, "valid": valid,
+            "optimal": optimal, "below_cbs": below}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -302,6 +356,8 @@ SUITE = [
     ("pibt_escape_convergence", _run_pibt_convergence),
     # strong-PIBT spine makes LaCAM's documented scaling actually deliver
     ("lacam_scaling_convergence", _run_lacam_convergence),
+    # LaCAM* anytime mode reaches the CBS optimum on small instances
+    ("lacam_optimality", _run_lacam_optimality),
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),
