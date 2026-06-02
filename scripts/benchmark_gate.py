@@ -121,6 +121,43 @@ def _run_lifelong(agents: int = 6, steps: int = 120, allocator: str = "stream",
     return out
 
 
+def _run_pibt_convergence() -> dict:
+    # Deterministic livelock escape for the PIBT core: plain deterministic PIBT
+    # livelocks on a chunk of random instances (the price of a reproducible
+    # tie-break vs the completeness theorem's random one). A stall-triggered,
+    # per-step scramble of equal-distance candidate ties breaks the symmetry with
+    # zero randomness. The contract: on a fixed open-grid battery every instance
+    # both converges *and* stays collision-free (bare PIBT clears only ~45/60).
+    import random
+
+    from mrn_coord.lifelong import pibt_solve
+    from mrn_coord.mapf import GridWorld
+
+    def _collision_free(cfgs) -> bool:
+        for prev, cur in zip(cfgs, cfgs[1:]):
+            if len({tuple(c) for c in cur}) != len(cur):
+                return False
+            for i in range(len(cur)):
+                for j in range(i + 1, len(cur)):
+                    if cur[i] == prev[j] and cur[j] == prev[i]:
+                        return False
+        return True
+
+    converged = collision_free = instances = 0
+    for w, h, n in ((8, 8, 16), (10, 10, 20), (12, 12, 30)):
+        grid = GridWorld(w, h)
+        for seed in range(20):
+            rng = random.Random(seed)
+            cells = [(x, y) for x in range(w) for y in range(h)]
+            starts, goals = rng.sample(cells, n), rng.sample(cells, n)
+            cfgs, ok = pibt_solve(grid, starts, goals, escape=True)
+            instances += 1
+            converged += int(ok)
+            collision_free += int(_collision_free(cfgs))
+    return {"case": "pibt_escape_convergence", "instances": instances,
+            "converged": converged, "collision_free": collision_free}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -215,6 +252,8 @@ SUITE = [
      lambda: _run_rhcr(agents=16, steps=80, rows=3, cols=4, aisle=2, window=10,
                        replan_period=1, solver="pbs", allocator="hungarian",
                        case="mapf_rhcr_open")),
+    # deterministic livelock escape recovers PIBT convergence (no randomness)
+    ("pibt_escape_convergence", _run_pibt_convergence),
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),

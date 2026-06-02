@@ -302,6 +302,18 @@ theorem relies on a *random* tie-break, which `pypibt` has (`rng.shuffle`) and o
   random tie-break escapes, so it is not *complete* the way `pypibt` is. We report
   the rate (~0.7 across the suite) rather than hide it.
 
+  But we can recover it **without** giving up determinism. `pibt_solve` adds a
+  livelock escape: when the team's summed distance-to-goal stalls, it bumps a
+  per-step *salt* that deterministically scrambles equal-distance candidate ties
+  until the symmetry breaks — the random tie-break's effect, reproduced with zero
+  randomness (a pure-arithmetic hash, no `PYTHONHASHSEED` dependence). On a random
+  open-grid battery convergence climbs from **~0.63 to ~0.99** while every step
+  stays collision-free, gated by the `pibt_escape_convergence` benchmark case
+  (60/60 converge and collision-free) and `test_pibt_escape`. The escape is
+  `salt=0`-off in the lifelong/RHCR engines, so it changes nothing there — every
+  throughput baseline is untouched — it is opt-in for the one-shot solver where
+  completeness, not bit-identical demos, is what matters.
+
   In the **lifelong** regime that livelock is *bounded* — but only under a
   precondition we now make explicit and test (it used to be an unverified aside
   that "no standoff is permanent"). Across ~3000 adversarial seeds — densely

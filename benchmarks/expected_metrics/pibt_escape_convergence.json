@@ -1,0 +1,6 @@
+{
+  "case": "pibt_escape_convergence",
+  "collision_free": 60,
+  "converged": 60,
+  "instances": 60
+}
