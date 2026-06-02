@@ -33,7 +33,7 @@ The pieces compose bottom-up:
 
 from .cbs import cbs
 from .ecbs import ecbs
-from .lacam import lacam
+from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
 from .pbs import pbs, pbs_paths
 from .conflicts import (
@@ -62,6 +62,7 @@ __all__ = [
     "cbs",
     "ecbs",
     "lacam",
+    "lacam_ltm",
     "mapf_lns",
     "pbs",
     "pbs_paths",

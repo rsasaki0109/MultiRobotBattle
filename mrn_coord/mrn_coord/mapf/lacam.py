@@ -34,6 +34,7 @@ construction); it is not cost-optimal. Pure and deterministic.
 
 from __future__ import annotations
 
+import heapq
 from collections import deque
 
 from .grid import Cell, GridWorld
@@ -117,7 +118,8 @@ def _pibt(grid, config, order, dist_to, forced, *, salt: int = 0):
 
 def lacam(grid: GridWorld, agents: dict, *,
           max_iterations: int = 1_000_000, stall_patience: int = 3,
-          optimize: bool = False):
+          optimize: bool = False, guide: dict | None = None,
+          history: list | None = None):
     """Solve a MAPF instance (satisficing, complete) by LaCAM.
 
     ``agents`` maps an agent id to a ``(start, goal)`` tuple. Returns a
@@ -143,6 +145,16 @@ def lacam(grid: GridWorld, agents: dict, *,
     scale use :func:`mapf_lns <mrn_coord.mapf.mapf_lns>` — local search drives those
     instances to ~1.13x the lower bound in a fraction of the time. The default
     (``optimize=False``) is unchanged: first solution, fast, at any team size.
+
+    ``guide`` (default ``None``) overrides the per-agent distance map that drives
+    PIBT's candidate ordering and the priority seed — :func:`lacam_ltm` passes
+    congestion-weighted distances here. The admissible heuristic used for
+    optimize pruning and the stall detector keeps using the *true* BFS distance,
+    so guidance steers the dive without breaking the cost bound. ``history``
+    (default ``None``), if a list, collects every committed agent move
+    ``(from, to)`` across PIBT executions — the raw signal :func:`lacam_ltm`
+    accumulates into its traffic map. With both ``None`` the search is
+    byte-for-byte unchanged.
     """
     ids = sorted(agents)
     starts = {a: agents[a][0] for a in ids}
@@ -154,6 +166,9 @@ def lacam(grid: GridWorld, agents: dict, *,
     for a in ids:
         if starts[a] not in dist_to[a]:
             return None                           # goal unreachable from start
+    # `guide_to` drives PIBT ordering/priority (LaCAM*+LTM passes weighted maps);
+    # `dist_to` stays the true BFS distance for the admissible h and stall.
+    guide_to = guide if guide is not None else dist_to
 
     init = tuple(starts[a] for a in ids)
     goal_config = tuple(goals[a] for a in ids)
@@ -182,7 +197,7 @@ def lacam(grid: GridWorld, agents: dict, *,
         prio = state[config][0]
         return [ids[k] for k in sorted(range(n), key=lambda k: (-prio[k], ids[k]))]
 
-    prio0 = [dist_to[ids[i]].get(init[i], big) / size for i in range(n)]
+    prio0 = [guide_to[ids[i]].get(init[i], big) / size for i in range(n)]
     state = {init: (prio0, sum_dist(init), 0, 0)}   # config -> (prio, best, stuck, depth)
     expand = {init: 0}                # how many times each config has been expanded
 
@@ -251,10 +266,15 @@ def lacam(grid: GridWorld, agents: dict, *,
                      + [a for a in priority_order(config) if a not in constraint])
         else:
             order = priority_order(config)
-        nxt = _pibt(grid, cfg, order, dist_to, constraint, salt=salt)
+        nxt = _pibt(grid, cfg, order, guide_to, constraint, salt=salt)
         if nxt is None:
             continue
         new_config = tuple(nxt[ids[i]] for i in range(n))
+
+        if history is not None:        # committed actions for the traffic map
+            for i in range(n):
+                if config[i] != new_config[i]:
+                    history.append((config[i], new_config[i]))
 
         if optimize:
             ng = g[config] + edge_cost(config, new_config)
@@ -300,3 +320,91 @@ def _reconstruct(parent, goal_config, ids) -> Solution:
     seq.reverse()
     paths = {ids[i]: [step[i] for step in seq] for i in range(len(ids))}
     return Solution(paths=paths, cost=sum_of_costs(paths))
+
+
+def _soc(solution: Solution) -> int:
+    """True sum-of-costs by arrival time: per agent, the last step it is *not*
+    parked at its goal, plus one. ``sum_of_costs`` (= sum of path lengths) instead
+    over-counts LaCAM's makespan padding (the trailing rest at the goal), so two
+    solutions of different makespan aren't comparable by it; this is."""
+    total = 0
+    for path in solution.paths.values():
+        goal = path[-1]
+        arrival = 0
+        for i, cell in enumerate(path):
+            if cell != goal:
+                arrival = i + 1
+        total += arrival
+    return total
+
+
+def _weighted_dist(grid: GridWorld, goal: Cell, edge_w) -> dict:
+    """Backward Dijkstra from ``goal``: shortest *weighted* distance from every
+    cell to the goal, where moving ``p -> v`` costs ``edge_w(p, v)``. Used to turn
+    a congestion-weighted traffic map into per-agent guidance for PIBT."""
+    dist = {goal: 0.0}
+    pq = [(0.0, goal)]
+    while pq:
+        d, v = heapq.heappop(pq)
+        if d > dist[v]:
+            continue
+        for p in grid.neighbors(v):               # p is a predecessor of v
+            nd = d + edge_w(p, v)
+            if nd < dist.get(p, float("inf")):
+                dist[p] = nd
+                heapq.heappush(pq, (nd, p))
+    return dist
+
+
+def lacam_ltm(grid: GridWorld, agents: dict, *, rounds: int = 6,
+              max_iterations: int = 200_000, stall_patience: int = 3,
+              optimize: bool = True, w_max: float = 10.0):
+    """LaCAM\\*+LTM — a Python reproduction of "A Lightweight Traffic Map for
+    Efficient Anytime LaCAM\\*" (arXiv:2603.07891; only a C++ reference exists).
+
+    Plain LaCAM\\* guides PIBT with a *static* shortest-path distance, so every
+    dive re-walks the same congested corridors — which is why
+    :func:`lacam`'s ``optimize=True`` stalls at scale (it returns the same cost
+    as the first dive on 16-30-agent grids). LaCAM\\*+LTM instead builds a
+    **lightweight traffic map** during the search: a directed-edge weight that
+    accumulates the agent moves actually committed by PIBT. Between bounded runs
+    it normalizes those counts into ``[0, w_max]``, recomputes each agent's
+    guidance distance on the congestion-weighted graph (so dives route *around*
+    the busy edges), and restarts. The cheapest solution over all rounds (by true
+    :func:`_soc`) is returned.
+
+    This is a faithful *subset* of the paper: it accumulates **committed** moves
+    only — the blocked-action and wait-propagation terms are omitted — and
+    restarts each round from the root (one-shot mode). The admissible heuristic is
+    untouched, so within a round ``optimize=True`` keeps its cost guarantees;
+    guidance only changes which dive PIBT takes. Deterministic.
+    """
+    ids = sorted(agents)
+    goals = {a: agents[a][1] for a in ids}
+
+    raw: dict = {}                                # directed edge -> commit count
+    best: Solution | None = None
+    best_soc = None
+    for r in range(rounds):
+        if raw:
+            max_count = max(raw.values())
+            norm = {e: w_max * c / max_count for e, c in raw.items()}
+
+            def edge_w(p, v, _norm=norm):
+                return 1.0 + _norm.get((p, v), 0.0)
+
+            guide = {a: _weighted_dist(grid, goals[a], edge_w) for a in ids}
+        else:
+            guide = None                          # round 0: plain BFS guidance
+
+        history: list = []
+        sol = lacam(grid, agents, max_iterations=max_iterations,
+                    stall_patience=stall_patience, optimize=optimize,
+                    guide=guide, history=history)
+        if sol is not None:
+            soc = _soc(sol)
+            if best_soc is None or soc < best_soc:
+                best, best_soc = sol, soc
+        for u, v in history:                      # accumulate committed moves
+            raw[(u, v)] = raw.get((u, v), 0) + 1
+    return best

@@ -200,6 +200,28 @@ lower bound barely prunes, and a 200k-iteration budget (~10 s/instance) returns
 the *same* cost as the first dive. **For cost at scale, use LNS** (below), which
 drives those instances to ~1.13× the lower bound in a fraction of the time.
 
+`lacam_ltm(grid, agents, rounds=...)` is a Python reproduction of *A Lightweight
+Traffic Map for Efficient Anytime LaCAM\** (arXiv:2603.07891, C++-only upstream)
+that attacks exactly that scaling wall. Plain `optimize` re-walks the same
+congested corridors every dive; LaCAM\*+LTM builds a **lightweight traffic map**
+during the search — a directed-edge weight accumulating the agent moves PIBT
+actually commits — then between bounded runs normalizes those counts into
+`[0, 10]`, recomputes each agent's guidance distance on the congestion-weighted
+graph (so dives route *around* busy edges), and restarts. The admissible
+heuristic is untouched, so each round keeps its cost guarantees; only the
+guidance changes. Measured at **equal total budget** (plain `optimize` given
+`rounds × budget` in one run vs LTM spending the same across restarts), LTM cuts
+aggregate sum-of-costs **1527 → 1264** over a 6-instance 10×10/20 + 12×12/30
+battery and wins **every** instance, where plain `optimize` returns the first
+dive's cost no matter the budget — a 14–32 % cut, from ~1.4–1.8× down to
+~1.21–1.23× the lower bound. This is a faithful *subset* of the paper
+(committed-move accumulation only; the blocked-action and wait terms are
+omitted) and is deterministic. The `lacam_ltm_vs_optimize` gate pins the win;
+it trips if the traffic-map guidance regresses. LNS (below) still owns the
+prioritized-replanning route to cost at scale; LTM is the *search-side* answer,
+keeping LaCAM's single-shot configuration search but spending extra budget on
+re-guided restarts instead of wasting it on a stalled optimize.
+
 ### High level: MAPF-LNS (`lns.py`)
 
 `mapf_lns(grid, agents, iterations=...)` is *anytime*: rather than searching for

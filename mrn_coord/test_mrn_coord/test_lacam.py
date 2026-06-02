@@ -193,5 +193,48 @@ class TestLacamOptimize(unittest.TestCase):
         self.assertTrue(_valid(grid, agents, lacam(grid, agents, max_iterations=200_000)))
 
 
+class TestLacamLTM(unittest.TestCase):
+    """LaCAM*+LTM (arXiv:2603.07891) reproduction: a congestion-weighted traffic
+    map re-guides each restart's dive, breaking the scaling wall plain optimize
+    hits (it returns the first dive's cost on 16-30-agent grids even at full
+    budget). Mirrors the `lacam_ltm_vs_optimize` gate."""
+
+    def test_beats_plain_optimize_at_equal_budget(self):
+        from mrn_coord.mapf import lacam_ltm
+        rounds, budget = 4, 6000
+        sum_opt = sum_ltm = wins = checked = 0
+        for w, h, n, seeds in ((10, 10, 20, range(3)), (12, 12, 30, range(2))):
+            grid = GridWorld(w, h)
+            cells = [(x, y) for x in range(w) for y in range(h)]
+            for seed in seeds:
+                rng = random.Random(seed * 1000 + w * 7 + n)
+                starts, goals = rng.sample(cells, n), rng.sample(cells, n)
+                agents = {i: (starts[i], goals[i]) for i in range(n)}
+                # equal TOTAL budget: optimize gets rounds*budget in one run, so a
+                # win is the LTM mechanism, not extra iterations.
+                opt = lacam(grid, agents, optimize=True,
+                            max_iterations=rounds * budget)
+                ltm = lacam_ltm(grid, agents, rounds=rounds,
+                                max_iterations=budget, optimize=True)
+                self.assertTrue(_valid(grid, agents, ltm))      # still valid
+                sum_opt += _soc(opt.paths)
+                sum_ltm += _soc(ltm.paths)
+                wins += int(_soc(ltm.paths) < _soc(opt.paths))
+                checked += 1
+        self.assertLess(sum_ltm, sum_opt, "LTM did not cut cost at scale")
+        self.assertEqual(wins, checked, "LTM should win every instance here")
+
+    def test_deterministic(self):
+        from mrn_coord.mapf import lacam_ltm
+        grid = GridWorld(10, 10)
+        cells = [(x, y) for x in range(10) for y in range(10)]
+        rng = random.Random(7)
+        starts, goals = rng.sample(cells, 20), rng.sample(cells, 20)
+        agents = {i: (starts[i], goals[i]) for i in range(20)}
+        a = lacam_ltm(grid, agents, rounds=3, max_iterations=8000)
+        b = lacam_ltm(grid, agents, rounds=3, max_iterations=8000)
+        self.assertEqual(a.paths, b.paths)
+
+
 if __name__ == "__main__":
     unittest.main()

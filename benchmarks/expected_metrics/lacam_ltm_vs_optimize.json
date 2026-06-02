@@ -1,0 +1,9 @@
+{
+  "case": "lacam_ltm_vs_optimize",
+  "instances": 6,
+  "sum_opt": 1527,
+  "sum_ltm": 1264,
+  "ltm_wins": 6,
+  "valid_all": 6,
+  "ltm_beats_opt": true
+}

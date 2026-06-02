@@ -258,6 +258,67 @@ def _run_lacam_optimality() -> dict:
             "optimal": optimal, "below_cbs": below}
 
 
+def _run_lacam_ltm_vs_optimize() -> dict:
+    # LaCAM*+LTM (lacam_ltm) is a Python reproduction of "A Lightweight Traffic
+    # Map for Efficient Anytime LaCAM*" (arXiv:2603.07891, C++-only upstream).
+    # It targets exactly the boundary `lacam_optimality`'s docstring records:
+    # plain optimize=True stalls at scale -- on these 16-30-agent grids it returns
+    # the *same* cost as the first dive even given the full budget, because the
+    # config space is too large for the lower bound to prune. LTM breaks that by
+    # building a congestion-weighted traffic map from committed PIBT moves and
+    # re-guiding each restart's dive around the busy edges. This gate pins the
+    # reproduction WIN at EQUAL total budget (optimize gets rounds*budget in one
+    # run; LTM spends the same across `rounds` restarts) so the gain is the
+    # mechanism, not extra iterations: aggregate LTM sum-of-costs must stay below
+    # plain optimize's, every instance must improve, and every solution must be
+    # valid. If the traffic-map guidance regresses, sum_ltm rises and it trips.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.lacam import lacam, lacam_ltm
+    from mrn_coord.mapf.solution import pad_paths
+
+    def _soc(sol) -> int:
+        total = 0
+        for p in sol.paths.values():
+            goal, arrival = p[-1], 0
+            for t, c in enumerate(p):
+                if c != goal:
+                    arrival = t + 1
+            total += arrival
+        return total
+
+    def _valid(grid, agents, sol) -> bool:
+        if sol is None or detect_first_conflict(pad_paths(sol.paths)) is not None:
+            return False
+        return all(sol.paths[a][0] == agents[a][0]
+                   and sol.paths[a][-1] == agents[a][1] for a in agents)
+
+    rounds, budget = 4, 6000
+    instances = sum_opt = sum_ltm = ltm_wins = valid_all = 0
+    for w, h, n, seeds in ((10, 10, 20, range(4)), (12, 12, 30, range(2))):
+        grid = GridWorld(w, h)
+        cells = [(x, y) for x in range(w) for y in range(h)]
+        for seed in seeds:
+            rng = random.Random(seed * 1000 + w * 7 + n)
+            starts, goals = rng.sample(cells, n), rng.sample(cells, n)
+            agents = {i: (starts[i], goals[i]) for i in range(n)}
+            opt = lacam(grid, agents, optimize=True,
+                        max_iterations=rounds * budget)   # equal total budget
+            ltm = lacam_ltm(grid, agents, rounds=rounds, max_iterations=budget,
+                            optimize=True)
+            instances += 1
+            sum_opt += _soc(opt)
+            sum_ltm += _soc(ltm)
+            ltm_wins += int(_soc(ltm) < _soc(opt))
+            valid_all += int(_valid(grid, agents, opt)
+                             and _valid(grid, agents, ltm))
+    return {"case": "lacam_ltm_vs_optimize", "instances": instances,
+            "sum_opt": sum_opt, "sum_ltm": sum_ltm, "ltm_wins": ltm_wins,
+            "valid_all": valid_all, "ltm_beats_opt": sum_ltm < sum_opt}
+
+
 def _run_lns_scaling_improvement() -> dict:
     # LNS's selling point is anytime cost improvement "on team sizes far beyond
     # CBS's reach" -- but the only other LNS gate pins a single 3-agent example's
@@ -461,6 +522,7 @@ SUITE = [
     ("lacam_scaling_convergence", _run_lacam_convergence),
     # LaCAM* anytime mode reaches the CBS optimum on small instances
     ("lacam_optimality", _run_lacam_optimality),
+    ("lacam_ltm_vs_optimize", _run_lacam_ltm_vs_optimize),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),
