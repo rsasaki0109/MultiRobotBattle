@@ -54,6 +54,21 @@ class LifelongResult:
     max_wait: int                        # longest a single task took
     history: list = field(default_factory=list)   # [ {id: cell} per step ] if kept
     goal_history: list = field(default_factory=list)  # [ {id: goal cell} per step ]
+    completions: list = field(default_factory=list)   # [ tasks finished at step t ]
+
+    def longest_stall(self) -> int:
+        """Longest run of consecutive steps that finished **zero** tasks.
+
+        The liveness probe: in a lifelong run every agent always holds a task, so
+        a long window with no completions is a throughput stall (agents shuffling
+        without delivering) — the standoff the engine claims arrival-driven goals
+        prevent. Requires the run to have been captured (``keep_history=True``).
+        """
+        worst = run = 0
+        for c in self.completions:
+            run = run + 1 if c == 0 else 0
+            worst = max(worst, run)
+        return worst
 
     def as_dict(self) -> dict:
         return {
@@ -237,6 +252,7 @@ def run_lifelong(
     service_times: list = []
     history: list = []
     goal_history: list = []
+    completions: list = []
 
     # task assignment: round-robin stream, or cost-aware pool allocator
     assign = make_assigner(grid, ids, stream, allocator, open_tasks, dist_to,
@@ -257,6 +273,7 @@ def run_lifelong(
             goal[a] = pos[a]
         if done:
             assign(done, step, pos)
+        completions.append(len(done))
 
         if keep_history:
             history.append(dict(pos))
@@ -275,11 +292,14 @@ def run_lifelong(
             elapsed[a] += 1
 
     # final-tick completions.
+    final_done = 0
     for a in ids:
         if has_task[a] and pos[a] == goal[a]:
             completed += 1
             per_agent[a] += 1
+            final_done += 1
             service_times.append(max_steps - assigned_at[a])
+    completions.append(final_done)
     if keep_history:
         history.append(dict(pos))
         goal_history.append({a: (goal[a] if has_task[a] else pos[a]) for a in ids})
@@ -295,6 +315,7 @@ def run_lifelong(
         max_wait=(max(service_times) if service_times else 0),
         history=history,
         goal_history=goal_history,
+        completions=completions,
     )
 
 

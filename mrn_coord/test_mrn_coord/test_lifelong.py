@@ -1,5 +1,6 @@
 """Tests for lifelong / online MAPF: collision-freedom, throughput, determinism."""
 
+import random
 import unittest
 
 from mrn_coord.lifelong import (
@@ -103,6 +104,50 @@ class TestLifelong(unittest.TestCase):
             # a comfortable margin below the observed ~6.5x, not a tight latch
             self.assertGreater(served, 3 * stream,
                                f"{allocator} lost its lead over round-robin")
+
+    def test_liveness_bounded_under_distinct_goals(self):
+        # The repo claims arrival-driven goals prevent a permanent standoff. That
+        # claim was never tested. Probe it adversarially: a battery of densely
+        # packed warehouses, random start permutations, random *distinct*-endpoint
+        # task streams (one station per cell, the realistic regime). The liveness
+        # contract is that no run stalls for long — `longest_stall` (consecutive
+        # steps finishing zero tasks) stays well bounded. Over ~3000 wider seeds
+        # the worst seen is 8 steps; gate at 15 so a regression that introduces a
+        # genuine livelock (e.g. a priority/tie-break change) fails here.
+        shapes = [(2, 2, 1), (2, 3, 1), (3, 3, 1), (3, 4, 1), (2, 2, 2), (3, 4, 2)]
+        worst = 0
+        for rows, cols, aisle in shapes:
+            grid, endpoints = make_warehouse(rows=rows, cols=cols, aisle=aisle)
+            for seed in range(12):
+                rng = random.Random(seed * 101 + 7)
+                n = len(endpoints) if seed % 2 else max(2, len(endpoints) - 2)
+                order = endpoints[:]
+                rng.shuffle(order)
+                starts = {f"r{i}": order[i] for i in range(n)}
+                pool = endpoints[:]            # distinct endpoints, shuffled
+                rng.shuffle(pool)
+                for allocator in ("stream", "hungarian"):
+                    res = run_lifelong(grid, dict(starts), TaskStream(list(pool)),
+                                       max_steps=120, allocator=allocator)
+                    worst = max(worst, res.longest_stall())
+        self.assertLess(worst, 15, f"a distinct-goal run stalled {worst} steps")
+
+    def test_duplicate_goals_break_liveness(self):
+        # The precise boundary of the claim above (a characterization tripwire,
+        # not an endorsement). Funnel *every* task to a single contested cell with
+        # cost-aware allocation: the agent already standing there is never assigned
+        # its own cell, so it idles and squats while the others pile into the
+        # corner around it. PIBT's push then has nowhere to shove the squatter, and
+        # the cluster deadlocks permanently — zero tasks ever complete. This is the
+        # random-tie-break escape the deterministic engine deliberately forgoes
+        # (see docs/coordination.md). If a future change makes this complete tasks,
+        # the engine gained a livelock escape and this test should assert that win.
+        grid, endpoints = make_warehouse(rows=2, cols=2, aisle=1)
+        starts = {f"r{i}": endpoints[i] for i in range(4)}
+        res = run_lifelong(grid, starts, TaskStream([endpoints[0]]),
+                           max_steps=60, allocator="hungarian")
+        self.assertEqual(res.completed, 0)
+        self.assertGreater(res.longest_stall(), 50)
 
     def test_warehouse_layout(self):
         grid, endpoints = make_warehouse(rows=2, cols=2, aisle=1)

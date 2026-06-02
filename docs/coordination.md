@@ -300,8 +300,24 @@ theorem relies on a *random* tie-break, which `pypibt` has (`rng.shuffle`) and o
 - **converged** — the honest cost of the deterministic tie-break: as a one-shot
   fixed-goal solver `_Pibt` can livelock in a symmetric standoff the reference's
   random tie-break escapes, so it is not *complete* the way `pypibt` is. We report
-  the rate (~0.7 across the suite) rather than hide it; it is irrelevant to
-  lifelong throughput, where goals change on arrival and no standoff is permanent.
+  the rate (~0.7 across the suite) rather than hide it.
+
+  In the **lifelong** regime that livelock is *bounded* — but only under a
+  precondition we now make explicit and test (it used to be an unverified aside
+  that "no standoff is permanent"). Across ~3000 adversarial seeds — densely
+  packed warehouses, random starts, random task streams over **distinct**
+  endpoints (one station per cell, the realistic regime) — the worst stall is **8
+  steps**: goals changing on arrival keep churning the priority order, so no
+  cluster sits forever. `test_lifelong.test_liveness_bounded_under_distinct_goals`
+  gates this (`longest_stall < 15`), so a change that introduces a real livelock
+  fails the build. The precondition is that no two agents are ever assigned the
+  **same** goal cell at once: funnel several agents onto one contested cell (an
+  out-of-contract duplicate-goal stream) and the deterministic engine *does*
+  deadlock permanently — the agent already on the cell idles and squats, PIBT's
+  push has nowhere to shove it, and the corner cluster never resolves (zero tasks
+  ever complete). `test_duplicate_goals_break_liveness` pins that boundary as a
+  tripwire. `LifelongResult.longest_stall()` (the longest zero-completion window)
+  is the measure behind both.
 - **makespan** — where ours converges, its length tracks the reference's within a
   bound (a bound, not equality). Numbers in
   [`benchmarks/pibt_pypibt.md`](../benchmarks/pibt_pypibt.md).
