@@ -10,17 +10,28 @@ cheap (it replans a few agents, not all), the cost decreases monotonically, and
 you can stop whenever the budget runs out — so a rough initial solution is
 polished toward the optimum over time, on team sizes far beyond CBS's reach.
 
-Two destroy heuristics, chosen at random each round (the adaptive ensemble that
-makes LNS robust):
+Three destroy heuristics:
 
 - **random** — a random set of agents.
 - **worst** — the most *delayed* agent (largest gap between its current path
   cost and its obstacle-aware shortest path) plus the agents whose paths cross
   it; replanning this cluster together is what unsticks a bad detour.
+- **map** — the agents passing through a congested high-degree vertex (an
+  intersection, picked degree-weighted); replanning them together relieves the
+  junction. Only used in adaptive mode.
 
-Pure and deterministic given the seed. Repair is collision-free by construction
-(prioritized replanning over the frozen paths), so every accepted solution stays
-valid.
+By default the round picks random/worst with a fair coin and uses a fixed
+neighborhood size — the original Li et al. ensemble. With ``adaptive=True`` the
+round instead uses a **bi-level Thompson-Sampling bandit** (BALANCE, Phan et
+al., AAAI 2024): a top bandit learns which of the three destroy heuristics pays
+off, and a per-heuristic bottom bandit learns the neighborhood size from
+``{2,4,8,16,32}``. The reward is the realized cost improvement
+``max(0, c(P) - c(P+))``, so the search shifts effort toward whatever is
+actually biting on *this* instance instead of a fixed 50/50 coin and a fixed k.
+
+Pure and deterministic given the seed (the bandit samples from the same seeded
+RNG). Repair is collision-free by construction (prioritized replanning over the
+frozen paths), so every accepted solution stays valid.
 """
 
 from __future__ import annotations
@@ -109,6 +120,84 @@ def _worst_neighborhood(paths, shortest, rng, k):
     return set(chosen[:k])
 
 
+def _vertex_degrees(grid: GridWorld) -> dict:
+    """Free-neighbor count per free cell — high degree marks an intersection."""
+    deg = {}
+    for x in range(grid.width):
+        for y in range(grid.height):
+            cell = (x, y)
+            if grid.is_free(cell):
+                deg[cell] = sum(1 for _ in grid.neighbors(cell))
+    return deg
+
+
+def _map_neighborhood(paths, degrees, rng, k):
+    """Agents through a congested high-degree vertex (degree-weighted pick)."""
+    on_path: dict = {}
+    for agent, path in paths.items():
+        for cell in path:
+            on_path.setdefault(cell, set()).add(agent)
+    if not on_path:
+        return set(list(paths)[:k])
+    cells = sorted(on_path)                      # deterministic candidate order
+    weights = [degrees.get(c, 1) for c in cells]
+    pick = rng.choices(cells, weights=weights, k=1)[0]
+    chosen = sorted(on_path[pick])
+    rng.shuffle(chosen)
+    if len(chosen) < k:
+        rest = [a for a in paths if a not in chosen]
+        rng.shuffle(rest)
+        chosen += rest
+    return set(chosen[:k])
+
+
+class _NormalGammaBandit:
+    """Thompson Sampling over a fixed arm set with Normal-Gamma posteriors.
+
+    Each arm's reward is modeled Normal with unknown mean and precision; the
+    Normal-Gamma prior is conjugate, so an arm only needs running
+    ``(n, mean, M2)`` (Welford). To pick, we draw a plausible mean from each
+    arm's posterior and take the argmax — exploration falls out of posterior
+    width, so a barely-tried arm can still win. Deterministic given ``rng``.
+    """
+
+    def __init__(self, arms, rng, *, mu0=0.0, lambda0=1.0, alpha0=1.0,
+                 beta0=1.0):
+        self.arms = list(arms)
+        self.rng = rng
+        self.mu0, self.lambda0 = mu0, lambda0
+        self.alpha0, self.beta0 = alpha0, beta0
+        self.n = {a: 0 for a in self.arms}
+        self.mean = {a: 0.0 for a in self.arms}
+        self.m2 = {a: 0.0 for a in self.arms}
+
+    def _sample(self, arm) -> float:
+        n = self.n[arm]
+        lam = self.lambda0 + n
+        alpha = self.alpha0 + n / 2.0
+        mu = (self.lambda0 * self.mu0 + n * self.mean[arm]) / lam
+        beta = (self.beta0 + 0.5 * self.m2[arm]
+                + (self.lambda0 * n * (self.mean[arm] - self.mu0) ** 2)
+                / (2.0 * lam))
+        tau = self.rng.gammavariate(alpha, 1.0 / beta)   # sampled precision
+        sigma = (1.0 / (lam * tau)) ** 0.5
+        return self.rng.gauss(mu, sigma)
+
+    def select(self):
+        best, best_val = self.arms[0], None
+        for arm in self.arms:                            # arm order breaks ties
+            val = self._sample(arm)
+            if best_val is None or val > best_val:
+                best, best_val = arm, val
+        return best
+
+    def update(self, arm, reward: float) -> None:
+        self.n[arm] += 1
+        delta = reward - self.mean[arm]
+        self.mean[arm] += delta / self.n[arm]
+        self.m2[arm] += delta * (reward - self.mean[arm])
+
+
 def mapf_lns(
     grid: GridWorld,
     agents: dict,
@@ -117,6 +206,7 @@ def mapf_lns(
     iterations: int = 100,
     seed: int = 0,
     init: Solution | None = None,
+    adaptive: bool = False,
     stats: dict | None = None,
 ):
     """Improve a MAPF solution by Large Neighborhood Search (anytime).
@@ -124,8 +214,17 @@ def mapf_lns(
     ``agents`` maps an agent id to a ``(start, goal)`` tuple. Returns the best
     :class:`Solution` found (collision-free), or ``None`` if no initial solution
     exists. ``init`` seeds the search (default: prioritized planning, then LaCAM
-    if that fails). If ``stats`` is given, it records ``initial_cost``,
-    ``final_cost``, ``iterations``, and ``accepted`` (rounds that improved).
+    if that fails).
+
+    With ``adaptive=True`` the destroy heuristic and neighborhood size are
+    chosen each round by a bi-level Thompson-Sampling bandit (BALANCE) instead
+    of a fixed coin/size — it learns online which destroy pays off on this
+    instance. The default (``adaptive=False``) is the original fixed ensemble
+    and is byte-for-byte unchanged.
+
+    If ``stats`` is given, it records ``initial_cost``, ``final_cost``,
+    ``iterations``, and ``accepted`` (rounds that improved); in adaptive mode it
+    also records ``arm_pulls`` (per-heuristic selection counts).
     """
     ids = sorted(agents)
     if init is None:
@@ -151,8 +250,31 @@ def mapf_lns(
     horizon = max(formula, max(len(p) for p in paths.values())) + len(ids) + 5
     accepted = 0
 
+    heuristics = ("random", "worst", "map")
+    if adaptive:
+        degrees = _vertex_degrees(grid)
+        sizes = [s for s in (2, 4, 8, 16, 32) if 2 <= s <= len(ids)]
+        if not sizes:                          # tiny instance: only one size fits
+            sizes = [max(2, len(ids))]
+        h_bandit = _NormalGammaBandit(heuristics, rng)
+        size_bandits = {h: _NormalGammaBandit(sizes, rng) for h in heuristics}
+
+    def _destroy(name, size):
+        size = min(size, len(ids))
+        if size >= len(ids):
+            return set(ids)
+        if name == "random":
+            return set(rng.sample(ids, size))
+        if name == "worst":
+            return _worst_neighborhood(paths, shortest, rng, size)
+        return _map_neighborhood(paths, degrees, rng, size)
+
     for _ in range(iterations):
-        if k >= len(ids):
+        if adaptive:
+            heuristic = h_bandit.select()
+            size = size_bandits[heuristic].select()
+            subset = _destroy(heuristic, size)
+        elif k >= len(ids):
             subset = set(ids)
         elif rng.random() < 0.5:
             subset = set(rng.sample(ids, k))                  # random destroy
@@ -160,20 +282,26 @@ def mapf_lns(
             subset = _worst_neighborhood(paths, shortest, rng, k)  # worst destroy
 
         repaired = _repair(grid, agents, paths, subset, horizon)
-        if repaired is None:
-            continue
-        candidate = dict(paths)
-        candidate.update(repaired)
-        new_cost = sum_of_costs(candidate)
-        if new_cost <= cur_cost:
-            if new_cost < cur_cost:
-                accepted += 1
-            paths = candidate
-            cur_cost = new_cost
+        reward = 0.0
+        if repaired is not None:
+            candidate = dict(paths)
+            candidate.update(repaired)
+            new_cost = sum_of_costs(candidate)
+            if new_cost <= cur_cost:
+                if new_cost < cur_cost:
+                    accepted += 1
+                    reward = float(cur_cost - new_cost)   # realized improvement
+                paths = candidate
+                cur_cost = new_cost
+        if adaptive:
+            h_bandit.update(heuristic, reward)
+            size_bandits[heuristic].update(size, reward)
 
     if stats is not None:
         stats["initial_cost"] = initial_cost
         stats["final_cost"] = cur_cost
         stats["iterations"] = iterations
         stats["accepted"] = accepted
+        if adaptive:
+            stats["arm_pulls"] = dict(h_bandit.n)
     return Solution(paths=paths, cost=cur_cost)

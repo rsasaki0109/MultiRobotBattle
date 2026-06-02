@@ -310,6 +310,57 @@ def _run_lns_scaling_improvement() -> dict:
             "sum_final": sum_final, "sum_lower_bound": sum_lower_bound}
 
 
+def _run_lns_adaptive_vs_fixed() -> dict:
+    # `mapf_lns(adaptive=True)` is a faithful port of BALANCE (Phan et al., AAAI
+    # 2024): a bi-level Thompson-Sampling bandit that learns the destroy
+    # heuristic and neighborhood size online, where vanilla LNS uses a fixed
+    # 50/50 coin and a fixed size. BALANCE reports >=50% cost gains -- but on a
+    # specialized SIPP repair, structured warehouse maps, and thousands of
+    # iterations. Ported onto THIS repo's prioritized-A* repair and measured
+    # honestly across open grids and budgets up to 1000 iters, the bandit does
+    # NOT beat the fixed ensemble: it loses ~2% because the repo's `worst`
+    # heuristic is already strong and the bandit's early exploration cost is
+    # never recovered at these scales. This gate PINS that negative result --
+    # aggregate adaptive SOC stays >= fixed SOC -- so nobody later overstates
+    # "we have adaptive LNS, it's better", and so a future change that *did*
+    # make adaptive win would trip the gate and force the claim to be re-pinned.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.lns import mapf_lns
+
+    instances = sum_initial = sum_fixed = sum_adaptive = 0
+    fixed_wins = adaptive_wins = ties = 0
+    for w, h, n in ((10, 10, 20), (12, 12, 30)):
+        grid = GridWorld(w, h)
+        cells = [(x, y) for x in range(w) for y in range(h)]
+        for seed in range(4):
+            rng = random.Random(seed * 1000 + w * 7 + n)
+            starts, goals = rng.sample(cells, n), rng.sample(cells, n)
+            agents = {i: (starts[i], goals[i]) for i in range(n)}
+            sf: dict = {}
+            sa: dict = {}
+            mapf_lns(grid, agents, iterations=80, seed=0, stats=sf,
+                     adaptive=False)
+            mapf_lns(grid, agents, iterations=80, seed=0, stats=sa,
+                     adaptive=True)
+            instances += 1
+            sum_initial += sf["initial_cost"]
+            sum_fixed += sf["final_cost"]
+            sum_adaptive += sa["final_cost"]
+            if sa["final_cost"] < sf["final_cost"]:
+                adaptive_wins += 1
+            elif sa["final_cost"] > sf["final_cost"]:
+                fixed_wins += 1
+            else:
+                ties += 1
+    return {"case": "lns_adaptive_vs_fixed", "instances": instances,
+            "sum_initial": sum_initial, "sum_fixed": sum_fixed,
+            "sum_adaptive": sum_adaptive, "fixed_wins": fixed_wins,
+            "adaptive_wins": adaptive_wins, "ties": ties,
+            "adaptive_not_better": sum_adaptive >= sum_fixed}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -412,6 +463,7 @@ SUITE = [
     ("lacam_optimality", _run_lacam_optimality),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
+    ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),

@@ -1,0 +1,11 @@
+{
+  "case": "lns_adaptive_vs_fixed",
+  "instances": 8,
+  "sum_initial": 2357,
+  "sum_fixed": 1665,
+  "sum_adaptive": 1695,
+  "fixed_wins": 2,
+  "adaptive_wins": 2,
+  "ties": 4,
+  "adaptive_not_better": true
+}

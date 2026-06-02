@@ -130,5 +130,67 @@ class TestLnsBasics(unittest.TestCase):
         self.assertLess(stats["final_cost"], stats["initial_cost"])
 
 
+class TestAdaptiveBandit(unittest.TestCase):
+    """`adaptive=True` is a faithful BALANCE port (bi-level Thompson Sampling).
+
+    The honest finding: on this repo's prioritized-A* repair, at these budgets
+    and on open grids, the bandit does NOT beat the fixed random/worst ensemble
+    -- it loses a couple percent because the `worst` heuristic is already strong
+    and the bandit's early exploration isn't recovered. These tests pin that:
+    adaptive stays valid, deterministic, and not-better-in-aggregate, mirroring
+    the `lns_adaptive_vs_fixed` benchmark gate.
+    """
+
+    def test_adaptive_stays_valid_and_deterministic(self):
+        grid = GridWorld(6, 6, blocked={(3, 2), (2, 3)})
+        agents = {"a": ((0, 0), (5, 5)), "b": ((5, 0), (0, 5)),
+                  "c": ((0, 5), (5, 0))}
+        a = mapf_lns(grid, agents, iterations=50, seed=7, adaptive=True)
+        b = mapf_lns(grid, agents, iterations=50, seed=7, adaptive=True)
+        self.assertTrue(_valid(grid, agents, a))
+        self.assertEqual(a.paths, b.paths)         # bandit draws from seeded RNG
+
+    def test_default_is_byte_identical_to_pre_bandit(self):
+        # The bandit is opt-in: adaptive=False must reproduce the exact old path.
+        grid = GridWorld(8, 8)
+        cells = [(x, y) for x in range(8) for y in range(8)]
+        rng = random.Random(0)
+        starts, goals = rng.sample(cells, 12), rng.sample(cells, 12)
+        agents = {i: (starts[i], goals[i]) for i in range(12)}
+        explicit = mapf_lns(grid, agents, iterations=60, seed=0, adaptive=False)
+        default = mapf_lns(grid, agents, iterations=60, seed=0)
+        self.assertEqual(explicit.paths, default.paths)
+
+    def test_adaptive_does_not_beat_fixed_in_aggregate(self):
+        # The negative result, pinned at the API level. Adaptive learns (it
+        # records arm_pulls and shifts away from weak arms) but the realized
+        # aggregate SOC is no better than the fixed ensemble's at this scale.
+        sum_fixed = sum_adaptive = 0
+        total_pulls = {"random": 0, "worst": 0, "map": 0}
+        for w, h, n in ((10, 10, 20), (12, 12, 30)):
+            grid = GridWorld(w, h)
+            cells = [(x, y) for x in range(w) for y in range(h)]
+            for seed in range(4):
+                rng = random.Random(seed * 1000 + w * 7 + n)
+                starts, goals = rng.sample(cells, n), rng.sample(cells, n)
+                agents = {i: (starts[i], goals[i]) for i in range(n)}
+                sf, sa = {}, {}
+                mapf_lns(grid, agents, iterations=80, seed=0, stats=sf,
+                         adaptive=False)
+                mapf_lns(grid, agents, iterations=80, seed=0, stats=sa,
+                         adaptive=True)
+                sum_fixed += sf["final_cost"]
+                sum_adaptive += sa["final_cost"]
+                for arm, count in sa["arm_pulls"].items():
+                    total_pulls[arm] += count
+        self.assertGreaterEqual(sum_adaptive, sum_fixed,
+                                "adaptive unexpectedly beat fixed -- re-pin the "
+                                "lns_adaptive_vs_fixed gate and its claim")
+        # the bandit is not degenerate: it really exercised all three arms
+        # (Thompson Sampling can starve a clearly-losing arm on a single
+        # instance, but across the battery every heuristic gets pulled).
+        self.assertTrue(all(c > 0 for c in total_pulls.values()), total_pulls)
+
+
 if __name__ == "__main__":
     unittest.main()

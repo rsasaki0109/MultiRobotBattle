@@ -222,6 +222,27 @@ reach 5×5 / 4 agents, where CBS itself is cheap). This is the cost optimizer at
 scale, where LaCAM\* (above) stops improving. Run `mrn_mapf_demo --solver lns` or
 `mrn_mapf_bench --solver lns`.
 
+**Adaptive (BALANCE) — a faithful port, and an honest negative result.**
+`mapf_lns(..., adaptive=True)` replaces the fixed 50/50 coin and fixed
+neighborhood size with the bi-level Thompson-Sampling bandit of BALANCE (Phan
+et al., AAAI 2024): a top bandit learns which of three destroy heuristics
+(random / worst / a new **map** heuristic targeting congested high-degree
+vertices) pays off, and a per-heuristic bottom bandit learns the size from
+`{2,4,8,16,32}`, rewarded by realized cost improvement. BALANCE reports ≥50%
+cost gains — but on a specialized SIPP repair, structured warehouse maps, and
+thousands of iterations. Ported onto *this* repo's prioritized-A\* repair and
+measured honestly (open grids 8×8/16 … 12×12/30 and obstacle-dense 16×16 …
+20×20, budgets to 1000 iterations), **the bandit does not beat the fixed
+ensemble — it loses ~2%.** The mechanism works (it learns and shifts away from
+weak arms), but the repo's `worst` heuristic is already strong and the bandit's
+early exploration is never recovered at these scales; an open grid has no
+high-degree junctions for the `map` arm to exploit. The default stays
+`adaptive=False` and is byte-for-byte unchanged. The negative result is itself
+guarded: the `lns_adaptive_vs_fixed` gate pins aggregate adaptive SOC ≥ fixed
+SOC (1695 vs 1665 over 8 instances), so the claim can't be silently overstated,
+and a future change that *did* make adaptive win would trip the gate and force
+the claim to be re-pinned.
+
 ### High level: prioritized planning (`prioritized.py`)
 
 `prioritized_planning(grid, agents, order)` is the fast, **incomplete**
