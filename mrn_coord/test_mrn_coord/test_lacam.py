@@ -90,6 +90,39 @@ class TestLacamCompleteness(unittest.TestCase):
         b = lacam(grid, agents)
         self.assertEqual(a.paths, b.paths)
 
+    def test_scales_past_the_toy_regime(self):
+        # The completeness test above only ever stresses 2-4 agents on 4x4-6x6
+        # grids — a regime where the greedy dive almost always reaches the goal, so
+        # the *scaling* claim went untested. With a static per-config priority order
+        # the dive was a weak deterministic PIBT that livelocked, dropping into the
+        # exponential lazy-constraint fallback; this 16-30 agent open-grid battery
+        # solved only ~0.667 even at 200k iterations and ran ~100x slower. The
+        # strong-PIBT spine (accumulating priority + the deterministic escape salt,
+        # reseeded per re-expansion) must clear every one of these, fast.
+        for w, h, n in ((8, 8, 16), (10, 10, 20), (12, 12, 30)):
+            grid = GridWorld(w, h)
+            cells = [(x, y) for x in range(w) for y in range(h)]
+            for seed in range(20):
+                rng = random.Random(seed)
+                starts, goals = rng.sample(cells, n), rng.sample(cells, n)
+                agents = {i: (starts[i], goals[i]) for i in range(n)}
+                sol = lacam(grid, agents, max_iterations=200_000)
+                self.assertTrue(_valid(grid, agents, sol),
+                                msg=f"LaCAM failed {w}x{h} n={n} seed={seed}")
+
+    def test_recovers_the_seed_that_only_the_escape_solves(self):
+        # 10x10/20 seed=66 livelocks the strong dive on its first salted attempt and
+        # — because `explored` forbids revisiting a config — cannot recover the way
+        # pibt_solve's oscillating walk does, UNLESS the escape salt is reseeded each
+        # time the stuck config is re-expanded. Without that reseed this instance
+        # fails even at 3,000,000 iterations / ~100s; with it, it solves instantly.
+        grid = GridWorld(10, 10)
+        cells = [(x, y) for x in range(10) for y in range(10)]
+        rng = random.Random(66)
+        starts, goals = rng.sample(cells, 20), rng.sample(cells, 20)
+        agents = {i: (starts[i], goals[i]) for i in range(20)}
+        self.assertTrue(_valid(grid, agents, lacam(grid, agents, max_iterations=200_000)))
+
 
 if __name__ == "__main__":
     unittest.main()

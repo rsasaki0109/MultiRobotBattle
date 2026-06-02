@@ -165,6 +165,45 @@ def _run_pibt_convergence() -> dict:
             "bare_converged": bare_converged}
 
 
+def _run_lacam_convergence() -> dict:
+    # LaCAM's documented selling point is *scaling* — complete, and fast on teams
+    # CBS cannot touch. That lives entirely in the order successors are generated:
+    # its greedy DFS spine is a PIBT rollout, and a *static* per-config priority
+    # made that the weak deterministic PIBT, which livelocked and dropped into the
+    # exponential lazy-constraint fallback — solving only ~0.667 of this open-grid
+    # battery even at 200k iterations, ~100x slower. The spine now runs the strong
+    # PIBT (accumulating priority + the deterministic escape salt reseeded per
+    # re-expansion). The contract: it solves *every* instance, each solution valid
+    # (collision-free, every agent on its goal), inside a bounded budget. The toy
+    # completeness test never reached this regime; this pins the scaling claim.
+    import random
+
+    from mrn_coord.mapf import GridWorld, lacam
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.solution import pad_paths
+
+    def _valid(grid, agents, sol) -> bool:
+        if sol is None or detect_first_conflict(pad_paths(sol.paths)) is not None:
+            return False
+        return all(sol.paths[a][0] == agents[a][0] and sol.paths[a][-1] == agents[a][1]
+                   for a in agents)
+
+    solved = valid = instances = 0
+    for w, h, n in ((8, 8, 16), (10, 10, 20), (12, 12, 30)):
+        grid = GridWorld(w, h)
+        cells = [(x, y) for x in range(w) for y in range(h)]
+        for seed in range(60):
+            rng = random.Random(seed)
+            starts, goals = rng.sample(cells, n), rng.sample(cells, n)
+            agents = {i: (starts[i], goals[i]) for i in range(n)}
+            sol = lacam(grid, agents, max_iterations=200_000)
+            instances += 1
+            solved += int(sol is not None)
+            valid += int(_valid(grid, agents, sol))
+    return {"case": "lacam_scaling_convergence", "instances": instances,
+            "solved": solved, "valid": valid}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -261,6 +300,8 @@ SUITE = [
                        case="mapf_rhcr_open")),
     # deterministic livelock escape recovers PIBT convergence (no randomness)
     ("pibt_escape_convergence", _run_pibt_convergence),
+    # strong-PIBT spine makes LaCAM's documented scaling actually deliver
+    ("lacam_scaling_convergence", _run_lacam_convergence),
     # executing a discrete MAPF plan in the continuous world (plan vs reality)
     ("mapf_exec_tpg", lambda: _run_mapf_exec("tpg")),
     ("mapf_exec_dwa", lambda: _run_mapf_exec("dwa")),

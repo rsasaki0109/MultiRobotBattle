@@ -10,8 +10,23 @@ configuration node carries a tree of low-level nodes that pin successive agents
 to successive candidate cells, generating PIBT successors under those pins one at
 a time. Because the constraints eventually enumerate *every* successor of a
 configuration and the configuration space is finite, LaCAM is **complete** — it
-finds a solution whenever one exists — while staying fast enough to scale to
-teams CBS cannot touch.
+finds a solution whenever one exists.
+
+Completeness alone is cheap; *scaling* lives entirely in the order successors are
+generated. LaCAM dives greedily — the empty-constraint (unconstrained) PIBT
+successor is explored first, so the DFS spine *is* a PIBT rollout, and the lazy
+constraints are only the backtracking fallback. If that spine reaches the goal
+directly, LaCAM is fast; if it livelocks, the search drops into the
+lazy-constraint enumeration, which branches-explodes (every agent's every
+neighbor) and times out. A *static* per-config priority order makes the spine the
+weak deterministic PIBT that livelocks. So the spine here is the **strong** PIBT,
+exactly :func:`pibt_solve <mrn_coord.lifelong.pibt_solve>`'s: off-goal agents
+*accumulate* priority (so a stuck agent eventually wins right of way), and a stall
+— the team's summed distance-to-goal failing to reach a new low — bumps a
+deterministic escape ``salt`` that scrambles equal-distance ties until the
+symmetry breaks. The spine reaches the goal directly far more often, so the
+exponential fallback is rarely touched. The constraint enumeration is *untouched*,
+so completeness still holds — only the successor order changes.
 
 This is the satisficing variant (any valid solution, collision-free by PIBT
 construction); it is not cost-optimal. Pure and deterministic.
@@ -39,13 +54,25 @@ def _bfs_dist(grid: GridWorld, goal: Cell) -> dict:
     return dist
 
 
-def _pibt(grid, config, order, dist_to, forced):
+def _mix(cell, salt: int) -> int:
+    """Deterministic integer hash of ``(cell, salt)`` — the twin of
+    :func:`mrn_coord.lifelong.lifelong._mix`, duplicated here so :mod:`mapf` need
+    not import :mod:`lifelong` (which imports back from :mod:`mapf`). Pure
+    arithmetic so the scramble is bit-reproducible (no ``PYTHONHASHSEED``); only
+    reached when an escape ``salt`` is active, so ``salt == 0`` is unchanged.
+    """
+    return ((cell[0] * 73856093) ^ (cell[1] * 19349663) ^ (salt * 83492791)) & 0xFFFFFFFF
+
+
+def _pibt(grid, config, order, dist_to, forced, *, salt: int = 0):
     """One PIBT step: return ``{agent: next_cell}`` or ``None`` if infeasible.
 
     ``config`` maps agent -> current cell; ``order`` is the priority order to
     decide agents in; ``dist_to`` maps agent -> {cell: dist-to-goal}; ``forced``
     pins some agents to a specific next cell (the LaCAM constraint). Pushing
-    (priority inheritance) and swap prevention are exactly PIBT's.
+    (priority inheritance) and swap prevention are exactly PIBT's. A non-zero
+    ``salt`` scrambles equal-distance candidate ties via :func:`_mix` (the
+    deterministic livelock escape); ``salt == 0`` breaks ties by raw coordinate.
     """
     occupant = {config[a]: a for a in config}
     next_pos: dict = {}
@@ -57,6 +84,9 @@ def _pibt(grid, config, order, dist_to, forced):
         d = dist_to[a]
         big = len(d) + 1
         here = config[a]
+        if salt:
+            return sorted(grid.neighbors(here),
+                          key=lambda c: (d.get(c, big), c == here, _mix(c, salt)))
         return sorted(grid.neighbors(here),
                       key=lambda c: (d.get(c, big), c == here, c))
 
@@ -85,12 +115,16 @@ def _pibt(grid, config, order, dist_to, forced):
     return next_pos
 
 
-def lacam(grid: GridWorld, agents: dict, *, max_iterations: int = 1_000_000):
+def lacam(grid: GridWorld, agents: dict, *,
+          max_iterations: int = 1_000_000, stall_patience: int = 3):
     """Solve a MAPF instance (satisficing, complete) by LaCAM.
 
     ``agents`` maps an agent id to a ``(start, goal)`` tuple. Returns a
     collision-free :class:`Solution` (not cost-optimal), or ``None`` if the
-    instance is infeasible or the iteration budget is exhausted.
+    instance is infeasible or the iteration budget is exhausted. The greedy DFS
+    spine runs the strong PIBT — accumulating priorities plus a deterministic
+    livelock escape that engages after ``stall_patience`` non-improving steps; see
+    the module docstring.
     """
     ids = sorted(agents)
     starts = {a: agents[a][0] for a in ids}
@@ -107,8 +141,9 @@ def lacam(grid: GridWorld, agents: dict, *, max_iterations: int = 1_000_000):
     goal_config = tuple(goals[a] for a in ids)
 
     n = len(ids)
+    size = grid.width * grid.height
+    big = size + 1
     cfg_cache: dict = {}
-    order_cache: dict = {}
 
     def cfg_of(config):
         c = cfg_cache.get(config)
@@ -117,14 +152,21 @@ def lacam(grid: GridWorld, agents: dict, *, max_iterations: int = 1_000_000):
             cfg_cache[config] = c
         return c
 
+    def sum_dist(config):
+        return sum(dist_to[ids[i]].get(config[i], big) for i in range(n))
+
+    # Per-config dive state, mirroring pibt_solve: an accumulating priority vector
+    # (off-goal agents gain +1, fractional reset on arrival) and a running-minimum
+    # stall counter (best summed distance-to-goal along the path to this config).
+    # `depth` doubles as the escape salt source so the perturbation varies down the
+    # spine, exactly as pibt_solve's per-step salt does.
     def priority_order(config):
-        # far-from-goal first (a PIBT heuristic); ties by id for determinism.
-        o = order_cache.get(config)
-        if o is None:
-            cfg = cfg_of(config)
-            o = sorted(ids, key=lambda a: (-dist_to[a].get(cfg[a], 0), a))
-            order_cache[config] = o
-        return o
+        prio = state[config][0]
+        return [ids[k] for k in sorted(range(n), key=lambda k: (-prio[k], ids[k]))]
+
+    prio0 = [dist_to[ids[i]].get(init[i], big) / size for i in range(n)]
+    state = {init: (prio0, sum_dist(init), 0, 0)}   # config -> (prio, best, stuck, depth)
+    expand = {init: 0}                # how many times each config has been expanded
 
     parent = {init: None}
     trees: dict = {init: [{}]}        # per-config stack of partial constraints
@@ -156,12 +198,21 @@ def lacam(grid: GridWorld, agents: dict, *, max_iterations: int = 1_000_000):
                 child[agent] = v
                 tree.append(child)
 
+        prio, best, stuck, depth = state[config]
+        # The escape salt mixes in `expand[config]` so a stuck config gets a
+        # *distinct* salted dive every time it is re-expanded — not just the single
+        # unconstrained one. This is what lets the spine recover where pibt_solve's
+        # oscillating walk would: there, a livelock is reseeded with a fresh salt
+        # each step; here, `explored` forbids revisiting a config, so the diversity
+        # has to come from re-expanding the *same* node under new salts instead.
+        salt = (depth + 1 + expand[config]) if stuck >= stall_patience else 0
+        expand[config] += 1
         if constraint:
             order = ([a for a in ids if a in constraint]
                      + [a for a in priority_order(config) if a not in constraint])
         else:
             order = priority_order(config)
-        nxt = _pibt(grid, cfg, order, dist_to, constraint)
+        nxt = _pibt(grid, cfg, order, dist_to, constraint, salt=salt)
         if nxt is None:
             continue
         new_config = tuple(nxt[ids[i]] for i in range(n))
@@ -170,6 +221,16 @@ def lacam(grid: GridWorld, agents: dict, *, max_iterations: int = 1_000_000):
         explored.add(new_config)
         parent[new_config] = config
         trees[new_config] = [{}]
+        expand[new_config] = 0
+        # Accumulate priority and roll the running-minimum stall forward, so the
+        # child's spine expansion behaves like pibt_solve's next step.
+        new_prio = [(prio[i] - int(prio[i])) if new_config[i] == goal_config[i]
+                    else prio[i] + 1 for i in range(n)]
+        s = sum_dist(new_config)
+        if s < best:
+            state[new_config] = (new_prio, s, 0, depth + 1)
+        else:
+            state[new_config] = (new_prio, best, stuck + 1, depth + 1)
         open_stack.append(new_config)
 
     return None

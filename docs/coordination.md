@@ -162,11 +162,29 @@ near-linear time). PIBT alone is greedy and incomplete, so LaCAM hangs a tree of
 agents to successive candidate cells, each yielding a PIBT successor under those
 pins. Because the constraints eventually enumerate *every* successor and the
 configuration space is finite, LaCAM is **complete** — it finds a solution
-whenever one exists — while scaling to teams the search-tree solvers cannot
-touch. It is satisficing (any valid collision-free solution, not cost-optimal);
-in random tests it solves every instance CBS solves, and it matches the optimum
-on the bundled example. Run `mrn_mapf_demo --solver lacam` or
-`mrn_mapf_bench --solver lacam`.
+whenever one exists. It is satisficing (any valid collision-free solution, not
+cost-optimal); in random tests it solves every instance CBS solves, and it
+matches the optimum on the bundled example.
+
+Completeness is cheap; *scaling* is the hard part, and it lives entirely in the
+order successors are generated. LaCAM dives greedily — the unconstrained PIBT
+successor is explored first, so the DFS spine *is* a PIBT rollout and the lazy
+constraints are only the backtracking fallback. With a **static** per-config
+priority the spine was the weak deterministic PIBT, which livelocks and drops
+into the lazy-constraint enumeration; that branches-explodes (every agent × every
+neighbor) and times out. On a 16–30-agent open-grid battery the old order solved
+only **0.667** of instances even at 200k iterations, ~100× slower than now — and
+some it could not solve at *3M* iterations: complete only in theory. The spine
+now runs the **strong** PIBT, the same one `pibt_solve` (in `lifelong/`) uses:
+off-goal agents *accumulate* priority, and a stall (summed distance-to-goal
+failing to reach a new low) bumps the deterministic escape `salt` — reseeded each
+time a stuck configuration is re-expanded, since `explored` forbids the revisits
+that let `pibt_solve`'s oscillating walk recover. The constraint enumeration is
+untouched, so completeness still holds; only the successor order changes. That
+battery now solves **180/180**, every solution valid, in seconds — the
+`lacam_scaling_convergence` gate pins it, where the toy completeness test (2–4
+agents on 4×4–6×6) never reached the regime the claim lived in. Run
+`mrn_mapf_demo --solver lacam` or `mrn_mapf_bench --solver lacam`.
 
 ### High level: MAPF-LNS (`lns.py`)
 
