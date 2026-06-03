@@ -188,6 +188,40 @@ the reference as above (the `ecbs` target ships in the same `cmake --build`), se
 `LIBMRP_ECBS`, and the `mapf-libmrp-equivalence` CI job runs it on every push —
 so the suboptimality *bound*, like the optimum itself, is a guarded contract.
 
+### High level: EECBS (`eecbs.py`)
+
+`eecbs(grid, agents, w=1.5)` is also **bounded-suboptimal**, but it fixes the
+one thing ECBS leaves on the table: ECBS's lower bound, `Σ f_min`, is the sum of
+the agents' *individual* optima and so is blind to the extra cost their
+conflicts *force*. EECBS (Li, Ruml & Koenig, AAAI 2021) keeps ECBS's focal,
+conflict-avoiding low level but swaps in CBSH's **admissible WDG heuristic** for
+a tight lower bound `f = LB + h`, and drives the high level with **Explicit
+Estimation Search** (EES). Each node now carries two path sets: the focal
+(conflict-dodging) paths give the candidate cost `g`, while the *optimal* paths
+under the same constraints give `LB` and feed the WDG heuristic — reused verbatim
+from `cbsh.py`. EES keeps three views of OPEN: a *cleanup* queue by `f` (whose
+minimum anchors the `w` guarantee), an *open* queue by an online-learned
+inadmissible estimate `f̂ = max(f, g + ε̄·conflicts)`, and a *focal* set within
+`w` of the best `f̂` ordered by conflict count. Because the search only has to
+certify `cost ≤ w·(global LB)`, a tighter `LB` reaches that certificate sooner.
+
+`benchmark_gate.py::eecbs_vs_ecbs` pins the win against `ecbs.py` at the same
+near-optimal `w = 1.02`, on the same battery `cbsh` uses (an obstacle-dense
+8×8/7 and an open 7×7/8, first 12 seeds each, 22 solvable instances). Two
+structural invariants make the gain unambiguous: `eecbs(heuristic=None)` — the
+EES skeleton with `h = 0` — expands **exactly** as many nodes as ECBS
+(`none == ecbs`, 240 = 240), so EES alone changes nothing; adding the heuristic
+is monotone `wdg ≤ dg ≤ cg ≤ none` and cuts the aggregate **240 → 126**
+high-level expansions (~1.9×, and `wdg ≤ ecbs` on all 22). The gain is a
+near-optimal-`w` phenomenon: at a loose `w = 1.5` the bound is trivially
+satisfied and the heuristic is dead weight (the gate would show no separation),
+which is exactly when you'd reach for plain ECBS instead. **Honest scope:**
+EECBS's cardinal-conflict *prioritization* is left out (it splits the first
+conflict like ECBS, so the measured win is purely EES + the admissible bound);
+prioritization is already reproduced and measured in `cbsh.py`. The cost bound
+itself (`≤ w·optimal`) is checked in the unit tests, where the CBS optimum is on
+hand; the gate stays on the cheap expansion-count contract.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of
@@ -354,7 +388,9 @@ larger teams use **CBSH** (`cbsh.py`, the same optimum with a CG/DG/WDG
 heuristic — ~13× fewer high-level expansions here); for a bigger jump trade
 optimality for **ECBS**
 (`--solver ecbs`, bounded-suboptimal — much further reach for a small cost
-premium), **LaCAM** (`--solver lacam`, complete and satisficing — solves large
+premium), or **EECBS** (`eecbs.py`, ECBS plus CBSH's admissible bound + EES —
+~1.9× fewer expansions than ECBS at a near-optimal `w`, when you want the
+suboptimality dialed close to 1), **LaCAM** (`--solver lacam`, complete and satisficing — solves large
 teams when the search trees blow up), **MAPF-LNS** (`--solver lns`, anytime —
 polishes a feasible solution toward the optimum), **PBS** (`--solver pbs`,
 priority-ordering search — suboptimal, but reorders past the head-on deadlocks

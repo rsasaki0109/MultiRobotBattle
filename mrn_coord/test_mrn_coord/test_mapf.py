@@ -11,6 +11,8 @@ from mrn_coord.mapf import (
     cbsh,
     cell_at,
     detect_first_conflict,
+    ecbs,
+    eecbs,
     makespan,
     manhattan,
     pad_paths,
@@ -254,6 +256,96 @@ class TestCBSH(unittest.TestCase):
         grid = GridWorld(3, 1)
         agents = {"a": ((0, 0), (2, 0)), "b": ((2, 0), (0, 0))}
         self.assertIsNone(cbsh(grid, agents, heuristic=None, max_expansions=500))
+
+
+class TestEECBS(unittest.TestCase):
+    """EECBS: bounded-suboptimal, fewer expansions than ECBS at the same w."""
+
+    def test_respects_bound_across_heuristics(self):
+        # Every heuristic (and the h=0 ablation) must return a valid solution
+        # within the suboptimality factor of the CBS optimum, at a few factors.
+        for seed in range(8):
+            grid, agents = _rand_instance(6, 6, 5, seed)
+            base = cbs(grid, agents, max_expansions=50000)
+            if base is None:
+                continue
+            for w in (1.0, 1.5):
+                for mode in (None, "cg", "dg", "wdg"):
+                    sol = eecbs(grid, agents, w=w, heuristic=mode,
+                                max_expansions=50000)
+                    self.assertIsNotNone(sol, f"seed={seed} w={w} mode={mode}")
+                    self.assertIsNone(detect_first_conflict(sol.paths))
+                    self.assertLessEqual(sol.cost, w * base.cost + 1e-9,
+                                         f"seed={seed} w={w} mode={mode}")
+                    for a, (start, goal) in agents.items():
+                        self.assertEqual(sol.paths[a][0], start)
+                        self.assertEqual(sol.paths[a][-1], goal)
+
+    def test_w_one_is_optimal(self):
+        # At w=1.0 the bound forces optimality — EECBS must match CBS's cost.
+        for seed in range(10):
+            grid, agents = _rand_instance(6, 6, 5, seed)
+            base = cbs(grid, agents, max_expansions=50000)
+            if base is None:
+                continue
+            sol = eecbs(grid, agents, w=1.0, heuristic="wdg",
+                        max_expansions=50000)
+            self.assertIsNotNone(sol, f"seed={seed}")
+            self.assertEqual(sol.cost, base.cost, f"seed={seed}")
+
+    def test_admissible_bound_cuts_expansions_vs_ecbs(self):
+        # Near-optimal (w=1.02) is where the admissible WDG bound bites: EECBS
+        # must expand no more than ECBS per instance, and far fewer in aggregate.
+        # The h=0 ablation reduces to ECBS's own expansion count.
+        tot_ecbs = tot_wdg = 0
+        for seed in range(8):
+            grid, agents = _rand_instance(8, 8, 7, seed, obstacle=0.12)
+            se = {}
+            base = ecbs(grid, agents, w=1.02, stats=se, max_expansions=20000)
+            if base is None:
+                continue
+            sh = {}
+            sol = eecbs(grid, agents, w=1.02, heuristic="wdg", stats=sh,
+                        max_expansions=20000)
+            self.assertIsNotNone(sol, f"seed={seed}")
+            self.assertLessEqual(sh["expansions"], se["expansions"],
+                                 f"seed={seed}")
+            tot_ecbs += se["expansions"]
+            tot_wdg += sh["expansions"]
+        # A clear aggregate win on this conflict-heavy battery.
+        self.assertLess(tot_wdg, tot_ecbs)
+
+    def test_heuristics_are_monotone(self):
+        # Stronger admissible heuristic -> never more expansions, in aggregate.
+        tot = {None: 0, "cg": 0, "dg": 0, "wdg": 0}
+        for seed in range(8):
+            grid, agents = _rand_instance(8, 8, 7, seed, obstacle=0.12)
+            for mode in (None, "cg", "dg", "wdg"):
+                sh = {}
+                if eecbs(grid, agents, w=1.02, heuristic=mode, stats=sh,
+                         max_expansions=20000) is None:
+                    break
+                tot[mode] += sh["expansions"]
+        self.assertLessEqual(tot["wdg"], tot["dg"])
+        self.assertLessEqual(tot["dg"], tot["cg"])
+        self.assertLessEqual(tot["cg"], tot[None])
+
+    def test_deterministic(self):
+        grid, agents = _rand_instance(7, 7, 8, 3)
+        runs = []
+        for _ in range(2):
+            sh = {}
+            sol = eecbs(grid, agents, w=1.1, heuristic="wdg", stats=sh)
+            runs.append((sol.cost, sh["expansions"]))
+        self.assertEqual(runs[0], runs[1])
+
+    def test_unsolvable_corridor_returns_none(self):
+        # 1-wide corridor swap is infeasible; EECBS exhausts its budget and
+        # returns None. (heuristic=None keeps the per-node work cheap.)
+        grid = GridWorld(3, 1)
+        agents = {"a": ((0, 0), (2, 0)), "b": ((2, 0), (0, 0))}
+        self.assertIsNone(
+            eecbs(grid, agents, w=1.5, heuristic=None, max_expansions=500))
 
 
 class TestPrioritized(unittest.TestCase):

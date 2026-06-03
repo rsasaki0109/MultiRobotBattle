@@ -20,6 +20,10 @@ The pieces compose bottom-up:
 - :mod:`ecbs` — Enhanced CBS: bounded-suboptimal (``cost <= w * optimal``) via
   focal search at both levels; expands far fewer nodes than CBS for a little
   cost slack, so it scales to more agents.
+- :mod:`eecbs` — EECBS (Li et al. 2021): bounded-suboptimal like ECBS, but it
+  reuses CBSH's admissible WDG heuristic for a tight lower bound and runs
+  Explicit Estimation Search at the high level, certifying the ``w`` bound with
+  fewer expansions than ECBS at the same factor.
 - :mod:`lacam` — LaCAM: complete satisficing search over whole configurations
   using PIBT as a successor generator with lazy constraints; scales to large
   teams (not cost-optimal).
@@ -37,6 +41,7 @@ The pieces compose bottom-up:
 from .cbs import cbs
 from .cbsh import cbsh
 from .ecbs import ecbs
+from .eecbs import eecbs
 from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
 from .pbs import pbs, pbs_paths
@@ -66,6 +71,7 @@ __all__ = [
     "cbs",
     "cbsh",
     "ecbs",
+    "eecbs",
     "lacam",
     "lacam_ltm",
     "mapf_lns",

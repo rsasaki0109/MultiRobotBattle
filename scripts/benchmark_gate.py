@@ -485,6 +485,82 @@ def _run_cbsh_vs_cbs() -> dict:
             "monotone": exp_wdg <= exp_dg <= exp_cg <= exp_cbs}
 
 
+def _run_eecbs_vs_ecbs() -> dict:
+    # EECBS (eecbs) is a Python reproduction of Li, Ruml & Koenig's "EECBS: A
+    # Bounded-Suboptimal Search for MAPF" (AAAI 2021). It keeps ECBS's focal,
+    # conflict-avoiding low level but replaces ECBS's loose lower bound (sum of
+    # the agents' individual optima) with CBSH's admissible WDG heuristic, and
+    # drives the high level with Explicit Estimation Search. At a near-optimal
+    # suboptimality factor (here w = 1.02) the tighter bound certifies the
+    # solution after far fewer high-level expansions. This gate pins that win
+    # against the existing ecbs at the SAME w, on the same battery cbsh uses.
+    #
+    # It locks the expansion counts per variant. Two structural invariants make
+    # the win unambiguous and attributable: (1) eecbs(heuristic=None) -- the EES
+    # skeleton with h = 0 -- expands EXACTLY as many nodes as ecbs (none==ecbs),
+    # so EES alone changes nothing; (2) adding the heuristic is monotone,
+    # wdg <= dg <= cg <= none, i.e. the entire reduction comes from the
+    # admissible bound. The cost bound (<= w * optimal) is verified in the unit
+    # tests, where the cbs optimum is available; the gate stays on the cheap
+    # performance contract. If a change weakens the heuristic the eecbs sums
+    # rise back toward ecbs and the gate trips.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.ecbs import ecbs
+    from mrn_coord.mapf.eecbs import eecbs
+
+    def _instance(w, h, n, seed, obstacle):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obstacle}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        starts = free[:n]
+        goals = free[n:2 * n]
+        grid = GridWorld(w, h, frozenset(blocked))
+        return grid, {i: (starts[i], goals[i]) for i in range(n)}
+
+    weight = 1.02
+    instances = exp_ecbs = exp_none = exp_cg = exp_dg = exp_wdg = 0
+    wdg_le_ecbs = 0
+    # First 12 seeds of two configs: a conflict-heavy 8x8/7 at 12% obstacles and
+    # an open 7x7/8 (no cherry-picking -- plain `range(12)`).
+    for w, h, n, obstacle in ((8, 8, 7, 0.12), (7, 7, 8, 0.0)):
+        for seed in range(12):
+            grid, agents = _instance(w, h, n, seed, obstacle)
+            se: dict = {}
+            base = ecbs(grid, agents, w=weight, stats=se, max_expansions=20000)
+            if base is None:
+                continue
+            row = {}
+            ok = True
+            for mode in (None, "cg", "dg", "wdg"):
+                sh: dict = {}
+                sol = eecbs(grid, agents, w=weight, heuristic=mode, stats=sh,
+                            max_expansions=20000)
+                if sol is None:
+                    ok = False
+                    break
+                row[mode] = sh["expansions"]
+            if not ok:
+                continue
+            instances += 1
+            exp_ecbs += se["expansions"]
+            exp_none += row[None]
+            exp_cg += row["cg"]
+            exp_dg += row["dg"]
+            exp_wdg += row["wdg"]
+            wdg_le_ecbs += int(row["wdg"] <= se["expansions"])
+    return {"case": "eecbs_vs_ecbs", "instances": instances,
+            "exp_ecbs": exp_ecbs, "exp_none": exp_none, "exp_cg": exp_cg,
+            "exp_dg": exp_dg, "exp_wdg": exp_wdg,
+            "none_eq_ecbs": exp_none == exp_ecbs,
+            "wdg_le_ecbs": wdg_le_ecbs,
+            "monotone": exp_wdg <= exp_dg <= exp_cg <= exp_none}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -589,6 +665,8 @@ SUITE = [
     # CBSH improved heuristics (CG/DG/WDG) + cardinal prioritization: same
     # optimum as CBS, far fewer high-level expansions
     ("cbsh_vs_cbs", _run_cbsh_vs_cbs),
+    # EECBS: admissible WDG bound + EES cut bounded-suboptimal expansions vs ECBS
+    ("eecbs_vs_ecbs", _run_eecbs_vs_ecbs),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

@@ -1,0 +1,12 @@
+{
+  "case": "eecbs_vs_ecbs",
+  "instances": 22,
+  "exp_ecbs": 240,
+  "exp_none": 240,
+  "exp_cg": 156,
+  "exp_dg": 134,
+  "exp_wdg": 126,
+  "none_eq_ecbs": true,
+  "wdg_le_ecbs": 22,
+  "monotone": true
+}
