@@ -335,6 +335,7 @@ def joint_astar(grid: GridWorld, agents: dict, *, max_expansions: int = 200_000,
     open_heap = [(h(starts), next(counter), starts)]
     closed: set = set()
     expansions = 0
+    generated = 0
     while open_heap:
         _, _, u = heapq.heappop(open_heap)
         if u in closed:
@@ -344,10 +345,12 @@ def joint_astar(grid: GridWorld, agents: dict, *, max_expansions: int = 200_000,
         if expansions > max_expansions:
             if stats is not None:
                 stats["expansions"] = expansions
+                stats["generated"] = generated
             return None
         if u == goals:
             if stats is not None:
                 stats["expansions"] = expansions
+                stats["generated"] = generated
             configs = [u]
             cur = u
             while cur in parent:
@@ -366,6 +369,7 @@ def joint_astar(grid: GridWorld, agents: dict, *, max_expansions: int = 200_000,
         for v in itertools.product(*per_agent):
             if not legal(u, v):
                 continue
+            generated += 1
             ng = g[u] + edge_cost(u, v)
             if ng < g.get(v, INF):
                 g[v] = ng
@@ -373,4 +377,5 @@ def joint_astar(grid: GridWorld, agents: dict, *, max_expansions: int = 200_000,
                 heapq.heappush(open_heap, (ng + h(v), next(counter), v))
     if stats is not None:
         stats["expansions"] = expansions
+        stats["generated"] = generated
     return None

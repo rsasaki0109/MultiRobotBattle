@@ -1327,6 +1327,149 @@ def _run_mstar_subdimensional() -> dict:
     }
 
 
+def _run_standley_id_od() -> dict:
+    # Standley's "Finding Optimal Solutions to Cooperative Pathfinding Problems"
+    # (AAAI 2010), reproduced in standley.py: two attacks on the b**n joint
+    # branching. OPERATOR DECOMPOSITION (od_astar) assigns a move to one agent at
+    # a time -- effective branching b, not b**n -- so it GENERATES a small
+    # fraction of the successors a fully coupled joint A* (mstar.joint_astar)
+    # does, and the gap widens with the team (od_advantage_grows_with_team).
+    # INDEPENDENCE DETECTION (independence_detection) plans agents separately and
+    # merges only colliding groups, so on the isolated-swap family it only ever
+    # solves the 2-agent pair jointly (peak_group == 2) while every bystander
+    # stays its own group (num_groups grows with the team). Both return CBS's
+    # exact optimum (od_matches_cbs / id_matches_cbs), checked on random maps and
+    # the constructed family. If OD's decomposition regresses, od_generated rises
+    # toward joint_generated; if ID stops decoupling, peak_group rises toward the
+    # team size.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.mstar import joint_astar
+    from mrn_coord.mapf.solution import sum_of_costs
+    from mrn_coord.mapf.standley import independence_detection, od_astar
+
+    def _valid(sol, ag):
+        return (detect_first_conflict(sol.paths) is None
+                and all(sol.paths[a][-1] == ag[a][1] for a in ag))
+
+    def _rand(w, h, n, seed, obs):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obs}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        return (GridWorld(w, h, frozenset(blocked)),
+                {i: (free[i], free[n + i]) for i in range(n)})
+
+    def _isolated(nby, seed):
+        L, pk = 5, 2
+        W, H = L + 1, 2 + 2 * nby
+        blocked = set()
+        for x in range(W):
+            if (x, 1) != (pk, 1):
+                blocked.add((x, 1))
+        for k in range(nby):
+            sep = 2 + 2 * k + 1
+            if sep < H:
+                for x in range(W):
+                    blocked.add((x, sep))
+        grid = GridWorld(W, H, frozenset(blocked))
+        ag = {0: ((0, 0), (L, 0)), 1: ((L, 0), (0, 0))}
+        rng = random.Random(seed)
+        for k in range(nby):
+            ly = 2 + 2 * k
+            ag[2 + k] = (((0, ly), (W - 1, ly)) if rng.random() < 0.5
+                         else ((W - 1, ly), (0, ly)))
+        return grid, ag
+
+    rand_inst = od_opt = id_opt = od_val = id_val = 0
+    for (w, h, n, obs) in ((5, 5, 3, 0.0), (5, 5, 4, 0.1), (6, 6, 3, 0.12)):
+        for seed in range(8):
+            grid, ag = _rand(w, h, n, seed, obs)
+            base = cbs(grid, ag, max_expansions=20000)
+            if base is None:
+                continue
+            od = od_astar(grid, ag, max_expansions=100000)
+            idsol = independence_detection(grid, ag, max_expansions=100000)
+            if od is None or idsol is None:
+                continue
+            rand_inst += 1
+            od_opt += int(od.cost == base.cost
+                          and sum_of_costs(od.paths) == base.cost)
+            id_opt += int(idsol.cost == base.cost
+                          and sum_of_costs(idsol.paths) == base.cost)
+            od_val += int(_valid(od, ag))
+            id_val += int(_valid(idsol, ag))
+
+    od_gen = {}
+    joint_gen = {}
+    for n in (3, 4):
+        og = jg = 0
+        for seed in range(8):
+            grid, ag = _rand(6, 6, n, seed, 0.05)
+            if cbs(grid, ag, max_expansions=20000) is None:
+                continue
+            so = {}
+            od_astar(grid, ag, stats=so, max_expansions=100000)
+            sj = {}
+            joint_astar(grid, ag, stats=sj, max_expansions=300000)
+            og += so["generated"]
+            jg += sj["generated"]
+        od_gen[n] = og
+        joint_gen[n] = jg
+
+    con_inst = id_con_opt = 0
+    peak_group = 0
+    groups_largest = 0
+    for nby in (2, 3, 4, 5):
+        for seed in range(6):
+            grid, ag = _isolated(nby, seed)
+            base = cbs(grid, ag, max_expansions=20000)
+            st = {}
+            sol = independence_detection(grid, ag, stats=st,
+                                         max_expansions=100000)
+            if base is None or sol is None:
+                continue
+            con_inst += 1
+            id_con_opt += int(sol.cost == base.cost
+                              and sum_of_costs(sol.paths) == base.cost
+                              and detect_first_conflict(sol.paths) is None)
+            peak_group = max(peak_group, st["max_group"])
+            if nby == 5:
+                groups_largest = st["num_groups"]
+
+    ratio3 = joint_gen[3] / max(1, od_gen[3])
+    ratio4 = joint_gen[4] / max(1, od_gen[4])
+    return {
+        "case": "standley_id_od",
+        "rand_instances": rand_inst,
+        "od_opt_match": od_opt,
+        "id_opt_match": id_opt,
+        "od_valid": od_val,
+        "id_valid": id_val,
+        "od_generated_n3": od_gen[3],
+        "od_generated_n4": od_gen[4],
+        "joint_generated_n3": joint_gen[3],
+        "joint_generated_n4": joint_gen[4],
+        "con_instances": con_inst,
+        "id_con_opt_match": id_con_opt,
+        "peak_group": peak_group,
+        "num_groups_largest_team": groups_largest,
+        "od_matches_cbs": od_opt == rand_inst,
+        "id_matches_cbs": id_opt == rand_inst and id_con_opt == con_inst,
+        "all_valid": od_val == rand_inst and id_val == rand_inst,
+        "od_branching_below_joint": (od_gen[3] < joint_gen[3]
+                                     and od_gen[4] < joint_gen[4]),
+        "od_advantage_grows_with_team": ratio4 > ratio3,
+        "id_couples_only_the_pair": peak_group == 2,
+        "id_groups_one_per_independent_agent": groups_largest == 6,
+    }
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -1457,6 +1600,9 @@ SUITE = [
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),
+    # Standley OD + ID: operator decomposition cuts joint branching b**n -> b;
+    # independence detection solves only the colliding groups (same optimum as CBS)
+    ("standley_id_od", _run_standley_id_od),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

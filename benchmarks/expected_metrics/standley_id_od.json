@@ -1,0 +1,23 @@
+{
+  "all_valid": true,
+  "case": "standley_id_od",
+  "con_instances": 24,
+  "id_con_opt_match": 24,
+  "id_couples_only_the_pair": true,
+  "id_groups_one_per_independent_agent": true,
+  "id_matches_cbs": true,
+  "id_opt_match": 22,
+  "id_valid": 22,
+  "joint_generated_n3": 11772,
+  "joint_generated_n4": 70356,
+  "num_groups_largest_team": 6,
+  "od_advantage_grows_with_team": true,
+  "od_branching_below_joint": true,
+  "od_generated_n3": 2389,
+  "od_generated_n4": 5469,
+  "od_matches_cbs": true,
+  "od_opt_match": 22,
+  "od_valid": 22,
+  "peak_group": 2,
+  "rand_instances": 22
+}

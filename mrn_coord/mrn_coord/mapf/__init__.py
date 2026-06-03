@@ -53,6 +53,13 @@ The pieces compose bottom-up:
   their full moves. Same optimum as CBS; on instances with few, isolated
   interactions the collision set — and the search — stays low-dimensional and
   invariant to the rest of the team.
+- :mod:`standley` — Standley's optimal MAPF (AAAI 2010): two ways to beat the
+  ``b**n`` joint branching. ``od_astar`` is *operator decomposition* — assign a
+  move to one agent at a time so the effective branching is ``b`` not ``b**n``;
+  ``independence_detection`` plans agents (groups) separately and merges only the
+  groups that actually collide. Both reach CBS's optimum; OD generates a small
+  fraction of a joint A*'s successors, ID never searches independent agents
+  together.
 - :mod:`flow` — anonymous makespan-optimal MAPF (Yu & LaValle 2013): when targets
   are interchangeable, minimum-makespan routing reduces to integer MAX FLOW on a
   time-expanded network — polynomial, no search tree, with a self-certified
@@ -88,6 +95,7 @@ from .mutex import classify_conflict, generate_mutexes, pc_constraints
 from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
 from .mstar import joint_astar, mstar
+from .standley import independence_detection, od_astar
 from .pbs import pbs, pbs_paths
 from .conflicts import (
     EdgeConflict,
@@ -127,6 +135,8 @@ __all__ = [
     "lacam_ltm",
     "mstar",
     "joint_astar",
+    "od_astar",
+    "independence_detection",
     "mapf_lns",
     "pbs",
     "pbs_paths",

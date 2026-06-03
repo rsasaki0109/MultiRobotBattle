@@ -598,6 +598,45 @@ its edge (rM\* is the fix, left for later). The gate therefore demonstrates the
 mechanism on the regime it was designed for — few, isolated interactions — and
 pins the exact-optimum agreement with CBS everywhere.
 
+### High level: Standley — operator decomposition + independence detection (`standley.py`)
+
+`od_astar` and `independence_detection` reproduce Trevor Standley's *Finding
+Optimal Solutions to Cooperative Pathfinding Problems* (AAAI 2010) — the two
+ideas that made *optimal* joint-space A\* practical, each attacking the `b**n`
+joint branching (`b` moves each for `n` agents) from a different end.
+
+**Operator decomposition (OD).** Rather than move all agents at once (`b**n`
+children), `od_astar` assigns a move to **one** agent at a time: between two full
+("standard") configurations the search threads `n − 1` *intermediate* states,
+each branching only `b` ways, and a partial assignment is collision-checked
+against the agents already committed this round so a doomed prefix is pruned
+before all `n` agents commit. Same optimal sum-of-costs as CBS, reached while
+*generating* a small fraction of a fully coupled joint A\*'s successors. (Cost is
+the true sum-of-costs via the same `(config, settled)` accounting M\* uses, so an
+agent that must vacate its goal and return is priced exactly.)
+
+**Independence detection (ID).** `independence_detection` doesn't search `n`
+agents together unless forced to: it plans each agent alone, and whenever two
+groups' paths collide it merges them and replans that group jointly, repeating
+until no two groups collide. At convergence the groups are mutually
+conflict-free and each is individually optimal, so their union is optimal — the
+same value CBS returns.
+
+The `standley_id_od` gate pins both wins against CBS. **Same optimum:** on random
+maps OD and ID each return CBS's sum-of-costs on every instance
+(`od_matches_cbs`, `id_matches_cbs`), every plan collision-free
+(`all_valid`). **OD shrinks the branching:** on `6×6` maps OD generates far fewer
+successors than `joint_astar` and the gap *widens* with the team — aggregate
+`od_generated 2389 → 5469` against `joint_generated 11772 → 70356` from 3 to 4
+agents (≈5× → ≈13×), so `od_branching_below_joint` and
+`od_advantage_grows_with_team` both hold. **ID decouples:** on the same
+isolated-swap + bystanders family M\* uses, ID solves *only* the 2-agent pair
+jointly (`peak_group == 2`) while every bystander stays its own group, so the
+group count tracks the team (`num_groups == n − 1`,
+`id_groups_one_per_independent_agent`). Unlike basic M\*, OD's branching win is
+unconditional — it holds even when every agent couples — which is why it pairs
+naturally with ID's group decomposition as the classic optimal-MAPF workhorse.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of

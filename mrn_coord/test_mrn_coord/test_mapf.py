@@ -1143,5 +1143,106 @@ class TestMStar(unittest.TestCase):
         self.assertEqual(runs[0], runs[1])
 
 
+class TestStandley(unittest.TestCase):
+    """Standley's OD (operator decomposition) and ID (independence detection):
+    same optimum as CBS, b**n branching shrunk to b, only colliding groups
+    searched together."""
+
+    @staticmethod
+    def _isolated(nby, seed):
+        import random
+        L, pk = 5, 2
+        W, H = L + 1, 2 + 2 * nby
+        blocked = set()
+        for x in range(W):
+            if (x, 1) != (pk, 1):
+                blocked.add((x, 1))
+        for k in range(nby):
+            sep = 2 + 2 * k + 1
+            if sep < H:
+                for x in range(W):
+                    blocked.add((x, sep))
+        grid = GridWorld(W, H, frozenset(blocked))
+        agents = {0: ((0, 0), (L, 0)), 1: ((L, 0), (0, 0))}
+        rng = random.Random(seed)
+        for k in range(nby):
+            ly = 2 + 2 * k
+            agents[2 + k] = (((0, ly), (W - 1, ly)) if rng.random() < 0.5
+                             else ((W - 1, ly), (0, ly)))
+        return grid, agents
+
+    def test_od_and_id_match_cbs_optimum(self):
+        # Both OD-A* and ID must return CBS's optimal sum-of-costs, with valid
+        # collision-free plans honoring endpoints — including dense maps whose
+        # optimum needs an agent to vacate its goal and return.
+        from mrn_coord.mapf.standley import independence_detection, od_astar
+        for w, h, n, obs in ((5, 5, 3, 0.0), (5, 5, 4, 0.1), (6, 6, 3, 0.12)):
+            for seed in range(6):
+                grid, agents = _rand_instance(w, h, n, seed, obstacle=obs)
+                base = cbs(grid, agents, max_expansions=20000)
+                if base is None:
+                    continue
+                for solve in (od_astar, independence_detection):
+                    sol = solve(grid, agents, max_expansions=100000)
+                    self.assertIsNotNone(sol, f"{solve.__name__} seed={seed}")
+                    self.assertEqual(sol.cost, base.cost,
+                                     f"{solve.__name__} {w}x{h} seed={seed}")
+                    self.assertEqual(sum_of_costs(sol.paths), base.cost)
+                    self.assertIsNone(detect_first_conflict(sol.paths))
+                    for a, (start, goal) in agents.items():
+                        self.assertEqual(sol.paths[a][0], start)
+                        self.assertEqual(sol.paths[a][-1], goal)
+
+    def test_od_branching_below_joint_and_grows(self):
+        # Operator decomposition must generate fewer successors than a fully
+        # coupled joint A*, and the advantage must widen with the team size.
+        from mrn_coord.mapf.mstar import joint_astar
+        from mrn_coord.mapf.standley import od_astar
+        ratios = {}
+        for n in (3, 4):
+            og = jg = 0
+            for seed in range(6):
+                grid, agents = _rand_instance(6, 6, n, seed, obstacle=0.05)
+                if cbs(grid, agents, max_expansions=20000) is None:
+                    continue
+                so = {}
+                od_astar(grid, agents, stats=so, max_expansions=100000)
+                sj = {}
+                joint_astar(grid, agents, stats=sj, max_expansions=300000)
+                og += so["generated"]
+                jg += sj["generated"]
+            self.assertLess(og, jg, f"n={n}")
+            ratios[n] = jg / og
+        self.assertGreater(ratios[4], ratios[3])
+
+    def test_id_couples_only_the_conflict(self):
+        # On the isolated-swap family ID solves only the 2-agent pair jointly;
+        # every bystander stays its own group, so the number of groups grows with
+        # the team while the largest group stays 2.
+        from mrn_coord.mapf.standley import independence_detection
+        for nby in (2, 3, 4, 5):
+            n = 2 + nby
+            grid, agents = self._isolated(nby, 0)
+            base = cbs(grid, agents, max_expansions=20000)
+            st = {}
+            sol = independence_detection(grid, agents, stats=st,
+                                         max_expansions=100000)
+            self.assertIsNotNone(sol)
+            self.assertEqual(sol.cost, base.cost, f"nby={nby}")
+            self.assertIsNone(detect_first_conflict(sol.paths))
+            self.assertEqual(st["max_group"], 2, f"nby={nby}")
+            self.assertEqual(st["num_groups"], n - 1, f"nby={nby}")
+
+    def test_deterministic(self):
+        from mrn_coord.mapf.standley import od_astar
+        grid, agents = _rand_instance(6, 6, 4, 2, obstacle=0.08)
+        runs = []
+        for _ in range(2):
+            so = {}
+            sol = od_astar(grid, agents, stats=so, max_expansions=100000)
+            runs.append((sol.cost, so["generated"]))
+        self.assertEqual(runs[0], runs[1])
+
+
 if __name__ == "__main__":
     unittest.main()
