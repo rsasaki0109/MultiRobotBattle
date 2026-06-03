@@ -247,9 +247,40 @@ CBS's tree actually blows up — first 10 seeds each of an open 7×7/8 and an
 obstacle-dense 6×6/6 (no cherry-picking). It pins **optimality** (cbsh's cost
 equals cbs's on every instance) and the **expansion counts**, monotone
 `wdg ≤ dg ≤ cg ≤ cbs`: in aggregate **3540 → 268** high-level nodes (a 13×
-cut overall, ~21× on the conflict-heavy grid). Honest scope: the heaviest term
-of the paper, *bypass*, is not implemented; this is the heuristic + conflict
-prioritization, which is where most of the cut comes from.
+cut overall, ~21× on the conflict-heavy grid). This is the heuristic + conflict
+prioritization; the orthogonal *bypass* term of ICBS is reproduced separately in
+`bypass.py` below.
+
+#### Bypassing conflicts (`bypass.py`)
+
+`cbs_bypass(grid, agents)` reproduces Boyarski et al., *"Don't Split, Try to Work
+It Out: Bypassing Conflicts in Multi-Agent Pathfinding"* (ICAPS 2015) — the BP
+component of ICBS. Standard CBS, when it picks a conflict, always **splits**:
+it adds a constraint-tree child for each of the two agents. BP first asks whether
+that split is necessary. When it generates the two children it checks if either
+is a **valid bypass** of the current node `N`:
+
+- same **cost** as `N` (nobody paid to resolve the conflict), and
+- strictly **fewer conflicts** than `N`.
+
+If so it **adopts that child's new path** into `N` — *without* recording the
+constraint — and re-examines `N` in place, generating no tree nodes. The adopted
+path is valid under `N`'s weaker constraints (it was found under more), and its
+cost is unchanged, so `g(N)` and the optimal bound hold: BP returns the **same
+optimal sum-of-costs as CBS**. A **cardinal** conflict can never be bypassed —
+both its children must gain cost, failing the same-cost test — so BP collapses the
+tree precisely on the non-cardinal conflicts plain CBS wastefully splits. Each
+adoption strictly drops the conflict count, so a node is bypassed only finitely
+often before it is solved or genuinely split.
+
+It reuses CBSH's conflict machinery (MDD classification, cardinal-first conflict
+choice); `cbs.py` stays byte-for-byte the baseline. Gated by `mapf_cbs_bypass`:
+on a 320-instance battery `cbs_bypass` matches the `cbs` optimum and is
+collision-free everywhere, while bypassing cuts high-level expansions **867 →
+490** and generated tree nodes **1094 → 340**, and **never** expands more than
+the `bypass=False` ablation (worse = 0). A frozen showcase (seed 54, 5 agents on
+6×6) keeps the optimum 22 but collapses expansions **17 → 3** and generated nodes
+**32 → 4** through 3 bypasses (`test_bypass`).
 
 #### Rectangle symmetry reasoning (`cbsh(rectangle=True)`, `rectangle.py`)
 

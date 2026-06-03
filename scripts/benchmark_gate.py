@@ -1204,6 +1204,100 @@ def _run_whca() -> dict:
     }
 
 
+def _run_cbs_bypass() -> dict:
+    # CBS with bypassing conflicts (bypass.py) is a Python reproduction of
+    # Boyarski et al.'s "Don't Split, Try to Work It Out: Bypassing Conflicts in
+    # Multi-Agent Pathfinding" (ICAPS 2015), the BP component of ICBS. Standard
+    # CBS always SPLITS a conflict into two constraint-tree children. BP first
+    # checks whether either child is a valid BYPASS of the current node: same
+    # cost AND strictly fewer conflicts. If so it ADOPTS that child's path into
+    # the node (constraints unchanged) and re-examines it -- no new tree nodes.
+    # The adopted path is valid (found under more constraints) and same-cost, so
+    # the optimum is preserved; a cardinal conflict can never be bypassed (both
+    # children gain cost), so BP shrinks the tree precisely on the non-cardinal
+    # conflicts plain CBS wastefully splits.
+    #
+    # This gate pins:
+    # (1) SAME OPTIMUM AS CBS: on a random battery, cbs_bypass matches the cbs
+    #     optimum and is collision-free (opt_match == instances, cf == instances).
+    # (2) BYPASS SHRINKS THE SEARCH: aggregated over the battery, bypass cuts both
+    #     high-level expansions (867 -> 490) and generated tree nodes (1094 ->
+    #     340), and NEVER expands more than the no-bypass ablation (worse == 0).
+    # (3) A frozen showcase (seed 54, 5 agents on 6x6): same optimum 22, but
+    #     expansions 17 -> 3 and generated nodes 32 -> 4 via 3 bypasses.
+    import random
+
+    from mrn_coord.mapf import GridWorld, cbs
+    from mrn_coord.mapf.bypass import cbs_bypass
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    def _inst(seed, n, w, h):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        cells = rng.sample(free, 2 * n)
+        return GridWorld(w, h), {i: (cells[i], cells[n + i]) for i in range(n)}
+
+    instances = opt_match = cf = 0
+    exp_off = exp_on = gen_off = gen_on = bypasses = worse = 0
+    for seed in range(80):
+        for n, w, h in ((3, 5, 5), (4, 5, 5), (4, 6, 6), (5, 6, 6)):
+            grid, agents = _inst(seed, n, w, h)
+            base = cbs(grid, agents, max_expansions=40000)
+            if base is None:
+                continue
+            instances += 1
+            so: dict = {}
+            sb: dict = {}
+            off = cbs_bypass(grid, agents, bypass=False, max_expansions=40000,
+                             stats=so)
+            on = cbs_bypass(grid, agents, bypass=True, max_expansions=40000,
+                            stats=sb)
+            if on is not None and on.cost == base.cost:
+                opt_match += 1
+            if on is not None and detect_first_conflict(on.paths) is None:
+                cf += 1
+            exp_off += so["expansions"]
+            exp_on += sb["expansions"]
+            gen_off += so["generated"]
+            gen_on += sb["generated"]
+            bypasses += sb["bypasses"]
+            if sb["expansions"] > so["expansions"]:
+                worse += 1
+
+    # A frozen showcase where bypassing collapses the tree.
+    sgrid, sagents = _inst(54, 5, 6, 6)
+    sbase = cbs(sgrid, sagents)
+    sso: dict = {}
+    ssb: dict = {}
+    cbs_bypass(sgrid, sagents, bypass=False, stats=sso)
+    son = cbs_bypass(sgrid, sagents, bypass=True, stats=ssb)
+
+    return {
+        "case": "mapf_cbs_bypass",
+        "instances": instances,
+        "opt_match": opt_match,
+        "cf": cf,
+        "battery_exp_off": exp_off,
+        "battery_exp_on": exp_on,
+        "battery_gen_off": gen_off,
+        "battery_gen_on": gen_on,
+        "battery_bypasses": bypasses,
+        "battery_worse": worse,
+        "showcase_cbs_cost": sbase.cost,
+        "showcase_bypass_cost": son.cost,
+        "showcase_off_exp": sso["expansions"],
+        "showcase_off_gen": sso["generated"],
+        "showcase_on_exp": ssb["expansions"],
+        "showcase_on_gen": ssb["generated"],
+        "showcase_bypasses": ssb["bypasses"],
+        "same_optimum_as_cbs": (opt_match == instances and cf == instances
+                                and son.cost == sbase.cost),
+        "bypass_shrinks_search": (exp_on < exp_off and gen_on < gen_off
+                                  and bypasses > 0),
+        "bypass_never_hurts": worse == 0,
+    }
+
+
 def _run_disjoint_vs_standard() -> dict:
     # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
     # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
@@ -2843,6 +2937,10 @@ SUITE = [
     # collision-free by construction, and resolves transient deadlocks that a
     # single fixed priority order (prioritized planning) livelocks on
     ("mapf_whca", _run_whca),
+    # CBS bypassing conflicts (ICAPS 2015): adopt a same-cost, fewer-conflicts
+    # child's path instead of splitting -- same optimum as CBS, fewer high-level
+    # expansions and far fewer generated tree nodes, never worse
+    ("mapf_cbs_bypass", _run_cbs_bypass),
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),

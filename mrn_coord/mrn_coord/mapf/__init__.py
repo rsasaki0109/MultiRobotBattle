@@ -21,6 +21,11 @@ The pieces compose bottom-up:
 - :mod:`cbsh` — CBS with improved heuristics (Li et al. 2019): the same optimal
   search, but an admissible CG/DG/WDG heuristic plus cardinal-conflict
   prioritization cut the high-level node expansions by a large factor.
+- :mod:`bypass` — CBS with bypassing conflicts (Boyarski et al. 2015): before
+  splitting a conflict, check if either child is a *valid bypass* — same cost and
+  strictly fewer conflicts — and if so adopt its path into the node instead of
+  growing the tree. Same optimum as CBS; collapses the tree on the non-cardinal
+  conflicts plain CBS wastefully splits (a cardinal conflict can never bypass).
 - :mod:`macbs` — Meta-Agent CBS (Sharon et al. 2012/2015): the same optimal CBS,
   but with a conflict bound ``B`` — two "agents" that conflict more than ``B``
   times are *merged* into a meta-agent solved by a coupled (joint) low level.
@@ -118,6 +123,7 @@ The pieces compose bottom-up:
 """
 
 from .bcp import bcp
+from .bypass import cbs_bypass
 from .cbs import cbs
 from .cbsh import cbsh
 from .macbs import macbs
@@ -161,6 +167,7 @@ __all__ = [
     "cell_at",
     "detect_first_conflict",
     "bcp",
+    "cbs_bypass",
     "cbs",
     "cbsh",
     "macbs",

@@ -1,0 +1,22 @@
+{
+  "battery_bypasses": 281,
+  "battery_exp_off": 867,
+  "battery_exp_on": 490,
+  "battery_gen_off": 1094,
+  "battery_gen_on": 340,
+  "battery_worse": 0,
+  "bypass_never_hurts": true,
+  "bypass_shrinks_search": true,
+  "case": "mapf_cbs_bypass",
+  "cf": 320,
+  "instances": 320,
+  "opt_match": 320,
+  "same_optimum_as_cbs": true,
+  "showcase_bypass_cost": 22,
+  "showcase_bypasses": 3,
+  "showcase_cbs_cost": 22,
+  "showcase_off_exp": 17,
+  "showcase_off_gen": 32,
+  "showcase_on_exp": 3,
+  "showcase_on_gen": 4
+}
