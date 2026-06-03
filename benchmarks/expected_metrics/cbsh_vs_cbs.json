@@ -1,0 +1,10 @@
+{
+  "case": "cbsh_vs_cbs",
+  "instances": 19,
+  "exp_cbs": 3540,
+  "exp_cg": 274,
+  "exp_dg": 271,
+  "exp_wdg": 268,
+  "opt_match": 19,
+  "monotone": true
+}

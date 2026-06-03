@@ -422,6 +422,69 @@ def _run_lns_adaptive_vs_fixed() -> dict:
             "adaptive_not_better": sum_adaptive >= sum_fixed}
 
 
+def _run_cbsh_vs_cbs() -> dict:
+    # CBSH (cbsh) is a Python reproduction of Li et al.'s "Improved Heuristics
+    # for MAPF with Conflict-Based Search" (IJCAI 2019) plus ICBS conflict
+    # prioritization. It returns the SAME optimal sum-of-costs as plain cbs but
+    # expands far fewer high-level nodes by adding an admissible CG/DG/WDG
+    # heuristic and splitting cardinal conflicts first. This gate pins that win
+    # on a battery where plain CBS's constraint tree actually blows up -- an
+    # obstacle-dense 6x6 with 6 agents is where the gap is largest. It locks:
+    # (1) optimality -- cbsh's cost equals cbs's on every instance (opt_match);
+    # (2) the expansion counts per variant, monotone wdg <= dg <= cg <= cbs in
+    # aggregate (the whole point: stronger heuristic, fewer nodes). If a change
+    # weakens the heuristic or breaks classification, the cbsh sums rise toward
+    # cbs and the gate trips; if it ever breaks optimality, opt_match goes False.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.cbsh import cbsh
+
+    def _instance(w, h, n, seed, obstacle):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obstacle}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        starts = free[:n]
+        rng.shuffle(free)
+        goals = free[:n]
+        grid = GridWorld(w, h, frozenset(blocked))
+        return grid, {i: (starts[i], goals[i]) for i in range(n)}
+
+    instances = exp_cbs = exp_cg = exp_dg = exp_wdg = opt_match = 0
+    # First 10 seeds of two configs: an open 7x7/8 and a conflict-heavy 6x6/6
+    # at 12% obstacles (no cherry-picking -- plain `range(10)`).
+    for w, h, n, obstacle in ((7, 7, 8, 0.0), (6, 6, 6, 0.12)):
+        for seed in range(10):
+            grid, agents = _instance(w, h, n, seed, obstacle)
+            s: dict = {}
+            base = cbs(grid, agents, stats=s, max_expansions=20000)
+            if base is None:
+                continue
+            instances += 1
+            exp_cbs += s["expansions"]
+            costs = {"cbs": base.cost}
+            for mode, acc in (("cg", "cg"), ("dg", "dg"), ("wdg", "wdg")):
+                sh: dict = {}
+                sol = cbsh(grid, agents, heuristic=mode, stats=sh,
+                           max_expansions=20000)
+                costs[mode] = None if sol is None else sol.cost
+                if mode == "cg":
+                    exp_cg += sh["expansions"]
+                elif mode == "dg":
+                    exp_dg += sh["expansions"]
+                else:
+                    exp_wdg += sh["expansions"]
+            opt_match += int(all(c == base.cost for c in costs.values()))
+    return {"case": "cbsh_vs_cbs", "instances": instances,
+            "exp_cbs": exp_cbs, "exp_cg": exp_cg, "exp_dg": exp_dg,
+            "exp_wdg": exp_wdg, "opt_match": opt_match,
+            "monotone": exp_wdg <= exp_dg <= exp_cg <= exp_cbs}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -523,6 +586,9 @@ SUITE = [
     # LaCAM* anytime mode reaches the CBS optimum on small instances
     ("lacam_optimality", _run_lacam_optimality),
     ("lacam_ltm_vs_optimize", _run_lacam_ltm_vs_optimize),
+    # CBSH improved heuristics (CG/DG/WDG) + cardinal prioritization: same
+    # optimum as CBS, far fewer high-level expansions
+    ("cbsh_vs_cbs", _run_cbsh_vs_cbs),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

@@ -14,6 +14,9 @@ The pieces compose bottom-up:
   paths, with stay-at-goal semantics.
 - :mod:`cbs` — Conflict-Based Search: an optimal (sum-of-costs) two-level
   search that resolves conflicts by branching constraints.
+- :mod:`cbsh` — CBS with improved heuristics (Li et al. 2019): the same optimal
+  search, but an admissible CG/DG/WDG heuristic plus cardinal-conflict
+  prioritization cut the high-level node expansions by a large factor.
 - :mod:`ecbs` — Enhanced CBS: bounded-suboptimal (``cost <= w * optimal``) via
   focal search at both levels; expands far fewer nodes than CBS for a little
   cost slack, so it scales to more agents.
@@ -32,6 +35,7 @@ The pieces compose bottom-up:
 """
 
 from .cbs import cbs
+from .cbsh import cbsh
 from .ecbs import ecbs
 from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
@@ -60,6 +64,7 @@ __all__ = [
     "cell_at",
     "detect_first_conflict",
     "cbs",
+    "cbsh",
     "ecbs",
     "lacam",
     "lacam_ltm",

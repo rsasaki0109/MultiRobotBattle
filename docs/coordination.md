@@ -117,6 +117,43 @@ python3 scripts/compare_mapf_libmrp.py --write        # refresh benchmarks/mapf_
 The `mapf-libmrp-equivalence` CI job does exactly this on every push, so CBS
 computing the true optimum is a guarded contract, not a claim.
 
+### High level: CBS with improved heuristics (`cbsh.py`)
+
+`cbsh(grid, agents, heuristic="wdg")` returns the **same optimum** as `cbs` but
+expands far fewer high-level nodes — a Python reproduction of Li et al.,
+*"Improved Heuristics for Multi-Agent Path Finding with Conflict-Based Search"*
+(IJCAI 2019), with the conflict prioritization of Boyarski et al.'s ICBS (2015).
+Plain CBS orders its constraint tree by `g` (sum-of-costs) alone; CBSH adds an
+admissible `h` read off the *structure* of the conflicts, so nodes that cannot
+beat the incumbent sink in OPEN instead of being expanded.
+
+The unit of structure is the **MDD** (`mdd.py`): the union of all of an agent's
+cost-optimal paths, laid out by timestep. Its **width** at a level — how many
+cells the agent could occupy there without lengthening its path — says how
+expensive a conflict is. A conflict where both agents have width 1 is
+**cardinal**: every resolution must increase cost. From that, three admissible
+heuristics of increasing strength:
+
+- **CG** — an edge per pair with a cardinal conflict; `h` = minimum vertex cover.
+- **DG** — an edge per *dependent* pair (their joint MDD has no conflict-free
+  pair of optimal paths); `h` = minimum vertex cover.
+- **WDG** (default) — edges weighted by the true pairwise cost increase (a small
+  two-agent CBS); `h` = weighted minimum vertex cover. The tightest.
+
+Plus **conflict prioritization**: split a cardinal conflict first (both children
+then provably gain cost), else semi-cardinal, else any. `heuristic=None` keeps
+just the prioritization, isolating the two ideas.
+
+`cbs.py` is left byte-for-byte untouched as the baseline these numbers are
+measured against. The win is gated by `cbsh_vs_cbs` on a battery where plain
+CBS's tree actually blows up — first 10 seeds each of an open 7×7/8 and an
+obstacle-dense 6×6/6 (no cherry-picking). It pins **optimality** (cbsh's cost
+equals cbs's on every instance) and the **expansion counts**, monotone
+`wdg ≤ dg ≤ cg ≤ cbs`: in aggregate **3540 → 268** high-level nodes (a 13×
+cut overall, ~21× on the conflict-heavy grid). Honest scope: the heaviest term
+of the paper, *bypass*, is not implemented; this is the heuristic + conflict
+prioritization, which is where most of the cut comes from.
+
 ### High level: Enhanced CBS (`ecbs.py`)
 
 `ecbs(grid, agents, w=1.5)` is the **bounded-suboptimal** solver: it returns
@@ -312,7 +349,10 @@ ros2 run mrn_coord mrn_mapf_bench --solver pbs          # priority-ordering sear
 ros2 run mrn_coord mrn_mapf_bench --solver prioritized
 ```
 
-CBS is optimal but scales to small teams; for many agents use **ECBS**
+CBS is optimal but scales to small teams; to keep the optimum while reaching
+larger teams use **CBSH** (`cbsh.py`, the same optimum with a CG/DG/WDG
+heuristic — ~13× fewer high-level expansions here); for a bigger jump trade
+optimality for **ECBS**
 (`--solver ecbs`, bounded-suboptimal — much further reach for a small cost
 premium), **LaCAM** (`--solver lacam`, complete and satisficing — solves large
 teams when the search trees blow up), **MAPF-LNS** (`--solver lns`, anytime —

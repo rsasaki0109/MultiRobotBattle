@@ -8,6 +8,7 @@ from mrn_coord.mapf import (
     Solution,
     VertexConflict,
     cbs,
+    cbsh,
     cell_at,
     detect_first_conflict,
     makespan,
@@ -165,6 +166,94 @@ class TestCBS(unittest.TestCase):
         sol = cbs(grid, {"a": ((0, 0), (3, 0))})
         self.assertIsNotNone(sol)
         self.assertEqual(sol.cost, 3)
+
+
+def _rand_instance(w, h, n, seed, obstacle=0.0):
+    import random
+    rng = random.Random(seed)
+    blocked = {(x, y) for x in range(w) for y in range(h)
+               if rng.random() < obstacle}
+    free = [(x, y) for x in range(w) for y in range(h) if (x, y) not in blocked]
+    rng.shuffle(free)
+    starts = free[:n]
+    rng.shuffle(free)
+    goals = free[:n]
+    return GridWorld(w, h, frozenset(blocked)), \
+        {i: (starts[i], goals[i]) for i in range(n)}
+
+
+class TestCBSH(unittest.TestCase):
+    """CBS with improved heuristics: same optimum as CBS, fewer expansions."""
+
+    def test_matches_cbs_optimum_across_heuristics(self):
+        # Every heuristic (and prioritization-only) must return the SAME optimal
+        # sum-of-costs as plain CBS, with a valid collision-free solution.
+        for seed in range(15):
+            grid, agents = _rand_instance(6, 6, 5, seed)
+            base = cbs(grid, agents, max_expansions=50000)
+            if base is None:
+                continue
+            for mode in (None, "cg", "dg", "wdg"):
+                sol = cbsh(grid, agents, heuristic=mode, max_expansions=50000)
+                self.assertIsNotNone(sol, f"seed={seed} mode={mode}")
+                self.assertIsNone(detect_first_conflict(sol.paths))
+                self.assertEqual(sol.cost, base.cost,
+                                 f"seed={seed} mode={mode}")
+                for a, (start, goal) in agents.items():
+                    self.assertEqual(sol.paths[a][0], start)
+                    self.assertEqual(sol.paths[a][-1], goal)
+
+    def test_expands_no_more_than_cbs(self):
+        # The heuristic only delays expanding nodes that cannot be optimal, so
+        # CBSH never expands MORE than vanilla CBS — and far fewer in aggregate.
+        tot_cbs = tot_wdg = 0
+        for seed in range(10):
+            grid, agents = _rand_instance(6, 6, 6, seed, obstacle=0.12)
+            s = {}
+            base = cbs(grid, agents, stats=s, max_expansions=20000)
+            if base is None:
+                continue
+            sh = {}
+            sol = cbsh(grid, agents, heuristic="wdg", stats=sh,
+                       max_expansions=20000)
+            self.assertEqual(sol.cost, base.cost)
+            self.assertLessEqual(sh["expansions"], s["expansions"], f"seed={seed}")
+            tot_cbs += s["expansions"]
+            tot_wdg += sh["expansions"]
+        # On this conflict-heavy battery the reduction is dramatic (>5x).
+        self.assertLess(tot_wdg * 5, tot_cbs)
+
+    def test_heuristics_are_monotone(self):
+        # Stronger heuristic -> never more expansions, in aggregate.
+        tot = {"cg": 0, "dg": 0, "wdg": 0}
+        for seed in range(10):
+            grid, agents = _rand_instance(7, 7, 8, seed)
+            if cbs(grid, agents, max_expansions=20000) is None:
+                continue
+            for mode in ("cg", "dg", "wdg"):
+                sh = {}
+                cbsh(grid, agents, heuristic=mode, stats=sh,
+                     max_expansions=20000)
+                tot[mode] += sh["expansions"]
+        self.assertLessEqual(tot["wdg"], tot["dg"])
+        self.assertLessEqual(tot["dg"], tot["cg"])
+
+    def test_deterministic(self):
+        grid, agents = _rand_instance(7, 7, 8, 3)
+        runs = []
+        for _ in range(2):
+            sh = {}
+            sol = cbsh(grid, agents, heuristic="wdg", stats=sh)
+            runs.append((sol.cost, sh["expansions"]))
+        self.assertEqual(runs[0], runs[1])
+
+    def test_unsolvable_corridor_returns_none(self):
+        # 1-wide corridor swap is infeasible; like CBS, CBSH exhausts its budget
+        # and returns None. (heuristic=None keeps the per-node work cheap — the
+        # WDG pairwise solve would otherwise re-prove infeasibility every node.)
+        grid = GridWorld(3, 1)
+        agents = {"a": ((0, 0), (2, 0)), "b": ((2, 0), (0, 0))}
+        self.assertIsNone(cbsh(grid, agents, heuristic=None, max_expansions=500))
 
 
 class TestPrioritized(unittest.TestCase):
