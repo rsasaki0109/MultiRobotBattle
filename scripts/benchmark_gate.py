@@ -1192,6 +1192,124 @@ def _run_flow_anonymous_makespan() -> dict:
             "optimal": certified == solved}
 
 
+def _run_tswap_anonymous() -> dict:
+    # tswap.py is a Python reproduction of Offline TSWAP -- Okumura & Defago,
+    # "Solving Simultaneous Target Assignment and Path Planning Efficiently with
+    # Time-Independent Execution" (ICAPS 2022; AIJ 2023). Like flow it solves the
+    # ANONYMOUS (interchangeable-target) problem, but from the opposite corner of
+    # the trade-off: instead of flow's makespan-OPTIMAL but heavy max-flow over a
+    # time-expanded network, TSWAP is CONSTRUCTIVE -- it takes an arbitrary
+    # initial assignment and repeats one-timestep planning with TARGET SWAPPING
+    # until every agent is on a target. Collision-free BY CONSTRUCTION (an agent
+    # moves only into a cell empty at its turn, vacating its own), complete BY A
+    # POTENTIAL ARGUMENT (a swap when blocked by a settled agent, a target
+    # rotation when the "wants" pointers close a cycle -- each strictly drops the
+    # potential). The anonymous analogue of push_and_rotate's constructive stance.
+    #
+    # This gate pins:
+    # (1) CONSTRUCTIVE COMPLETENESS+VALIDITY on a random battery (no cherry-pick):
+    #     every instance is solved, collision-free, and ends on the goal SET
+    #     (solved == cf == covers == instances).
+    # (2) SOUND SUB-OPTIMALITY vs the flow optimum: TSWAP's makespan is NEVER
+    #     below flow's optimal (never_below_optimal == both_solved -- it cannot
+    #     beat the optimum) yet MATCHES it on a good fraction (matches_optimal),
+    #     i.e. near-optimal, not optimal.
+    # (3) ASSIGNMENT-INDEPENDENCE: handed a deliberately reversed (bad) initial
+    #     assignment it still solves every instance collision-free and covers the
+    #     goals (repair_solved == repair_cf_cover == repair_instances) -- the
+    #     completeness does not rely on the initial matching.
+    # (4) THE TWO MECHANISMS FIRE, isolated: a corridor where an agent must pass
+    #     agents sitting on their own targets triggers exactly the target SWAP
+    #     (swap_showcase_swaps, no rotation); a head-on corridor triggers the
+    #     target ROTATION (rotation_showcase_rotations, no swap).
+    # (5) SCALE: 40 agents on a 12x12 grid (where flow's time-expanded network is
+    #     costly) is solved collision-free and covered in a blink.
+    # If the live-occupancy move broke, cf would fall; if swap/rotation regressed,
+    # the showcases (or completeness on bad assignments) would trip.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.flow import anonymous_makespan
+    from mrn_coord.mapf.tswap import tswap
+
+    def _instance(w, h, n, seed):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        rng.shuffle(free)
+        return GridWorld(w, h), free[:n], free[n:2 * n]
+
+    instances = solved = cf = covers = 0
+    both = never_below = matches = 0
+    for w, h, n in ((6, 6, 3), (6, 6, 4), (5, 5, 3)):
+        for seed in range(10):
+            grid, starts, goals = _instance(w, h, n, seed)
+            st: dict = {}
+            paths = tswap(grid, starts, goals, stats=st)
+            instances += 1
+            if paths is None:
+                continue
+            solved += 1
+            cf += int(detect_first_conflict(paths) is None)
+            covers += int(sorted(p[-1] for p in paths.values()) == sorted(goals))
+            opt = anonymous_makespan(grid, starts, goals)
+            if opt is not None:
+                both += 1
+                never_below += int(st["makespan"] >= opt[1])
+                matches += int(st["makespan"] == opt[1])
+
+    # (3) Assignment-independence: hand each instance a reversed (bad) matching.
+    repair_instances = repair_solved = repair_cf_cover = 0
+    for seed in range(10):
+        grid, starts, goals = _instance(6, 6, 4, seed)
+        st = {}
+        paths = tswap(grid, starts, goals,
+                      assignment=list(reversed(range(4))), stats=st)
+        repair_instances += 1
+        if paths is None:
+            continue
+        repair_solved += 1
+        repair_cf_cover += int(
+            detect_first_conflict(paths) is None
+            and sorted(p[-1] for p in paths.values()) == sorted(goals))
+
+    # (4) The two mechanisms in isolation, on 1-wide corridors.
+    swap_grid = GridWorld(5, 1)
+    sw: dict = {}
+    tswap(swap_grid, [(0, 0), (2, 0), (3, 0)], [(4, 0), (2, 0), (3, 0)],
+          assignment=[0, 1, 2], stats=sw)
+    rot_grid = GridWorld(5, 1)
+    ro: dict = {}
+    tswap(rot_grid, [(0, 0), (4, 0)], [(4, 0), (0, 0)],
+          assignment=[0, 1], stats=ro)
+
+    # (5) Scale where flow's time-expanded network is costly.
+    rng = random.Random(0)
+    free = [(x, y) for x in range(12) for y in range(12)]
+    rng.shuffle(free)
+    sc: dict = {}
+    sc_paths = tswap(GridWorld(12, 12), free[:40], free[40:80], stats=sc)
+    scale_ok = (sc_paths is not None
+                and detect_first_conflict(sc_paths) is None
+                and sorted(p[-1] for p in sc_paths.values()) == sorted(free[40:80]))
+
+    return {"case": "tswap_anonymous",
+            "instances": instances, "solved": solved,
+            "collision_free": cf, "covers_goals": covers,
+            "both_solved": both, "never_below_optimal": never_below,
+            "matches_optimal": matches,
+            "repair_instances": repair_instances,
+            "repair_solved": repair_solved,
+            "repair_cf_cover": repair_cf_cover,
+            "swap_showcase_swaps": sw["swaps"],
+            "swap_showcase_rotations": sw["rotations"],
+            "rotation_showcase_rotations": ro["rotations"],
+            "rotation_showcase_swaps": ro["swaps"],
+            "scale_agents": 40, "scale_solved": bool(scale_ok),
+            "complete_valid": (solved == instances == cf == covers),
+            "sound_suboptimal": (never_below == both and matches < both)}
+
+
 def _run_push_and_rotate() -> dict:
     # push_and_rotate.py is a Python reproduction of the movement-primitive family
     # -- Luna & Bekris's "Push and Swap" (IJCAI 2011) and de Wilde, ter Mors &
@@ -2316,6 +2434,10 @@ SUITE = [
     # Network-flow: anonymous makespan-optimal MAPF via integer max-flow on a
     # time-expanded graph (polynomial, self-certified optimum)
     ("flow_anonymous_makespan", _run_flow_anonymous_makespan),
+    # TSWAP: constructive complete ANONYMOUS MAPF by target swapping -- the fast,
+    # sub-optimal counterpart of flow's optimal max-flow; collision-free by
+    # construction, complete by a potential argument, near-optimal at scale
+    ("tswap_anonymous", _run_tswap_anonymous),
     # Push and Swap/Rotate: constructive primitive-based solver -- complete with
     # slack, valid by construction, solves crowded maps where CBS blows up
     ("push_and_rotate", _run_push_and_rotate),

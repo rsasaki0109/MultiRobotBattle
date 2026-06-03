@@ -1,0 +1,21 @@
+{
+  "both_solved": 30,
+  "case": "tswap_anonymous",
+  "collision_free": 30,
+  "complete_valid": true,
+  "covers_goals": 30,
+  "instances": 30,
+  "matches_optimal": 15,
+  "never_below_optimal": 30,
+  "repair_cf_cover": 10,
+  "repair_instances": 10,
+  "repair_solved": 10,
+  "rotation_showcase_rotations": 1,
+  "rotation_showcase_swaps": 0,
+  "scale_agents": 40,
+  "scale_solved": true,
+  "solved": 30,
+  "sound_suboptimal": true,
+  "swap_showcase_rotations": 0,
+  "swap_showcase_swaps": 2
+}

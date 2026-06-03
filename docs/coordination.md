@@ -506,6 +506,59 @@ Yu & LaValle solve in polynomial time — a relaxation of labeled MAPF, so its
 makespan lower-bounds any labeled solution's. The *labeled* makespan-optimal
 problem is NP-hard and is **not** reproduced here.
 
+#### Offline TSWAP — constructive anonymous MAPF by target swapping (`tswap.py`)
+
+`flow` is the makespan-**optimal** anonymous solver, but it pays for it — a
+time-expanded network and a binary search of max-flows. **Offline TSWAP**
+([Okumura & Défago, ICAPS 2022](https://ojs.aaai.org/index.php/ICAPS/article/view/19810);
+extended in AIJ 2023) takes the opposite corner of the trade-off: it is the
+**fast, constructive, complete** anonymous solver — the unlabeled analogue of
+`push_and_rotate`'s constructive stance. It takes an *arbitrary* initial
+assignment and repeats **one-timestep planning with target swapping** until every
+agent sits on a target.
+
+Each agent `a` holds a location `a.v` and a current target `a.g`. Processing the
+agents in a fixed order and updating positions *and targets* in place, one
+timestep applies (Algorithm 1):
+
+- `u = nextNode(a.v, a.g)` — the neighbour (waiting included) closest to `a.g`;
+- if `u` is **free**, `a` moves into it;
+- else if `u == b.g` (the occupant `b` sits on *its own* target), **swap targets**
+  `a.g ↔ b.g` — `a` inherits the settled blocker's goal and `b`, now unsettled,
+  will step aside;
+- else if `a` lies on a **deadlock cycle** (the "wants" pointers
+  `nextNode(a₁.v,a₁.g)=a₂.v, …, nextNode(aⱼ.v,aⱼ.g)=a₁.v` close a loop),
+  **rotate** the cycle's targets one step;
+- else `a` waits.
+
+It is **collision-free by construction**: an agent moves *only* into a cell empty
+at the instant it is processed, vacating its own — so a vertex conflict (two
+agents into one cell) or a head-on swap (`x→y` while `y→x`) is structurally
+impossible. It is **complete by a potential argument**: with `Π(u,u′)` the
+interior of a shortest path, `φ = Σₐ { dist(a.v,a.g) + #{b : b.g ∈ Π(a.v,a.g)} }`
+is non-increasing and *strictly* decreases each timestep while `φ > 0` — if no
+agent moved and no swap fired, the blocked pointers must close a cycle, which the
+rotation resolves. Hence it terminates on any solvable instance **regardless of
+the initial assignment**, with makespan bounded by `O(|A|·diam(G))`.
+
+The `tswap_anonymous` gate pins: **(1) constructive completeness + validity** on
+a random battery — every instance solved, collision-free, ending on the goal set
+(`solved == collision_free == covers_goals == instances`, 30/30); **(2) sound
+sub-optimality** — the makespan is **never below** `flow`'s optimum
+(`never_below_optimal == both_solved`, 30/30, it cannot beat the optimum) yet
+**matches** it on half (`matches_optimal` 15/30) — near-optimal, not optimal;
+**(3) assignment-independence** — handed a deliberately reversed (bad) matching it
+still solves every instance collision-free and covers the goals (10/10), the
+completeness not relying on the initial assignment; **(4) the two mechanisms
+isolated** — a corridor where an agent must pass agents on their own targets fires
+exactly the **swap** (`swap_showcase_swaps` 2, no rotation), a head-on corridor
+fires the **rotation** (`rotation_showcase_rotations` 1, no swap); **(5) scale** —
+40 agents on a 12×12 grid (where `flow`'s network is costly) solved collision-free
+and covered in a blink. **Honest scope:** TSWAP is *sub-optimal* — paired with a
+good assignment it is empirically near-optimal at a fraction of `flow`'s cost, but
+its makespan only ever lower-bounds *to* `flow`'s, never beats it; the value is
+the constructive completeness and the target-swap mechanism, not optimality.
+
 ### High level: Push and Swap / Rotate — constructive primitives (`push_and_rotate.py`)
 
 A Python reproduction of the movement-primitive family —

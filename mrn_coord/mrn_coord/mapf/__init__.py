@@ -76,6 +76,11 @@ The pieces compose bottom-up:
   time-expanded network — polynomial, no search tree, with a self-certified
   optimum. A relaxation of labeled MAPF (its makespan lower-bounds any labeled
   solution's).
+- :mod:`tswap` — Offline TSWAP (Okumura & Defago 2022): the fast, constructive
+  counterpart for the same anonymous problem. From an *arbitrary* initial
+  assignment it repeats one-timestep planning with **target swapping** until all
+  agents sit on targets — collision-free by construction, complete by a potential
+  argument, sub-optimal but near-optimal at a fraction of flow's cost.
 - :mod:`lns` — MAPF-LNS: anytime large-neighborhood search that destroys and
   repairs a few agents at a time, polishing any feasible solution toward the
   optimum at scale.
@@ -106,6 +111,7 @@ from .ccbs import ccbs
 from .ecbs import ecbs
 from .eecbs import eecbs
 from .flow import anonymous_makespan
+from .tswap import tswap
 from .icts import icts
 from .mutex import classify_conflict, generate_mutexes, pc_constraints
 from .lacam import lacam, lacam_ltm
@@ -146,6 +152,7 @@ __all__ = [
     "ecbs",
     "eecbs",
     "anonymous_makespan",
+    "tswap",
     "icts",
     "classify_conflict",
     "generate_mutexes",
