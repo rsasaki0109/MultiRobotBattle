@@ -1,0 +1,22 @@
+{
+  "all_collision_free": true,
+  "branching_closes_integrality_gap": true,
+  "case": "bcp_branch_price",
+  "corridor_cbs": 8,
+  "corridor_cf": 1,
+  "corridor_columns": 93,
+  "corridor_cuts": 53,
+  "corridor_lp_bound": 7,
+  "corridor_nodes": 17,
+  "corridor_optimum": 8,
+  "lazy_cuts_and_priced_columns": true,
+  "lp_bound_certifies_optimum": true,
+  "optimal_matches_cbs": true,
+  "price_and_cut_solve_root": true,
+  "rand_branched": 0,
+  "rand_certified": 24,
+  "rand_instances": 24,
+  "rand_opt_match": 24,
+  "rand_root_integral": 24,
+  "rand_valid": 24
+}

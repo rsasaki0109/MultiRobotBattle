@@ -1565,6 +1565,105 @@ def _run_satmdd_makespan() -> dict:
     }
 
 
+def _run_bcp_branch_price() -> dict:
+    # Branch-and-cut-and-price (bcp.py), a Python reproduction of Lam, Le Bodic,
+    # Harabor & Stuckey's "Branch-and-Cut-and-Price for Multi-Agent Path Finding"
+    # (IJCAI 2019). This is the OPTIMIZATION paradigm: where CBS / M* / Standley
+    # SEARCH, MDD-SAT DECIDES, and flow ROUTES, BCP solves the path-based
+    # (Dantzig-Wolfe / set-partitioning) LINEAR PROGRAM and certifies optimality
+    # by LP DUALITY. Paths enter the LP only when a reduced-cost shortest path
+    # PRICES them in (column generation); vertex/edge conflict rows enter only
+    # when the LP solution violates one (lazy CUTting); branching on a fractional
+    # agent-vertex-time usage closes the integrality gap. It returns the SAME
+    # optimal sum-of-costs as plain cbs.
+    #
+    # Two things this gate pins. First, CORRECTNESS + CERTIFICATION on an open
+    # battery: every instance matches cbs's optimum, is collision-free, and the
+    # ROOT LP objective is a valid lower bound (lp_bound <= cost) -- the LP
+    # optimal VALUE is unique, so this certificate is environment-independent.
+    # On these sparse open maps branch-and-price solves every instance at the
+    # ROOT (rand_root_integral == rand_instances): the LP + pricing + lazy cuts
+    # alone are integral, no branching needed -- the paradigm's signature.
+    # Second, the MECHANISM on a constructed case where the LP genuinely is NOT
+    # integral: a head-on swap in a one-wide corridor with a single pocket. There
+    # the root LP relaxes to 7 but the integer optimum is 8 (corridor_lp_bound <
+    # corridor_optimum) -- a real integrality gap -- and branch-and-price closes
+    # it (corridor_nodes > 1) to the certified optimum 8 == cbs, driven by lazily
+    # separated conflict cuts (corridor_cuts) over priced-in columns
+    # (corridor_columns). If pricing/cut/branch ever regress, the root stops
+    # being integral on the open maps, or the corridor gap fails to close to cbs.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.bcp import bcp
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.solution import sum_of_costs
+
+    def _rand(w, h, n, seed):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        rng.shuffle(free)
+        return GridWorld(w, h), {i: (free[i], free[n + i]) for i in range(n)}
+
+    inst = opt = val = cert = rootint = branched = 0
+    for (w, h, n) in ((4, 4, 2), (5, 5, 3), (5, 5, 4)):
+        for seed in range(8):
+            grid, ag = _rand(w, h, n, seed)
+            base = cbs(grid, ag, max_expansions=20000)
+            if base is None:
+                continue
+            sm: dict = {}
+            sol = bcp(grid, ag, stats=sm)
+            if sol is None:
+                continue
+            inst += 1
+            cost = sum_of_costs(sol.paths)
+            opt += int(cost == base.cost)
+            val += int(detect_first_conflict(sol.paths) is None
+                       and all(sol.paths[a][-1] == ag[a][1] for a in ag))
+            cert += int(sm["lp_bound"] is not None
+                        and sm["lp_bound"] <= cost + 1e-6)
+            rootint += int(sm["root_integral"])
+            branched += int(not sm["root_integral"])
+
+    # constructed integrality-gap demonstrator: head-on swap, one-wide corridor
+    # (row y=0, length 3) with a single pocket at (1, 1) to step aside into.
+    blocked = {(x, 1) for x in range(4) if x != 1}
+    grid = GridWorld(4, 2, frozenset(blocked))
+    ag = {0: ((0, 0), (3, 0)), 1: ((3, 0), (0, 0))}
+    base = cbs(grid, ag)
+    cm: dict = {}
+    csol = bcp(grid, ag, stats=cm)
+    corr_cost = sum_of_costs(csol.paths)
+    corr_lb = int(round(cm["lp_bound"]))
+    corr_cf = detect_first_conflict(csol.paths) is None
+
+    return {
+        "case": "bcp_branch_price",
+        "rand_instances": inst,
+        "rand_opt_match": opt,
+        "rand_valid": val,
+        "rand_certified": cert,
+        "rand_root_integral": rootint,
+        "rand_branched": branched,
+        "corridor_lp_bound": corr_lb,
+        "corridor_optimum": corr_cost,
+        "corridor_cbs": base.cost,
+        "corridor_nodes": cm["nodes"],
+        "corridor_cuts": cm["cuts"],
+        "corridor_columns": cm["columns"],
+        "corridor_cf": int(corr_cf),
+        "optimal_matches_cbs": (opt == inst and corr_cost == base.cost),
+        "all_collision_free": (val == inst and corr_cf),
+        "lp_bound_certifies_optimum": cert == inst,
+        "price_and_cut_solve_root": rootint == inst,
+        "branching_closes_integrality_gap": (corr_lb < corr_cost
+                                             and cm["nodes"] > 1),
+        "lazy_cuts_and_priced_columns": (cm["cuts"] > 0 and cm["columns"] > 2),
+    }
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -1701,6 +1800,10 @@ SUITE = [
     # MDD-SAT: declarative makespan-optimal MAPF -- encode to CNF, sweep makespan,
     # self-certified by UNSAT below the optimum (labeled makespan >= flow's anon)
     ("satmdd_makespan", _run_satmdd_makespan),
+    # BCP: branch-and-cut-and-price -- the LP/duality paradigm. Path-formulation
+    # LP solved by column generation (pricing) + lazy conflict cuts + branching;
+    # same optimum as CBS, certified by the LP lower bound (gap zero)
+    ("bcp_branch_price", _run_bcp_branch_price),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

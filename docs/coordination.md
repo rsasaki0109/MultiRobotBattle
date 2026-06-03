@@ -675,6 +675,58 @@ by two UNSAT rounds below it (`pocket_unsat_below`). This is the SAT paradigm
 sitting cleanly between `flow` (anonymous, polynomial) and the labeled optimal
 searches.
 
+### High level: branch-and-cut-and-price (`bcp.py`)
+
+`bcp` reproduces the skeleton of Lam, Le Bodic, Harabor & Stuckey's
+*Branch-and-Cut-and-Price for MAPF* (IJCAI 2019) — the **optimization**
+paradigm. Where CBS / M* / Standley *search*, MDD-SAT *decides*, and `flow`
+*routes*, BCP writes MAPF as an integer **linear program** and certifies
+optimality by **LP duality**.
+
+The model is the path-based (Dantzig-Wolfe / set-partitioning) formulation: a
+binary variable `λ[a,p]` selects path `p` for agent `a`, minimizing total
+sum-of-costs subject to *convexity* (each agent picks exactly one path), *vertex*
+(≤1 agent per cell-time) and *edge* (≤1 agent per swap) constraints. Both the
+paths and the conflict rows are astronomically many, so neither is written down
+up front — and the two ways they are generated lazily are the "price" and the
+"cut" of the name:
+
+- **Pricing (column generation).** Start with one path per agent; add a new
+  path-column only when it has negative reduced cost. The pricing subproblem —
+  minimize `cost(p) − σ_a − Σ_r π_r [p covers r]` over paths — is a shortest path
+  in the time-expanded graph where occupying a congested cell carries the LP dual
+  price `−π_r ≥ 0` as a penalty (over the same `(cell, settled)` done-bit cost
+  model as `mstar`/`standley`, so vacate-and-return is priced exactly). When no
+  agent has an improving column the LP is optimal and its objective is a valid
+  **lower bound** — certified by the reduced-cost optimality condition.
+- **Cutting (lazy separation).** A vertex/edge conflict row is added only when
+  the current LP solution violates it; cells no agent contends for never get a
+  row. A per-agent big-M artificial column keeps the restricted master feasible
+  so the LP always has duals to price against.
+
+Branching closes the integrality gap: when the aggregate usage
+`y[a,v,t] = Σ_{p∋(v,t)} λ[a,p]` is fractional, BCP branches — one child forces
+agent `a` onto `(v,t)`, the other forbids it — imposed inside the pricing
+subproblem (a disjoint, CBS-style split). The incumbent whose cost equals the LP
+bound (gap zero) is the optimum, the **same sum-of-costs as CBS**. The LP master
+is SciPy's HiGHS; the published solver layers further cut families (rectangle,
+corridor, target) on this same frame.
+
+The `bcp_branch_price` gate pins both halves. **Correctness + certification on
+open maps:** every instance matches CBS's optimum (`optimal_matches_cbs`), is
+collision-free (`all_collision_free`), and the root LP objective is a valid lower
+bound (`lp_bound_certifies_optimum` — the LP optimal *value* is unique, so this
+certificate is environment-independent). On these sparse maps branch-and-price is
+integral at the **root** for all 24 instances (`price_and_cut_solve_root`): LP +
+pricing + lazy cuts alone, no branching — the paradigm's signature. **Mechanism on
+a genuinely fractional case:** a head-on swap in a one-wide corridor with a single
+pocket relaxes to a root LP bound of `7` below the integer optimum `8`
+(`branching_closes_integrality_gap`) — a real gap — which branch-and-price closes
+in 17 nodes to the certified optimum `8` = CBS, driven by lazily separated cuts
+over priced-in columns (`lazy_cuts_and_priced_columns`). Pure-Python LP-per-node
+is the practical ceiling, so the gate stays on tiny instances; the value here is
+the *certificate*, not the scale.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of

@@ -65,6 +65,12 @@ The pieces compose bottom-up:
   cells and hand it to a SAT solver; sweep ``mu`` up from the trivial lower bound
   so the first satisfiable makespan is optimal, self-certified by the UNSAT of
   every smaller one. Optimizes *labeled* makespan (≥ :mod:`flow`'s anonymous).
+- :mod:`bcp` — branch-and-cut-and-price (Lam et al. 2019): the LP/duality
+  paradigm. The path-based (set-partitioning) linear program is solved by
+  *column generation* (a reduced-cost shortest path *prices* in only useful
+  paths) with *lazy* vertex/edge conflict *cuts*, and branch-and-price closes
+  the integrality gap. Same optimum as CBS, certified by the LP lower bound
+  (gap zero) — the first solver here that optimizes rather than searches.
 - :mod:`flow` — anonymous makespan-optimal MAPF (Yu & LaValle 2013): when targets
   are interchangeable, minimum-makespan routing reduces to integer MAX FLOW on a
   time-expanded network — polynomial, no search tree, with a self-certified
@@ -89,6 +95,7 @@ The pieces compose bottom-up:
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
+from .bcp import bcp
 from .cbs import cbs
 from .cbsh import cbsh
 from .ccbs import ccbs
@@ -127,6 +134,7 @@ __all__ = [
     "EdgeConflict",
     "cell_at",
     "detect_first_conflict",
+    "bcp",
     "cbs",
     "cbsh",
     "ccbs",

@@ -1308,5 +1308,71 @@ class TestSatMdd(unittest.TestCase):
         self.assertIsNone(satmdd(grid, agents))
 
 
+class TestBcp(unittest.TestCase):
+    """Branch-and-cut-and-price: the LP/duality paradigm. Path-LP solved by
+    column generation + lazy conflict cuts + branch-and-price; same optimum as
+    CBS, certified by the LP lower bound."""
+
+    def test_matches_cbs_optimum_and_certifies(self):
+        from mrn_coord.mapf.bcp import bcp
+        for w, h, n in ((4, 4, 2), (4, 4, 3), (5, 5, 3)):
+            for seed in range(3):
+                grid, agents = _rand_instance(w, h, n, seed)
+                base = cbs(grid, agents, max_expansions=20000)
+                if base is None:
+                    continue
+                st = {}
+                sol = bcp(grid, agents, stats=st)
+                self.assertIsNotNone(sol, f"{w}x{h} seed={seed}")
+                self.assertIsNone(detect_first_conflict(sol.paths))
+                for a, (start, goal) in agents.items():
+                    self.assertEqual(sol.paths[a][0], start)
+                    self.assertEqual(sol.paths[a][-1], goal)
+                cost = sum_of_costs(sol.paths)
+                self.assertEqual(cost, base.cost)
+                # the root LP objective is a valid lower bound on the optimum
+                self.assertLessEqual(st["lp_bound"], cost + 1e-6)
+
+    def test_lp_bound_lower_and_branching_closes_gap(self):
+        # A 1-wide corridor with a single pocket: the two agents must swap. The
+        # path-LP relaxation is fractional (bound 7) below the integer optimum
+        # (8), so branch-and-price must branch (nodes > 1) -- and it closes the
+        # gap to the certified optimum, the same sum-of-costs as CBS.
+        from mrn_coord.mapf.bcp import bcp
+        grid = GridWorld(4, 2, frozenset({(0, 1), (2, 1), (3, 1)}))
+        agents = {0: ((0, 0), (3, 0)), 1: ((3, 0), (0, 0))}
+        base = cbs(grid, agents)
+        st = {}
+        sol = bcp(grid, agents, stats=st)
+        self.assertIsNotNone(sol)
+        self.assertIsNone(detect_first_conflict(sol.paths))
+        cost = sum_of_costs(sol.paths)
+        self.assertEqual(cost, base.cost)
+        self.assertLess(st["lp_bound"], cost)            # genuine integrality gap
+        self.assertGreater(st["nodes"], 1)               # branching was required
+        self.assertGreater(st["cuts"], 0)                # lazy cuts fired
+        self.assertGreater(st["columns"], len(agents))   # pricing added columns
+
+    def test_solves_open_maps_at_root(self):
+        # On a sparse open map, branch-and-price (LP + pricing + lazy cuts) is
+        # integral at the root node -- no branching needed.
+        from mrn_coord.mapf.bcp import bcp
+        grid = GridWorld(5, 5)
+        agents = {0: ((0, 0), (4, 4)), 1: ((4, 0), (0, 4)), 2: ((0, 4), (4, 0))}
+        base = cbs(grid, agents)
+        st = {}
+        sol = bcp(grid, agents, stats=st)
+        self.assertIsNotNone(sol)
+        self.assertEqual(sum_of_costs(sol.paths), base.cost)
+        self.assertTrue(st["root_integral"])
+
+    def test_unsolvable_corridor_returns_none(self):
+        # A 1-wide corridor with no pocket: the swap is impossible.
+        from mrn_coord.mapf.bcp import bcp
+        grid = GridWorld(3, 1)
+        agents = {0: ((0, 0), (2, 0)), 1: ((2, 0), (0, 0))}
+        self.assertIsNone(bcp(grid, agents))
+
+
 if __name__ == "__main__":
     unittest.main()
