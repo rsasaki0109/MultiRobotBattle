@@ -43,6 +43,7 @@ from .mdd import (
     min_vertex_cover,
     weighted_min_vertex_cover,
 )
+from .corridor import try_corridor
 from .rectangle import find_rectangle_barriers
 from .solution import Solution, sum_of_costs
 from .space_time_astar import plan_path
@@ -54,6 +55,7 @@ def cbsh(
     *,
     heuristic: str | None = "wdg",
     rectangle: bool = False,
+    corridor: bool = False,
     max_expansions: int = 100_000,
     stats: dict | None = None,
 ):
@@ -72,6 +74,13 @@ def cbsh(
     standard one-cell vertex split, collapsing the symmetric permutations CBS
     would otherwise enumerate (Li et al. 2019; :mod:`mrn_coord.mapf.rectangle`).
     The optimum is unchanged; ``stats["rectangles"]`` counts the barrier splits.
+
+    With ``corridor=True`` (off by default), it likewise resolves a **corridor
+    symmetry** — two agents traversing the same one-wide passage in opposite
+    directions — with a single *range* split that forces one agent through first
+    (Li et al. 2020; :mod:`mrn_coord.mapf.corridor`). ``stats["corridors"]``
+    counts the range splits. The two reasonings are orthogonal and may be
+    enabled together.
     """
     agent_ids = list(agents)
     vertex: dict = {a: frozenset() for a in agents}
@@ -92,29 +101,38 @@ def cbsh(
 
     expansions = 0
     rectangles = 0
+    corridors = 0
     while open_heap:
         _, g, _, vertex, edge, paths = heapq.heappop(open_heap)
         expansions += 1
         if expansions > max_expansions:
-            return _finish(stats, expansions, rectangles, None)
+            return _finish(stats, expansions, rectangles, corridors, None)
 
-        # A rectangle symmetry, when present and enabled, is split by barriers;
-        # otherwise fall back to the standard cardinal-first single-cell split.
-        rect = None
-        if rectangle:
+        # A corridor or rectangle symmetry, when present and enabled, is split by
+        # a range/barrier constraint; otherwise fall back to the standard
+        # cardinal-first single-cell split.
+        branches = None
+        if corridor:
+            cor = _choose_corridor(grid, agents, agent_ids, vertex, edge, paths)
+            if cor is not None:
+                agent_a, barrier_a, agent_b, barrier_b = cor
+                corridors += 1
+                branches = [(agent_a, barrier_a, frozenset()),
+                            (agent_b, barrier_b, frozenset())]
+        if branches is None and rectangle:
             rect = _choose_rectangle(grid, agents, agent_ids, vertex, edge, paths)
-        if rect is None:
+            if rect is not None:
+                agent_a, barrier_a, agent_b, barrier_b = rect
+                rectangles += 1
+                branches = [(agent_a, barrier_a, frozenset()),
+                            (agent_b, barrier_b, frozenset())]
+        if branches is None:
             conflict = _choose_conflict(grid, agents, vertex, edge, paths)
             if conflict is None:
-                return _finish(stats, expansions, rectangles,
+                return _finish(stats, expansions, rectangles, corridors,
                                Solution(paths=dict(paths), cost=g))
             branches = [(agent, *_as_sets(constraint))
                         for agent, constraint in _branches(conflict)]
-        else:
-            agent_a, barrier_a, agent_b, barrier_b = rect
-            rectangles += 1
-            branches = [(agent_a, barrier_a, frozenset()),
-                        (agent_b, barrier_b, frozenset())]
 
         for agent, add_vertex, add_edge in branches:
             child_vertex = dict(vertex)
@@ -141,13 +159,14 @@ def cbsh(
                  child_vertex, child_edge, child_paths),
             )
 
-    return _finish(stats, expansions, rectangles, None)
+    return _finish(stats, expansions, rectangles, corridors, None)
 
 
-def _finish(stats, expansions, rectangles, result):
+def _finish(stats, expansions, rectangles, corridors, result):
     if stats is not None:
         stats["expansions"] = expansions
         stats["rectangles"] = rectangles
+        stats["corridors"] = corridors
     return result
 
 
@@ -191,6 +210,21 @@ def _choose_rectangle(grid, agents, agent_ids, vertex, edge, paths):
             best_key = key
             best = (conflict.agent_a, barrier_a, conflict.agent_b, barrier_b)
     return best
+
+
+def _choose_corridor(grid, agents, agent_ids, vertex, edge, paths):
+    """The best corridor symmetry among the node's conflicts, as a range split
+    ``(agent_a, barrier_a, agent_b, barrier_b)``, or ``None``.
+
+    Scans every conflict (vertex *or* edge — a head-on swap is the canonical
+    corridor signature) earliest first and returns the first that forms an
+    opposite-direction corridor crossing whose range split makes progress."""
+    for _, _, conflict in _all_conflicts(paths, agent_ids):
+        split = try_corridor(grid, agents, paths, conflict)
+        if split is not None:
+            agent_a, barrier_a, agent_b, barrier_b, _ = split
+            return agent_a, barrier_a, agent_b, barrier_b
+    return None
 
 
 def _branches(conflict):

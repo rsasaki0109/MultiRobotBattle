@@ -685,6 +685,88 @@ def _run_rectangle_symmetry() -> dict:
             "all_valid": all_valid, "reduces": exp_on < exp_off}
 
 
+def _run_corridor_symmetry() -> dict:
+    # Corridor symmetry reasoning (cbsh's corridor=True, corridor.py) is a Python
+    # reproduction of Li, Harabor, Stuckey, Felner & Koenig's "New Techniques for
+    # Pairwise Symmetry Breaking in Multi-Agent Path Finding" (ICAPS 2020) -- the
+    # third leg of the symmetry-breaking trilogy alongside rectangle.py and
+    # mutex.py. When two agents traverse the same one-wide passage in OPPOSITE
+    # directions, the head-on conflict can be shifted one cell at a time, so plain
+    # CBS/CBSH branches a chain whose length grows with the corridor. A *range*
+    # constraint -- forbidding an agent from the shared entry opening across a
+    # whole band of timesteps -- holds it outside until the other has cleared,
+    # collapsing the chain to a single split.
+    #
+    # The reasoning is exhaustive (so optimality-preserving) only when the
+    # corridor is the SOLE route between its two sides, so it fires there and
+    # falls back to a plain split when a bypass exists. This gate uses hand-built
+    # forced corridors of increasing length and pins: (1) optimality -- the
+    # corridor cost equals plain-cbsh's and CBS's on every scenario (opt_match);
+    # (2) the collapse -- one range split per corridor (corridors == scenarios)
+    # cuts aggregate expansions from a length-growing 52 to a constant 8; (3)
+    # honesty -- on corridors that DO have a bypass the reasoning declines
+    # (bypass_corridors == 0) yet still returns the optimum (bypass_opt_match).
+    # If a range split ever dropped a solution, opt_match would fall; if detection
+    # regressed, exp_on would climb back toward exp_off.
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.cbsh import cbsh
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    def forced(L):
+        # 1-wide corridor (row y=1, x=1..L); the y=0/y=2 strips beside it are
+        # walled, so the corridor is the only crossing. Agents swap sides.
+        blocked = {(x, 0) for x in range(1, L + 1)} | \
+                  {(x, 2) for x in range(1, L + 1)}
+        return (GridWorld(L + 2, 3, blocked=frozenset(blocked)),
+                {0: ((0, 0), (L + 1, 2)), 1: ((L + 1, 0), (0, 2))})
+
+    def bypass(L):
+        # Same corridor but the y=0 strip is OPEN -> a detour exists, so corridor
+        # reasoning must decline and fall back.
+        blocked = {(x, 2) for x in range(1, L + 1)}
+        return (GridWorld(L + 2, 3, blocked=frozenset(blocked)),
+                {0: ((0, 1), (L + 1, 1)), 1: ((L + 1, 1), (0, 1))})
+
+    scn = opt_match = corridors = exp_off = exp_on = 0
+    all_valid = True
+    for L in (2, 3, 4, 5):
+        grid, agents = forced(L)
+        son: dict = {}
+        on = cbsh(grid, agents, heuristic="wdg", corridor=True, stats=son,
+                  max_expansions=20000)
+        soff: dict = {}
+        off = cbsh(grid, agents, heuristic="wdg", corridor=False, stats=soff,
+                   max_expansions=20000)
+        base = cbs(grid, agents, max_expansions=20000)
+        scn += 1
+        corridors += son["corridors"]
+        exp_on += son["expansions"]
+        exp_off += soff["expansions"]
+        opt_match += int(on.cost == off.cost == base.cost)
+        all_valid = all_valid and detect_first_conflict(on.paths) is None
+
+    bypass_scn = bypass_corridors = bypass_opt_match = 0
+    for L in (3, 4):
+        grid, agents = bypass(L)
+        s: dict = {}
+        on = cbsh(grid, agents, heuristic="wdg", corridor=True, stats=s,
+                  max_expansions=20000)
+        base = cbs(grid, agents, max_expansions=20000)
+        bypass_scn += 1
+        bypass_corridors += s["corridors"]
+        bypass_opt_match += int(on.cost == base.cost)
+        all_valid = all_valid and detect_first_conflict(on.paths) is None
+
+    return {"case": "corridor_symmetry", "scenarios": scn,
+            "opt_match": opt_match, "corridors": corridors,
+            "exp_off": exp_off, "exp_on": exp_on,
+            "bypass_scenarios": bypass_scn,
+            "bypass_corridors": bypass_corridors,
+            "bypass_opt_match": bypass_opt_match,
+            "all_valid": all_valid, "reduces": exp_on < exp_off}
+
+
 def _run_mutex_cardinal_detection() -> dict:
     # Mutex propagation (mutex.py) is a Python reproduction of Zhang, Li, Surynek,
     # Koenig & Kumar's "Multi-Agent Path Finding with Mutex Propagation" (ICAPS
@@ -2134,6 +2216,10 @@ SUITE = [
     # Rectangle symmetry: barrier splits collapse the symmetric blowup CBS/CBSH
     # suffer on open same-direction crossings (same optimum, ~20x fewer nodes)
     ("rectangle_symmetry", _run_rectangle_symmetry),
+    # Corridor symmetry: a range split collapses the cell-by-cell chain CBS/CBSH
+    # walk on opposite-direction one-wide crossings (same optimum, length-growing
+    # 52 -> constant 8 expansions; declines when a bypass exists)
+    ("corridor_symmetry", _run_corridor_symmetry),
     # Mutex propagation: a verified cardinal-conflict detector (Theorem 2 holds;
     # catches cardinals the width test misses)
     ("mutex_cardinal_detection", _run_mutex_cardinal_detection),

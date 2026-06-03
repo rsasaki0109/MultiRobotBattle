@@ -627,6 +627,117 @@ class TestRectangle(unittest.TestCase):
         self.assertEqual(runs[0], runs[1])
 
 
+class TestCorridor(unittest.TestCase):
+    """Corridor symmetry: a range split keeps the optimum and collapses the
+    cell-by-cell chain CBS walks on an opposite-direction one-wide crossing."""
+
+    @staticmethod
+    def _forced(L):
+        # 1-wide corridor (row y=1, x=1..L) walled on both sides, so the only way
+        # between the two rooms is through it. The agents swap sides head-on.
+        blocked = {(x, 0) for x in range(1, L + 1)} | \
+                  {(x, 2) for x in range(1, L + 1)}
+        return (GridWorld(L + 2, 3, blocked=frozenset(blocked)),
+                {0: ((0, 0), (L + 1, 2)), 1: ((L + 1, 0), (0, 2))})
+
+    @staticmethod
+    def _bypass(L):
+        # Same corridor but the y=0 strip is open, so a detour exists.
+        blocked = {(x, 2) for x in range(1, L + 1)}
+        return (GridWorld(L + 2, 3, blocked=frozenset(blocked)),
+                {0: ((0, 1), (L + 1, 1)), 1: ((L + 1, 1), (0, 1))})
+
+    def test_detects_opposite_crossing(self):
+        # try_corridor must return a two-sided split on the head-on swap.
+        from mrn_coord.mapf.conflicts import detect_first_conflict
+        from mrn_coord.mapf.corridor import try_corridor
+        from mrn_coord.mapf.space_time_astar import plan_path
+        grid, agents = self._forced(4)
+        paths = {a: plan_path(grid, *agents[a]) for a in agents}
+        conflict = detect_first_conflict(paths)
+        split = try_corridor(grid, agents, paths, conflict)
+        self.assertIsNotNone(split)
+        agent_a, barrier_a, agent_b, barrier_b, klass = split
+        self.assertEqual(klass, 2)
+        self.assertTrue(barrier_a and barrier_b)
+
+    def test_range_split_preserves_optimum(self):
+        # On each forced corridor, corridor reasoning returns the SAME optimum as
+        # CBS (and plain CBSH), collision-free, firing exactly one range split.
+        for L in (2, 3, 4, 5):
+            grid, agents = self._forced(L)
+            base = cbs(grid, agents, max_expansions=20000)
+            s = {}
+            sol = cbsh(grid, agents, heuristic="wdg", corridor=True, stats=s,
+                       max_expansions=20000)
+            self.assertIsNotNone(sol)
+            self.assertEqual(sol.cost, base.cost)
+            self.assertIsNone(detect_first_conflict(sol.paths))
+            self.assertEqual(s["corridors"], 1)
+
+    def test_collapses_chain_to_constant(self):
+        # OFF expansions grow with corridor length; ON stays constant.
+        ons = []
+        offs = []
+        for L in (2, 3, 4, 5):
+            grid, agents = self._forced(L)
+            son = {}
+            cbsh(grid, agents, heuristic="wdg", corridor=True, stats=son,
+                 max_expansions=20000)
+            soff = {}
+            cbsh(grid, agents, heuristic="wdg", corridor=False, stats=soff,
+                 max_expansions=20000)
+            ons.append(son["expansions"])
+            offs.append(soff["expansions"])
+        self.assertEqual(len(set(ons)), 1)          # ON is flat in L
+        self.assertGreater(len(set(offs)), 1)        # OFF grows with L
+        self.assertLess(sum(ons), sum(offs))
+
+    def test_declines_when_bypass_exists(self):
+        # With a detour the disjunction is not exhaustive, so the reasoning must
+        # decline (fall back) yet still return the optimum, collision-free.
+        for L in (3, 4):
+            grid, agents = self._bypass(L)
+            base = cbs(grid, agents, max_expansions=20000)
+            s = {}
+            sol = cbsh(grid, agents, heuristic="wdg", corridor=True, stats=s,
+                       max_expansions=20000)
+            self.assertEqual(s["corridors"], 0)
+            self.assertEqual(sol.cost, base.cost)
+            self.assertIsNone(detect_first_conflict(sol.paths))
+
+    def test_off_matches_plain_cbsh(self):
+        # Opt-in: corridor=False behaves exactly like default cbsh (same cost and
+        # expansion count) on every instance.
+        for seed in range(8):
+            grid, agents = _rand_instance(6, 6, 6, seed, obstacle=0.12)
+            s_default = {}
+            d = cbsh(grid, agents, heuristic="wdg", stats=s_default,
+                     max_expansions=20000)
+            s_off = {}
+            o = cbsh(grid, agents, heuristic="wdg", corridor=False, stats=s_off,
+                     max_expansions=20000)
+            if d is None:
+                self.assertIsNone(o)
+                continue
+            self.assertEqual(d.cost, o.cost)
+            self.assertEqual(s_default["expansions"], s_off["expansions"])
+
+    def test_optimum_preserved_on_random(self):
+        # Enabling corridor reasoning must never change the optimum or break a
+        # solution on random instances, where it rarely fires.
+        for seed in range(12):
+            grid, agents = _rand_instance(6, 6, 5, seed)
+            base = cbs(grid, agents, max_expansions=20000)
+            if base is None:
+                continue
+            sol = cbsh(grid, agents, heuristic="wdg", corridor=True,
+                       max_expansions=20000)
+            self.assertIsNotNone(sol, f"seed={seed}")
+            self.assertEqual(sol.cost, base.cost, f"seed={seed}")
+            self.assertIsNone(detect_first_conflict(sol.paths))
+
+
 class TestMutex(unittest.TestCase):
     """Mutex propagation: the detector agrees with the direct dependency test."""
 

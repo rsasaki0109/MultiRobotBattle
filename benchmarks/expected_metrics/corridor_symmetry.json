@@ -1,0 +1,13 @@
+{
+  "all_valid": true,
+  "bypass_corridors": 0,
+  "bypass_opt_match": 2,
+  "bypass_scenarios": 2,
+  "case": "corridor_symmetry",
+  "corridors": 4,
+  "exp_off": 52,
+  "exp_on": 8,
+  "opt_match": 4,
+  "reduces": true,
+  "scenarios": 4
+}

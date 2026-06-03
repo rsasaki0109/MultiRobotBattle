@@ -237,6 +237,43 @@ same-direction crossings and does nothing on instances without them (it is exact
 byte-neutral there); cardinal classification is done by directly testing whether
 a barrier cuts the MDD rather than the paper's corner-arithmetic shortcut.
 
+#### Corridor symmetry reasoning (`cbsh(corridor=True)`, `corridor.py`)
+
+The rectangle's sibling pattern, and the third leg of the symmetry trilogy: Li,
+Harabor, Stuckey, Felner & Koenig, *"New Techniques for Pairwise Symmetry
+Breaking in Multi-Agent Path Finding"* (ICAPS 2020). When two agents traverse the
+same **one-wide passage in opposite directions** they must meet head-on, and
+plain CBS/CBSH can shift that meeting one cell at a time — forbidding the meeting
+cell to one agent just moves the collision over by one — so it branches a chain
+whose length grows with the corridor before an agent is finally forced to wait
+the whole thing out.
+
+The fix is a **range constraint** — a single split that forbids an agent from a
+corridor *opening* across a whole *band* of timesteps. Because the agents cross
+in opposite directions they **share** the openings: one agent's exit `P` is the
+other's entry. To let `a₁` go first, forbid `a₂` from its entry `P` for all
+`t ∈ [0, d₁]` (with `d₁` the earliest `a₁` reaches `P`); since the corridor is
+one-wide and `P` is the only way in, that *holds `a₂` outside* rather than merely
+delaying where it surfaces — the whole chain collapses to one split. The two
+children (`a₁`-first / `a₂`-first) are a sound disjunction **exactly when the
+corridor is the sole route between its two sides**, so the reasoning fires only
+when neither agent has a **bypass** (a corridor-avoiding route to its exit) and
+otherwise falls back to the plain single-cell split — keeping the
+optimality-preserving core provably correct. The range needs no new low-level
+machinery: it expands to ordinary `(opening, t)` vertex constraints that
+`plan_path` already honours.
+
+The feature is **opt-in** (`corridor=False` by default, byte-identical to plain
+`cbsh`; orthogonal to and combinable with `rectangle=True`). The
+`corridor_symmetry` gate uses four hand-built forced corridors of growing length:
+with the WDG heuristic fixed on both sides, the cell-by-cell chain makes OFF
+expansions grow with length to an aggregate **52**, while one range split per
+corridor (`corridors == 4`) holds ON **constant at 8** — same optimum as CBS on
+every scenario. **Honest scope:** like the rectangle this is structure-dependent
+(it fires only on opposite-direction one-wide crossings with no detour); two
+*bypass* scenarios pin that it correctly **declines** (`bypass_corridors == 0`)
+yet still returns the optimum.
+
 #### Mutex propagation (`mutex.py`)
 
 Rectangle reasoning recognises *one* geometric pattern. **Mutex propagation**
