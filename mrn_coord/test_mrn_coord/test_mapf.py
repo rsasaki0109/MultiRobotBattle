@@ -862,6 +862,65 @@ class TestFlow(unittest.TestCase):
                                   1: (starts[1], goals[1])}, max_expansions=2000))
 
 
+class TestPushAndRotate(unittest.TestCase):
+    """Push/Swap/Rotate: valid by construction, complete with slack, suboptimal."""
+
+    def _solve(self, w, h, agents, **kw):
+        from mrn_coord.mapf import GridWorld
+        from mrn_coord.mapf.push_and_rotate import push_and_rotate
+        return push_and_rotate(GridWorld(w, h), agents, **kw)
+
+    def test_swap_two_agents(self):
+        # The canonical case the primitives exist for: two agents must exchange.
+        agents = {0: ((0, 0), (2, 2)), 1: ((2, 2), (0, 0))}
+        sol = self._solve(3, 3, agents)
+        self.assertIsNotNone(sol)
+        self.assertIsNone(detect_first_conflict(sol.paths))
+        for a, (s, g) in agents.items():
+            self.assertEqual(sol.paths[a][-1], g)
+
+    def test_returned_plans_are_valid_by_construction(self):
+        # Every primitive steps one agent to an adjacent empty cell, so any
+        # returned plan is collision-free and on-goal -- on a random battery.
+        for seed in range(12):
+            grid, agents = _rand_instance(5, 5, 5, seed)
+            sol = self._solve(5, 5, agents)
+            if sol is None:
+                continue
+            self.assertIsNone(detect_first_conflict(sol.paths), f"seed={seed}")
+            for a, (s, g) in agents.items():
+                self.assertEqual(sol.paths[a][-1], g, f"seed={seed}")
+
+    def test_complete_where_cbs_is_solvable_with_slack(self):
+        # With ample empty space, the primitives place every instance CBS proves
+        # solvable.
+        for w, h, n in ((4, 4, 4), (5, 5, 5)):
+            for seed in range(8):
+                grid, agents = _rand_instance(w, h, n, seed)
+                base = cbs(grid, agents, max_expansions=20000)
+                sol = self._solve(w, h, agents)
+                if base is not None:
+                    self.assertIsNotNone(sol, f"{w}x{h} seed={seed}")
+
+    def test_solves_a_crowded_instance_cbs_cannot_within_budget(self):
+        # 18 agents on 8x8: optimal CBS exhausts a small budget; the primitives
+        # place them all.
+        grid, agents = _rand_instance(8, 8, 18, 0)
+        self.assertIsNone(cbs(grid, agents, max_expansions=800))
+        sol = self._solve(8, 8, agents)
+        self.assertIsNotNone(sol)
+        self.assertIsNone(detect_first_conflict(sol.paths))
+
+    def test_deterministic(self):
+        grid, agents = _rand_instance(6, 6, 6, 3)
+        runs = []
+        for _ in range(2):
+            st = {}
+            sol = self._solve(6, 6, agents, stats=st)
+            runs.append((sol.cost, st["moves"]) if sol else None)
+        self.assertEqual(runs[0], runs[1])
+
+
 class TestPrioritized(unittest.TestCase):
     def test_parallel_succeeds(self):
         grid = GridWorld(5, 2)

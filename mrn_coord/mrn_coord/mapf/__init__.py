@@ -54,6 +54,11 @@ The pieces compose bottom-up:
 - :mod:`lns` — MAPF-LNS: anytime large-neighborhood search that destroys and
   repairs a few agents at a time, polishing any feasible solution toward the
   optimum at scale.
+- :mod:`push_and_rotate` — Push and Swap / Push and Rotate (Luna & Bekris 2011;
+  de Wilde et al. 2014): a constructive, primitive-based solver (push / swap /
+  rotate) rather than a search — collision-free and on-goal by construction,
+  complete when the map has slack, solving crowded maps where optimal search
+  blows up, at the cost of optimality.
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
 - :mod:`pbs` — Priority-Based Search: searches over priority *orderings* (PP at
@@ -82,6 +87,7 @@ from .conflicts import (
 from .grid import Cell, GridWorld, manhattan
 from .path_follower import pure_pursuit
 from .prioritized import prioritized_planning
+from .push_and_rotate import push_and_rotate
 from .sipp import plan_sipp
 from .solution import Solution, makespan, pad_paths, render_ascii, sum_of_costs
 from .space_time_astar import plan_path
@@ -112,6 +118,7 @@ __all__ = [
     "pbs",
     "pbs_paths",
     "prioritized_planning",
+    "push_and_rotate",
     "pure_pursuit",
     "Solution",
     "sum_of_costs",

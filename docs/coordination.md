@@ -469,6 +469,49 @@ Yu & LaValle solve in polynomial time — a relaxation of labeled MAPF, so its
 makespan lower-bounds any labeled solution's. The *labeled* makespan-optimal
 problem is NP-hard and is **not** reproduced here.
 
+### High level: Push and Swap / Rotate — constructive primitives (`push_and_rotate.py`)
+
+A Python reproduction of the movement-primitive family —
+[*Push and Swap*](https://www.ijcai.org/Proceedings/11/Papers/052.pdf)
+(Luna & Bekris, IJCAI 2011) and *Push and Rotate* (de Wilde, ter Mors &
+Witteveen, JAIR 2014), which closes Push-and-Swap's completeness gaps. Unlike
+everything above, this is **not a search** — it never enumerates plans. It
+*manipulates* the configuration with three reversible primitives until every
+agent stands on its goal:
+
+- **push** — advance an agent one step along its shortest path to goal, shoving
+  blockers into the nearest free space (never disturbing an already-placed
+  agent).
+- **swap** — when two agents must pass and pushing cannot, exchange them: bring
+  the pair to a vertex of degree `≥ 3`, clear two of its neighbours, and rotate
+  them around the hub in six moves; reversing the approach restores everyone
+  else.
+- **rotate** — Push-and-Rotate's addition for a fully-occupied cyclic component,
+  where no degree-3 hub is reachable: rotate the whole cycle by one.
+
+Agents are placed in priority order and a placed agent is protected. The decisive
+property is structural: **every primitive only ever steps one agent to an
+adjacent *empty* cell**, so any plan it returns is collision-free and ends with
+all agents on their goals *by construction* — there is no separate validity to
+check, only **completeness** (does it finish?) and the price in optimality.
+
+The `push_and_rotate` gate pins both regimes. **Complete-with-slack, valid, and
+suboptimal:** on a moderate battery (three configs, plain `range(10)`) every
+instance CBS proves solvable is also solved by the primitives
+(`complete_match == cbs_solved == 30/30`), every plan is collision-free and
+on-goal (`valid == pnr_solved`), and the cost sits far above CBS's optimum
+(`pnr_cost 2888` vs `cbs_cost 516` — the single-mover serialisation is loose on
+purpose). **Solves where search cannot:** on crowded `8×8`/18-agent instances CBS
+exhausts an 800-node budget every time while the primitives place all agents in
+polynomial time (`cbs_timeout == timeout_pnr_solved == 6`). **Honest scope:** this
+is the primitive core with a deterministic priority-order *sweep* — complete when
+the map has ample empty space, but the **near-fully-packed** regime (1–3 empty
+cells, where agents sit on cyclic dependencies) needs Push-and-Rotate's full
+*rotate + subproblem* machinery, which is **not** reproduced; on such packed
+instances it solves only a fraction. The gate therefore pins completeness only
+where the primitive core is complete, plus the search-blowup advantage, plus the
+absolute by-construction validity.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of

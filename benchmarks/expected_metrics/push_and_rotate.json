@@ -1,0 +1,17 @@
+{
+  "case": "push_and_rotate",
+  "instances": 30,
+  "cbs_solved": 30,
+  "pnr_solved": 30,
+  "complete_match": 30,
+  "valid": 30,
+  "pnr_cost": 2888,
+  "cbs_cost": 516,
+  "complete_with_slack": true,
+  "always_valid": true,
+  "suboptimal": true,
+  "timeout_instances": 6,
+  "cbs_timeout": 6,
+  "timeout_pnr_solved": 6,
+  "timeout_valid": 6
+}

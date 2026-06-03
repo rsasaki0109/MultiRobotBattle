@@ -1029,6 +1029,94 @@ def _run_flow_anonymous_makespan() -> dict:
             "optimal": certified == solved}
 
 
+def _run_push_and_rotate() -> dict:
+    # push_and_rotate.py is a Python reproduction of the movement-primitive family
+    # -- Luna & Bekris's "Push and Swap" (IJCAI 2011) and de Wilde, ter Mors &
+    # Witteveen's "Push and Rotate" (JAIR 2014). It is a CONSTRUCTIVE solver, not
+    # a search: it manipulates the configuration with reversible primitives (push
+    # an agent toward its goal shoving blockers aside; swap two agents by rotating
+    # them around a degree->=3 hub; rotate a cyclic component) until everyone is
+    # placed. Because every primitive only steps one agent to an adjacent EMPTY
+    # cell, any returned plan is collision-free and ends with all agents on goal
+    # BY CONSTRUCTION -- so it trades optimality for a guarantee, exactly where
+    # optimal CBS blows up on crowded maps.
+    #
+    # This gate pins two regimes:
+    # (1) COMPLETE-WITH-SLACK + VALID + SUBOPTIMAL. On a moderate battery (three
+    #     configs, plain range(10)) every instance CBS proves solvable is also
+    #     solved by the primitives (complete_match == cbs_solved), every returned
+    #     plan is collision-free and on-goal (valid == pnr_solved), and the cost
+    #     is far above CBS's optimum (pnr_cost >> cbs_cost) -- the price of the
+    #     guarantee (the single-mover serialisation makes it loose on purpose).
+    # (2) SOLVES WHERE SEARCH CANNOT. On crowded 8x8 instances (18 agents) CBS
+    #     exhausts a 800-node budget every time (cbs_timeout == 6), while the
+    #     primitives place all agents in polynomial time (timeout_pnr_solved == 6,
+    #     all valid).
+    # Honest scope (see docs): this is the primitive core with a deterministic
+    # priority-order sweep -- complete when the map has ample empty space, but the
+    # near-fully-packed regime (1-3 empty cells, cyclic dependencies) needs Push-
+    # and-Rotate's full rotate + subproblem machinery, which is NOT reproduced; on
+    # such packed instances it solves only a fraction. The gate therefore pins
+    # completeness only where the primitive core is complete, plus the
+    # search-blowup advantage, plus the absolute validity guarantee.
+    import random
+
+    from mrn_coord.mapf import GridWorld, cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.push_and_rotate import push_and_rotate
+
+    def _instance(w, h, n, seed):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        rng.shuffle(free)
+        return GridWorld(w, h), {i: (free[i], free[n + i]) for i in range(n)}
+
+    def _valid(sol, agents):
+        return (detect_first_conflict(sol.paths) is None
+                and all(sol.paths[k][-1] == g for k, (s, g) in agents.items()))
+
+    instances = cbs_solved = pnr_solved = complete_match = valid = 0
+    pnr_cost = cbs_cost = 0
+    for w, h, n in ((4, 4, 4), (5, 5, 5), (6, 6, 6)):
+        for seed in range(10):
+            grid, agents = _instance(w, h, n, seed)
+            base = cbs(grid, agents, max_expansions=20000)
+            sol = push_and_rotate(grid, agents)
+            instances += 1
+            if sol is not None:
+                pnr_solved += 1
+                valid += int(_valid(sol, agents))
+            if base is not None:
+                cbs_solved += 1
+                complete_match += int(sol is not None)
+                if sol is not None:
+                    pnr_cost += sol.cost
+                    cbs_cost += base.cost
+
+    timeout_instances = cbs_timeout = timeout_pnr_solved = timeout_valid = 0
+    for seed in range(6):
+        grid, agents = _instance(8, 8, 18, seed)
+        base = cbs(grid, agents, max_expansions=800)
+        sol = push_and_rotate(grid, agents)
+        timeout_instances += 1
+        if base is None:
+            cbs_timeout += 1
+        if sol is not None:
+            timeout_pnr_solved += 1
+            timeout_valid += int(_valid(sol, agents))
+
+    return {"case": "push_and_rotate", "instances": instances,
+            "cbs_solved": cbs_solved, "pnr_solved": pnr_solved,
+            "complete_match": complete_match, "valid": valid,
+            "pnr_cost": pnr_cost, "cbs_cost": cbs_cost,
+            "complete_with_slack": complete_match == cbs_solved,
+            "always_valid": valid == pnr_solved,
+            "suboptimal": pnr_cost > cbs_cost,
+            "timeout_instances": timeout_instances, "cbs_timeout": cbs_timeout,
+            "timeout_pnr_solved": timeout_pnr_solved,
+            "timeout_valid": timeout_valid}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -1153,6 +1241,9 @@ SUITE = [
     # Network-flow: anonymous makespan-optimal MAPF via integer max-flow on a
     # time-expanded graph (polynomial, self-certified optimum)
     ("flow_anonymous_makespan", _run_flow_anonymous_makespan),
+    # Push and Swap/Rotate: constructive primitive-based solver -- complete with
+    # slack, valid by construction, solves crowded maps where CBS blows up
+    ("push_and_rotate", _run_push_and_rotate),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),
