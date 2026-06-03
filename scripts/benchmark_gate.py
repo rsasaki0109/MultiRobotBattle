@@ -1298,6 +1298,195 @@ def _run_cbs_bypass() -> dict:
     }
 
 
+def _run_ddm() -> dict:
+    # DDM (ddm.py) is a Python reproduction of Han & Yu's "DDM: Fast Near-Optimal
+    # Multi-Robot Path Planning using Diversified-Path and Optimal Sub-Problem
+    # Solution Database Heuristics" (RA-L 2020). DDM is a decoupled planner whose
+    # two named heuristics this gate reproduces and pins:
+    #   (1) the OPTIMAL SUB-PROBLEM SOLUTION DATABASE -- conflicts are resolved in
+    #       small 2x3 / 3x3 windows by an *optimal* (min-makespan) collision-free
+    #       joint motion, precomputed once and reused in O(1); and
+    #   (2) PATH DIVERSIFICATION -- robots pick among several shortest paths the
+    #       one overlapping the others least, so fewer conflicts ever form.
+    # The two are wired into a database-driven online loop that is COLLISION-FREE
+    # BY CONSTRUCTION (every committed step is a database-certified joint move or
+    # an unconflicted advance).
+    #
+    # Honest scope: this reproduces the two heuristics and a database-driven
+    # resolver, NOT the paper's full warehouse pipeline; like DDM it is INCOMPLETE
+    # (it can livelock / hit a coupling larger than a local window and return
+    # None). It is not claimed to beat prioritized planning on open random grids
+    # -- the gate pins the *verified mechanisms*, not an overclaimed win:
+    # database optimality, translation-invariant reuse, the canonical local
+    # maneuvers, the diversification effect, and the collision-free guarantee.
+    import random
+    from collections import deque
+    from itertools import product
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.ddm import (
+        LocalDatabase, _dist_field, _diversified_paths, _shortest_paths, ddm,
+    )
+
+    # (1) Database == brute-force optimal makespan over 2x3 and 3x3 sub-instances.
+    def _brute(cells, starts, goals):
+        order = sorted(starts)
+        cs = set(cells)
+
+        def nb(c):
+            x, y = c
+            return [c] + [n for n in ((x + 1, y), (x - 1, y), (x, y + 1),
+                                      (x, y - 1)) if n in cs]
+
+        s = tuple(starts[r] for r in order)
+        g = tuple(goals[r] for r in order)
+        n = len(order)
+        seen = {s}
+        q = deque([(s, 0)])
+        while q:
+            u, d = q.popleft()
+            if u == g:
+                return d
+            for v in product(*[nb(u[i]) for i in range(n)]):
+                if len(set(v)) != n:
+                    continue
+                if any(u[i] == v[j] and u[j] == v[i] and u[i] != u[j]
+                       for i in range(n) for j in range(i + 1, n)):
+                    continue
+                if v not in seen:
+                    seen.add(v)
+                    q.append((v, d + 1))
+        return None
+
+    def _valid(plan, goals):
+        if plan is None:
+            return False
+        for cfg in plan:
+            if len(set(cfg.values())) != len(cfg):
+                return False
+        for t in range(len(plan) - 1):
+            u, v = plan[t], plan[t + 1]
+            for a in u:
+                for b in u:
+                    if a < b and u[a] == v[b] and u[b] == v[a] and u[a] != u[b]:
+                        return False
+        return all(plan[-1][r] == goals[r] for r in goals)
+
+    db_match = {}
+    for rw, rh, key in ((3, 2, "db23"), (3, 3, "db33")):
+        cells = [(x, y) for x in range(rw) for y in range(rh)]
+        db = LocalDatabase()
+        rng = random.Random(7)
+        ok = 0
+        for _ in range(300):
+            k = rng.randint(2, min(4, len(cells) // 2))
+            pts = rng.sample(cells, 2 * k)
+            s = {i: pts[i] for i in range(k)}
+            g = {i: pts[k + i] for i in range(k)}
+            pl = db.solve(cells, s, g)
+            bm = _brute(cells, s, g)
+            if ((pl is None and bm is None)
+                    or (pl is not None and bm is not None
+                        and len(pl) - 1 == bm and _valid(pl, g))):
+                ok += 1
+        db_match[key] = ok
+
+    # (2) Translation-invariant reuse: a shifted copy of a solved pattern reuses
+    # the cache (no fresh solve).
+    db = LocalDatabase()
+    cells23 = [(x, y) for x in range(3) for y in range(2)]
+    db.solve(cells23, {0: (0, 0), 1: (1, 0), 2: (2, 0)},
+             {0: (1, 0), 1: (2, 0), 2: (0, 0)})
+    solves_after_first = db.solves
+    db.solve([(x + 10, y + 10) for x, y in cells23],
+             {0: (10, 10), 1: (11, 10), 2: (12, 10)},
+             {0: (11, 10), 1: (12, 10), 2: (10, 10)})
+    translation_reused = (db.solves == solves_after_first)
+
+    # (3) Canonical local maneuvers in a 2x3 window: a 3-robot rotation and a
+    # 2-robot end-swap -- motions a single-cell view cannot perform.
+    dbc = LocalDatabase()
+    rot = dbc.solve(cells23, {0: (0, 0), 1: (1, 0), 2: (2, 0)},
+                    {0: (1, 0), 1: (2, 0), 2: (0, 0)})
+    swp = dbc.solve(cells23, {0: (0, 0), 1: (2, 0)}, {0: (2, 0), 1: (0, 0)})
+    rotation_steps = len(rot) - 1
+    swap_steps = len(swp) - 1
+
+    # (4) Diversification reduces the space-time footprint overlap.
+    def _inst(seed, n, w, h):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        c = rng.sample(free, 2 * n)
+        return GridWorld(w, h), {i: (c[i], c[n + i]) for i in range(n)}
+
+    def _overlap(paths):
+        claimed: dict = {}
+        o = 0
+        for p in paths.values():
+            for t, c in enumerate(p):
+                o += claimed.get((c, t), 0)
+                claimed[(c, t)] = claimed.get((c, t), 0) + 1
+        return o
+
+    ov_on = ov_off = 0
+    for seed in range(200):
+        grid, ag = _inst(seed, 8, 8, 8)
+        fields = {r: _dist_field(grid, ag[r][1]) for r in ag}
+        d = _diversified_paths(grid, ag, fields, candidates=4)
+        f = {r: _shortest_paths(grid, ag[r][0], ag[r][1], fields[r], 1)[0]
+             for r in ag}
+        if d is None:
+            continue
+        ov_on += _overlap(d)
+        ov_off += _overlap(f)
+
+    # (5) Collision-free by construction across a battery (incomplete: it solves
+    # a fraction, but every returned solution is collision-free and on-goal).
+    batt_inst = batt_solved = batt_cf_violations = 0
+    for seed in range(300):
+        grid, ag = _inst(seed, 6, 8, 8)
+        batt_inst += 1
+        sol = ddm(grid, ag)
+        if sol is None:
+            continue
+        batt_solved += 1
+        bad = (detect_first_conflict(sol.paths) is not None
+               or not all(sol.paths[r][-1] == ag[r][1]
+                          and sol.paths[r][0] == ag[r][0] for r in ag))
+        if bad:
+            batt_cf_violations += 1
+
+    # A frozen showcase that fires the database and solves collision-free.
+    sgrid, sag = _inst(4, 5, 5, 5)
+    sst: dict = {}
+    ssol = ddm(sgrid, sag, stats=sst)
+
+    return {
+        "case": "mapf_ddm",
+        "db23_optimal": db_match["db23"],
+        "db33_optimal": db_match["db33"],
+        "translation_reused": translation_reused,
+        "rotation_steps": rotation_steps,
+        "swap_steps": swap_steps,
+        "diversify_overlap_off": ov_off,
+        "diversify_overlap_on": ov_on,
+        "battery_instances": batt_inst,
+        "battery_solved": batt_solved,
+        "battery_cf_violations": batt_cf_violations,
+        "showcase_cost": ssol.cost if ssol else -1,
+        "showcase_makespan": sst.get("makespan"),
+        "showcase_database_solves": sst.get("database_solves"),
+        "showcase_cf": (ssol is not None
+                        and detect_first_conflict(ssol.paths) is None),
+        "database_optimal": (db_match["db23"] == 300 and db_match["db33"] == 300),
+        "database_translation_invariant": translation_reused,
+        "canonical_maneuvers": (rotation_steps == 3 and swap_steps == 4),
+        "diversification_reduces_congestion": ov_on < ov_off,
+        "collision_free_by_construction": batt_cf_violations == 0,
+    }
+
+
 def _run_disjoint_vs_standard() -> dict:
     # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
     # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
@@ -2941,6 +3130,11 @@ SUITE = [
     # child's path instead of splitting -- same optimum as CBS, fewer high-level
     # expansions and far fewer generated tree nodes, never worse
     ("mapf_cbs_bypass", _run_cbs_bypass),
+    # DDM (RA-L 2020): the optimal sub-problem solution database + path
+    # diversification. A database-driven, collision-free-by-construction resolver
+    # -- gate pins the verified mechanisms (optimal local database, translation
+    # reuse, canonical maneuvers, diversification), incomplete by design
+    ("mapf_ddm", _run_ddm),
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),

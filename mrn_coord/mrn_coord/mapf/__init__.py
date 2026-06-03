@@ -109,6 +109,11 @@ The pieces compose bottom-up:
   optimality.
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
+- :mod:`ddm` — database-driven multi-robot planning (Han & Yu 2020): a decoupled
+  planner whose two heuristics are an *optimal sub-problem solution database* —
+  conflicts resolved in tiny 2×3/3×3 windows by a precomputed, reused optimal
+  joint motion — and *path diversification* (pick the shortest path overlapping
+  others least). Collision-free by construction; incomplete.
 - :mod:`whca` — Windowed Hierarchical Cooperative A* (Silver 2005): cooperative
   planning made scalable. The *hierarchical* heuristic is the true shortest-path
   distance to the goal on the static map (Reverse Resumable A*), perfect enough
@@ -126,6 +131,7 @@ from .bcp import bcp
 from .bypass import cbs_bypass
 from .cbs import cbs
 from .cbsh import cbsh
+from .ddm import ddm
 from .macbs import macbs
 from .ccbs import ccbs
 from .ecbs import ecbs
@@ -170,6 +176,7 @@ __all__ = [
     "cbs_bypass",
     "cbs",
     "cbsh",
+    "ddm",
     "macbs",
     "ccbs",
     "ecbs",

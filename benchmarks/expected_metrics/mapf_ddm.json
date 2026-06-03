@@ -1,0 +1,22 @@
+{
+  "battery_cf_violations": 0,
+  "battery_instances": 300,
+  "battery_solved": 252,
+  "canonical_maneuvers": true,
+  "case": "mapf_ddm",
+  "collision_free_by_construction": true,
+  "database_optimal": true,
+  "database_translation_invariant": true,
+  "db23_optimal": 300,
+  "db33_optimal": 300,
+  "diversification_reduces_congestion": true,
+  "diversify_overlap_off": 325,
+  "diversify_overlap_on": 213,
+  "rotation_steps": 3,
+  "showcase_cf": true,
+  "showcase_cost": 21,
+  "showcase_database_solves": 3,
+  "showcase_makespan": 6,
+  "swap_steps": 4,
+  "translation_reused": true
+}
