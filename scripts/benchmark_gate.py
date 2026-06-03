@@ -1105,6 +1105,59 @@ def _run_push_and_rotate() -> dict:
             timeout_pnr_solved += 1
             timeout_valid += int(_valid(sol, agents))
 
+    # (3) DENSE PACKED RECTANGLES -- the near-packed gap, now closed for >=2 empty
+    # cells. A fully packed grid is the 15-puzzle regime: the greedy push/swap
+    # primitives stall at once (no slack to shove blockers), so Push-and-Rotate
+    # dispatches it with a CONSTRUCTIVE row/column reduction (place the rectangle
+    # top row by top row, then peel the strip's columns, finishing a 2x3 corner
+    # exactly) rather than a search -- search is what CBS does, and exactly what
+    # blows up here. Instances are packed formations (the target leaves its empty
+    # cells in a bottom band) scrambled by a random walk from the goal, so each is
+    # solvable BY CONSTRUCTION; the reduction's moves only ever step one agent into
+    # an adjacent empty cell, so every plan is collision-free and on-goal by
+    # construction too. This pins: every instance solved (complete_packed) and
+    # valid (packed_all_valid), and that optimal CBS busts a 300-node budget on
+    # every one of them (packed_cbs_busts == packed_instances) -- the constructive
+    # method wins precisely where search cannot. Honest scope (see docs): the
+    # single-blank case (exactly one empty cell, the tightest 15-puzzle parity
+    # regime) is only partially covered and is gated at >= 2 empty cells.
+    def _packed(w, h, blanks, seed):
+        rng = random.Random(seed * 131 + w * 7 + h * 3 + blanks)
+        grid = GridWorld(w, h)
+        cells = [(x, y) for y in range(h) for x in range(w)]
+        goal = cells[:len(cells) - blanks]
+        n = len(goal)
+        pos = {i: goal[i] for i in range(n)}
+        occ = {goal[i]: i for i in range(n)}
+        empt = set(cells) - set(goal)
+        nb = lambda c: [d for d in ((c[0] + 1, c[1]), (c[0] - 1, c[1]),
+                                    (c[0], c[1] + 1), (c[0], c[1] - 1))
+                        if grid.is_free(d)]
+        for _ in range(30 * n):
+            e = rng.choice(sorted(empt))
+            cand = [c for c in nb(e) if c in occ]
+            if not cand:
+                continue
+            c = rng.choice(cand)
+            a = occ.pop(c)
+            occ[e] = a
+            pos[a] = e
+            empt.discard(e)
+            empt.add(c)
+        return grid, {i: (pos[i], goal[i]) for i in range(n)}
+
+    packed_instances = packed_solved = packed_valid = packed_cbs_busts = 0
+    for w, h, blanks in ((4, 4, 2), (4, 4, 3), (5, 5, 2), (5, 5, 3)):
+        for seed in range(6):
+            grid, agents = _packed(w, h, blanks, seed)
+            sol = push_and_rotate(grid, agents)
+            packed_instances += 1
+            if sol is not None:
+                packed_solved += 1
+                packed_valid += int(_valid(sol, agents))
+            if cbs(grid, agents, max_expansions=300) is None:
+                packed_cbs_busts += 1
+
     return {"case": "push_and_rotate", "instances": instances,
             "cbs_solved": cbs_solved, "pnr_solved": pnr_solved,
             "complete_match": complete_match, "valid": valid,
@@ -1114,7 +1167,12 @@ def _run_push_and_rotate() -> dict:
             "suboptimal": pnr_cost > cbs_cost,
             "timeout_instances": timeout_instances, "cbs_timeout": cbs_timeout,
             "timeout_pnr_solved": timeout_pnr_solved,
-            "timeout_valid": timeout_valid}
+            "timeout_valid": timeout_valid,
+            "packed_instances": packed_instances, "packed_solved": packed_solved,
+            "packed_valid": packed_valid, "packed_cbs_busts": packed_cbs_busts,
+            "complete_packed": packed_solved == packed_instances,
+            "packed_all_valid": packed_valid == packed_instances,
+            "packed_beats_search": packed_cbs_busts == packed_instances}
 
 
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",

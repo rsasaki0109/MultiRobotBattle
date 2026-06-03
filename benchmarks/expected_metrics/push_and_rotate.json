@@ -13,5 +13,12 @@
   "timeout_instances": 6,
   "cbs_timeout": 6,
   "timeout_pnr_solved": 6,
-  "timeout_valid": 6
+  "timeout_valid": 6,
+  "packed_instances": 24,
+  "packed_solved": 24,
+  "packed_valid": 24,
+  "packed_cbs_busts": 24,
+  "complete_packed": true,
+  "packed_all_valid": true,
+  "packed_beats_search": true
 }

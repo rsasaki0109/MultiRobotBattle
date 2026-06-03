@@ -57,8 +57,10 @@ The pieces compose bottom-up:
 - :mod:`push_and_rotate` — Push and Swap / Push and Rotate (Luna & Bekris 2011;
   de Wilde et al. 2014): a constructive, primitive-based solver (push / swap /
   rotate) rather than a search — collision-free and on-goal by construction,
-  complete when the map has slack, solving crowded maps where optimal search
-  blows up, at the cost of optimality.
+  complete when the map has slack and, via a constructive row/column reduction,
+  on fully packed grids (the 15-puzzle regime, ``>= 2`` empty cells) where the
+  greedy primitives stall — solving crowded maps where optimal search blows up,
+  at the cost of optimality.
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
 - :mod:`pbs` — Priority-Based Search: searches over priority *orderings* (PP at

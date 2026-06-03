@@ -920,6 +920,53 @@ class TestPushAndRotate(unittest.TestCase):
             runs.append((sol.cost, st["moves"]) if sol else None)
         self.assertEqual(runs[0], runs[1])
 
+    @staticmethod
+    def _packed(w, h, blanks, seed):
+        # A fully packed formation (empties in the bottom band) scrambled by a
+        # random walk from the goal, so it is solvable by construction.
+        import random as _r
+        from mrn_coord.mapf import GridWorld
+        rng = _r.Random(seed)
+        grid = GridWorld(w, h)
+        cells = [(x, y) for y in range(h) for x in range(w)]
+        goal = cells[:len(cells) - blanks]
+        n = len(goal)
+        pos = {i: goal[i] for i in range(n)}
+        occ = {goal[i]: i for i in range(n)}
+        empt = set(cells) - set(goal)
+        nb = lambda c: [d for d in ((c[0] + 1, c[1]), (c[0] - 1, c[1]),
+                                    (c[0], c[1] + 1), (c[0], c[1] - 1))
+                        if grid.is_free(d)]
+        for _ in range(30 * n):
+            e = rng.choice(sorted(empt))
+            cand = [c for c in nb(e) if c in occ]
+            if not cand:
+                continue
+            c = rng.choice(cand)
+            a = occ.pop(c)
+            occ[e] = a
+            pos[a] = e
+            empt.discard(e)
+            empt.add(c)
+        return grid, {i: (pos[i], goal[i]) for i in range(n)}
+
+    def test_solves_dense_packed_grid_search_cannot(self):
+        # The closed near-packed gap: a fully packed rectangle (>=2 empty cells) is
+        # the 15-puzzle regime where the greedy primitives stall and optimal CBS
+        # blows its budget; the constructive row/column reduction solves it, and the
+        # plan is collision-free and on-goal by construction.
+        for w, h, blanks in ((4, 4, 2), (4, 4, 3), (5, 5, 2), (5, 5, 3)):
+            for seed in range(4):
+                grid, agents = self._packed(w, h, blanks, seed)
+                self.assertIsNone(cbs(grid, agents, max_expansions=300),
+                                  f"{w}x{h}/{blanks} seed={seed}")
+                sol = self._solve(w, h, agents)
+                self.assertIsNotNone(sol, f"{w}x{h}/{blanks} seed={seed}")
+                self.assertIsNone(detect_first_conflict(sol.paths),
+                                  f"{w}x{h}/{blanks} seed={seed}")
+                for a, (s, g) in agents.items():
+                    self.assertEqual(sol.paths[a][-1], g)
+
 
 class TestPrioritized(unittest.TestCase):
     def test_parallel_succeeds(self):

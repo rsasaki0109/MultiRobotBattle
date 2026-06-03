@@ -486,8 +486,17 @@ agent stands on its goal:
   the pair to a vertex of degree `≥ 3`, clear two of its neighbours, and rotate
   them around the hub in six moves; reversing the approach restores everyone
   else.
-- **rotate** — Push-and-Rotate's addition for a fully-occupied cyclic component,
-  where no degree-3 hub is reachable: rotate the whole cycle by one.
+- **rotate** — Push-and-Rotate's addition for a cyclic component where no degree-3
+  hub is reachable: bring one empty cell onto the cycle and rotate the whole ring
+  by one, advancing an agent past a blocker it could never swap with.
+- **grid reduction** — the dispatch for a *fully packed* rectangle (the 15-puzzle
+  regime), where the greedy primitives stall at once for want of slack. It is
+  still **constructive, not a search**: place the rectangle top row by top row
+  (each interior tile walked to its cell with the blank as a cursor; the two
+  rightmost tiles of a row placed as a pair by the standard corner rotation that
+  never strands the blank), then peel the remaining two-row strip column by column
+  down to a `2×3` corner that an exact micro-search finishes. Every step still
+  moves one agent into an adjacent empty cell.
 
 Agents are placed in priority order and a placed agent is protected. The decisive
 property is structural: **every primitive only ever steps one agent to an
@@ -495,7 +504,7 @@ adjacent *empty* cell**, so any plan it returns is collision-free and ends with
 all agents on their goals *by construction* — there is no separate validity to
 check, only **completeness** (does it finish?) and the price in optimality.
 
-The `push_and_rotate` gate pins both regimes. **Complete-with-slack, valid, and
+The `push_and_rotate` gate pins three regimes. **Complete-with-slack, valid, and
 suboptimal:** on a moderate battery (three configs, plain `range(10)`) every
 instance CBS proves solvable is also solved by the primitives
 (`complete_match == cbs_solved == 30/30`), every plan is collision-free and
@@ -503,14 +512,19 @@ on-goal (`valid == pnr_solved`), and the cost sits far above CBS's optimum
 (`pnr_cost 2888` vs `cbs_cost 516` — the single-mover serialisation is loose on
 purpose). **Solves where search cannot:** on crowded `8×8`/18-agent instances CBS
 exhausts an 800-node budget every time while the primitives place all agents in
-polynomial time (`cbs_timeout == timeout_pnr_solved == 6`). **Honest scope:** this
-is the primitive core with a deterministic priority-order *sweep* — complete when
-the map has ample empty space, but the **near-fully-packed** regime (1–3 empty
-cells, where agents sit on cyclic dependencies) needs Push-and-Rotate's full
-*rotate + subproblem* machinery, which is **not** reproduced; on such packed
-instances it solves only a fraction. The gate therefore pins completeness only
-where the primitive core is complete, plus the search-blowup advantage, plus the
-absolute by-construction validity.
+polynomial time (`cbs_timeout == timeout_pnr_solved == 6`). **The near-packed gap,
+now closed for `≥ 2` empty cells:** on fully packed rectangles (`4×4`/`5×5` with
+2–3 empty cells — the exact dense regime that previously solved only a fraction),
+scrambled by a random walk from the goal so each is solvable *by construction*,
+the row/column reduction solves **every** instance (`complete_packed`,
+`packed_solved == 24/24`), every plan is valid by construction
+(`packed_all_valid`), and optimal CBS busts a 300-node budget on **all** of them
+(`packed_beats_search`, `packed_cbs_busts == 24/24`) — the constructive method
+wins precisely where search blows up. **Honest scope:** the **single-blank** case
+(exactly one empty cell, the tightest 15-puzzle *parity* regime) is only partially
+covered — the reduction's blank maneuvering is too coarse there — so the packed
+gate is pinned at `≥ 2` empty cells; that last frontier is the one piece of de
+Wilde's machinery left unreproduced.
 
 ### High level: LaCAM (`lacam.py`)
 

@@ -52,6 +52,7 @@ class _Solver:
         self.occ = {s: a for a, (s, g) in agents.items()}   # cell -> agent
         self.moves = []                                      # (agent, to_cell)
         self.finished = set()                                # cells of placed agents
+        self.placed = set()                                  # ids of placed agents
         self.max_moves = max_moves
         self._adj = {}
         for x in range(grid.width):
@@ -73,6 +74,18 @@ class _Solver:
 
     def _degree(self, cell):
         return len(self._adj[cell])
+
+    # -- snapshot/restore -------------------------------------------------- #
+    # A primitive (swap, rotate) that fails partway has already appended moves;
+    # rolling back lets the caller try the next primitive on a clean state, so
+    # only a fully-successful primitive ever commits moves to the plan.
+    def _snapshot(self):
+        return (dict(self.pos), dict(self.occ), len(self.moves))
+
+    def _restore(self, snap):
+        self.pos = dict(snap[0])
+        self.occ = dict(snap[1])
+        del self.moves[snap[2]:]
 
     # -- BFS helpers ------------------------------------------------------- #
     def _path(self, src, dst, avoid):
@@ -252,13 +265,317 @@ class _Solver:
             trail.append(("b", frm_b))
         return [(a if tag == "a" else b, frm) for tag, frm in trail]
 
+    # -- rotate ------------------------------------------------------------ #
+    # Push-and-Rotate's addition over Push-and-Swap. When ``a`` is blocked by an
+    # agent ``b`` it must pass, the region is too packed to clear a degree->=3 hub
+    # for a swap, but ``a`` and ``b`` sit on a *cycle*: a single empty cell brought
+    # onto the cycle lets us rotate the whole ring by one, advancing ``a`` past
+    # ``b`` without ever touching a placed agent. This is exactly the near-packed,
+    # cyclic regime where the bare push/swap core gets stuck.
+    def _cycle_through_edge(self, u, v, avoid):
+        """The shortest simple cycle containing the edge ``u``-``v`` over the free
+        graph minus ``avoid``, returned as a ring ``[u, v, ...]`` whose ``+1``
+        direction carries ``u`` to ``v``. ``None`` if ``u``-``v`` is a bridge
+        (a tree-like region — swap territory, not rotate)."""
+        prev = {v: None}
+        q = deque([v])
+        while q:
+            x = q.popleft()
+            for w in self._adj[x]:
+                if w in prev or w in avoid:
+                    continue
+                if x == v and w == u:        # forbid the direct edge: need a detour
+                    continue
+                prev[w] = x
+                if w == u:                   # closed the loop u .. v .. u
+                    seq = []
+                    cur = w
+                    while cur is not None:
+                        seq.append(cur)
+                        cur = prev[cur]
+                    seq.reverse()            # [v, c1, ..., ck, u]
+                    return [u, v] + seq[1:-1]
+                q.append(w)
+        return None
+
+    def _bring_blank_onto(self, cycle):
+        """Shift a nearby empty cell onto some vertex of ``cycle`` (other than the
+        agent's own cell ``cycle[0]``), without crossing the cycle or disturbing a
+        placed agent. Returns True if a cycle vertex is now empty."""
+        cyset = set(cycle)
+        for w in cycle[1:]:
+            avoid = self.finished | (cyset - {w})
+            path = self._path_to_empty(w, avoid, prefer_open=False)
+            if path is not None and len(path) >= 2 and self._shift(path) \
+                    and self._empty(w):
+                return True
+        return False
+
+    def _rotate_advance(self, a):
+        """Advance ``a`` one step toward its goal by rotating a cycle, when push
+        and swap cannot. Returns True iff ``a`` moved."""
+        u = self.pos[a]
+        path = self._path(u, self.goal[a], self.finished)
+        if path is None or len(path) < 2:
+            return False
+        v = path[1]
+        cycle = self._cycle_through_edge(u, v, self.finished)
+        if cycle is None:
+            return False                     # bridge, not a cycle
+        if not any(self._empty(c) for c in cycle) \
+                and not self._bring_blank_onto(cycle):
+            return False
+        idx = {c: i for i, c in enumerate(cycle)}
+        k = len(cycle)
+        guard = 0
+        # Roll the empty backward around the ring toward ``a``: each step shifts one
+        # agent one position in the ``+1`` direction. When the empty reaches ``v``
+        # (``b`` has vacated it), ``a`` itself steps in.
+        while self.pos[a] != v:
+            guard += 1
+            if guard > 2 * k + 4:
+                return False
+            ahead = [i for c, i in idx.items() if i >= 1 and self._empty(c)]
+            if not ahead:
+                return False
+            j = min(ahead)                   # nearest empty ahead of a (at index 0)
+            if j == 1:                       # v is empty -> a steps into it
+                if not self._move(a, v):
+                    return False
+            else:                            # cycle[j-1] is occupied (j is nearest)
+                occ = self.occ.get(cycle[j - 1])
+                if occ is None or not self._move(occ, cycle[j]):
+                    return False
+        return True
+
+    # -- residual subproblem ---------------------------------------------- #
+    # Greedy priority placement can paint itself into a corner: once most agents
+    # are frozen, the last few sit in a small pocket walled off by placed agents,
+    # where neither push/swap nor a single cycle-rotate can untangle them. This is
+    # exactly the cyclic, near-packed residual Push-and-Rotate's subproblem
+    # decomposition exists to handle. Rather than reproduce de Wilde's polynomial
+    # decomposition + resolve bookkeeping, we solve that residual *pocket* exactly:
+    # a breadth-first search over the configurations of the not-yet-placed agents
+    # within their connected free component (placed agents are walls). BFS only
+    # ever steps one agent into an adjacent empty cell, so the plan it returns is
+    # collision-free and on-goal by construction; being exhaustive, it is complete
+    # whenever the residual is solvable with the placed agents held fixed. It is
+    # bounded (cells <= ``limit``, nodes <= ``node_cap``) so it stays a fast
+    # endgame, not an exponential search over the whole instance.
+    def _bfs_region(self, region, node_cap=200_000):
+        """Exactly solve the not-yet-placed agents inside ``region`` (cells outside
+        ``region`` are walls) by BFS over configurations. Only steps an agent into
+        an adjacent empty cell, so the plan is valid by construction; exhaustive,
+        so complete whenever the region's subproblem is solvable in isolation."""
+        cells = sorted(region)
+        cidx = {c: i for i, c in enumerate(cells)}
+        adj = {c: [d for d in self._adj[c] if d in region] for c in region}
+        aset = {self.occ[c] for c in cells
+                if c in self.occ and self.occ[c] not in self.placed}
+        if not aset:
+            return True
+        target = {}
+        for a in aset:
+            if self.goal[a] not in region:
+                return False
+            target[cidx[self.goal[a]]] = a
+        start = tuple(self.occ.get(c) if self.occ.get(c) in aset else None
+                      for c in cells)
+
+        def is_goal(st):
+            return all(st[i] == ag for i, ag in target.items())
+
+        seen = {start: None}
+        bq = deque([start])
+        found = None
+        while bq:
+            st = bq.popleft()
+            if is_goal(st):
+                found = st
+                break
+            if len(seen) > node_cap:
+                return False
+            for i, occ_a in enumerate(st):
+                if occ_a is None:
+                    continue
+                for d in adj[cells[i]]:
+                    j = cidx[d]
+                    if st[j] is None:
+                        nxt = list(st)
+                        nxt[j], nxt[i] = occ_a, None
+                        nxt = tuple(nxt)
+                        if nxt not in seen:
+                            seen[nxt] = (st, occ_a, d)
+                            bq.append(nxt)
+        if found is None:
+            return False
+        chain = []
+        cur = found
+        while seen[cur] is not None:
+            prev, ag, to = seen[cur]
+            chain.append((ag, to))
+            cur = prev
+        for ag, to in reversed(chain):
+            if not self._move(ag, to):
+                return False
+        for a in aset:
+            self.placed.add(a)
+            self.finished.add(self.goal[a])
+        return True
+
+    def _solve_residual(self, limit=9, node_cap=200_000):
+        rem = [a for a in self.pos if a not in self.placed]
+        if not rem:
+            return True
+        # connected free component of the residual, placed cells as walls
+        comp = set()
+        q = deque([self.pos[rem[0]]])
+        comp.add(self.pos[rem[0]])
+        while q:
+            u = q.popleft()
+            for v in self._adj[u]:
+                if v in self.finished or v in comp:
+                    continue
+                comp.add(v)
+                q.append(v)
+        if len(comp) > limit:
+            return False
+        for a in rem:
+            if self.pos[a] not in comp or self.goal[a] not in comp:
+                return False               # an agent or its goal escapes the pocket
+        return self._bfs_region(comp, node_cap=node_cap)
+
+    # -- grid reduction (the dense, rectangular endgame) ------------------- #
+    # On a fully packed rectangular region the greedy primitives stall almost
+    # immediately, and the residual pocket is the whole rectangle -- far too big to
+    # brute-force. This is the 15-puzzle regime, and Push-and-Rotate dispatches it
+    # with a *constructive* row reduction, NOT a search (search is what CBS does,
+    # and exactly what blows up here). We place the rectangle's tiles top row by
+    # top row -- each interior tile by walking it to its cell with the blank as a
+    # cursor, the two rightmost tiles of a row by the standard corner rotation that
+    # avoids trapping the blank -- locking each finished row, until a two-row strip
+    # remains that the exact ``_bfs_region`` finishes. Every step still moves one
+    # agent into an adjacent empty cell, so validity by construction is preserved.
+    # Scope: the rectangle's empty cells must lie in that bottom strip (its upper
+    # rows are full at the goal) -- the canonical packed-formation target.
+    def _route_blank_to(self, dest, avoid):
+        """Bring an empty cell to ``dest`` without crossing ``avoid``."""
+        if self._empty(dest):
+            return True
+        if dest in avoid:
+            return False
+        path = self._path_to_empty(dest, avoid, prefer_open=False)
+        if path is None or len(path) < 2:
+            return False
+        return self._shift(path)
+
+    def _move_tile(self, tile, target, locked):
+        """Walk ``tile`` to ``target`` one cell at a time, never moving a ``locked``
+        tile: route the blank to the next cell, then step the tile in."""
+        guard = 0
+        while self.pos[tile] != target:
+            guard += 1
+            if guard > 6 * len(self._adj):
+                return False
+            cur = self.pos[tile]
+            path = self._path(cur, target, locked)
+            if path is None or len(path) < 2:
+                return False
+            nb = path[1]
+            if not self._route_blank_to(nb, locked | {cur}):
+                return False
+            if not self._empty(nb) or not self._move(tile, nb):
+                return False
+        return True
+
+    def _place_pair(self, a_near, a_far, near, far, work, locked):
+        """Place a trapped pair: ``a_near`` ends on ``near``, ``a_far`` on the
+        corner ``far`` (reachable only through ``near`` or the open ``work`` cell).
+        Bring ``a_near`` to the corner and ``a_far`` to ``work``, then rotate them
+        into place — a maneuver that never strands the blank behind the corner."""
+        if self.pos[a_near] == near and self.pos[a_far] == far:
+            return True
+        if not self._move_tile(a_near, far, locked):
+            return False
+        if not self._move_tile(a_far, work, locked | {far}):
+            return False
+        if not self._route_blank_to(near, locked | {far, work}):
+            return False
+        return self._move(a_near, near) and self._move(a_far, far)
+
+    def _reduce_row(self, y, x0, x1, want, locked):
+        """Place row ``y`` left to right; the two rightmost cells go in as a pair,
+        using the row below (``y+1``) as the corner's workspace."""
+        for x in range(x0, x1 - 1):
+            tgt = (x, y)
+            a = want.get(tgt)
+            if a is None or not self._move_tile(a, tgt, locked):
+                return False
+            locked.add(tgt)
+        c0, c1 = (x1 - 1, y), (x1, y)
+        a0, a1 = want.get(c0), want.get(c1)
+        if a0 is None or a1 is None \
+                or not self._place_pair(a0, a1, c0, c1, (x1, y + 1), locked):
+            return False
+        locked.add(c0)
+        locked.add(c1)
+        return True
+
+    def _reduce_col(self, x, ytop, ybot, want, locked):
+        """Place column ``x`` of the final two-row strip as a pair (the two cells
+        share the trap), using the cell to the right as the corner's workspace."""
+        ct, cb = (x, ytop), (x, ybot)
+        at, ab = want.get(ct), want.get(cb)
+        if at is None or ab is None \
+                or not self._place_pair(ab, at, cb, ct, (x + 1, ytop), locked):
+            return False
+        locked.add(ct)
+        locked.add(cb)
+        return True
+
+    def _grid_reduction(self, comp):
+        xs = [c[0] for c in comp]
+        ys = [c[1] for c in comp]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        W, H = x1 - x0 + 1, y1 - y0 + 1
+        if len(comp) != W * H or W < 3 or H < 2:
+            return False                   # not a full rectangle the reduction fits
+        if not any(self._empty(c) for c in comp):
+            return False
+        want = {self.goal[a]: a for a in self.pos if a not in self.placed}
+        locked = set(self._adj) - set(comp)
+        # peel full rows from the top until exactly two rows remain ...
+        y = y0
+        while (y1 - y) >= 2:
+            if not self._reduce_row(y, x0, x1, want, locked):
+                return False
+            y += 1
+        # ... then peel columns of the two-row strip from the left to a 2x3 corner.
+        x = x0
+        while (x1 - x) >= 3:
+            if not self._reduce_col(x, y, y1, want, locked):
+                return False
+            x += 1
+        strip = {(xx, yy) for xx in range(x, x1 + 1) for yy in range(y, y1 + 1)}
+        return self._bfs_region(strip)
+
+    def solve_reduction(self):
+        """Solve a fully packed rectangle by constructive row reduction. Returns the
+        move list, or ``None`` if the region is not a rectangle the reduction
+        handles (the caller then falls back to the primitive order-sweep)."""
+        if not self._grid_reduction(sorted(self._adj)):
+            return None
+        if any(self.pos[a] != self.goal[a] for a in self.pos):
+            return None
+        return self.moves
+
     # -- top level --------------------------------------------------------- #
     def solve(self, order):
         for a in order:
             guard = 0
             while self.pos[a] != self.goal[a]:
                 guard += 1
-                if guard > 4 * len(self._adj) + 10:
+                if guard > 8 * len(self._adj) + 10:
                     return None
                 if len(self.moves) > self.max_moves:
                     return None
@@ -266,13 +583,28 @@ class _Solver:
                     continue
                 path = self._path(self.pos[a], self.goal[a], self.finished)
                 if path is None or len(path) < 2:
+                    if self._solve_residual():
+                        break
                     return None
                 b = self.occ.get(path[1])
                 if b is None or b in (a,):
+                    if self._solve_residual():
+                        break
                     return None
-                if not self._swap(a, b):
-                    return None
+                # Push and Swap's primitive; when it cannot find/clear a hub (the
+                # packed, cyclic regime) fall back to Push and Rotate's rotate, and
+                # to an exact solve of the small residual pocket as a last resort.
+                snap = self._snapshot()
+                if self._swap(a, b):
+                    continue
+                self._restore(snap)
+                if self._rotate_advance(a):
+                    continue
+                if self._solve_residual():
+                    break
+                return None
             self.finished.add(self.goal[a])
+            self.placed.add(a)
         return self.moves
 
 
@@ -322,13 +654,23 @@ def push_and_rotate(grid: GridWorld, agents: dict, *, max_moves: int = 100_000,
         sorted(agents, reverse=True, key=lambda a: (gdeg(a), agents[a][1])),
     ]
     from .solution import sum_of_costs
+
+    def _finish(moves):
+        paths = _moves_to_paths(agents, moves)
+        if stats is not None:
+            stats["moves"] = len(moves)
+        return Solution(paths=paths, cost=sum_of_costs(paths))
+
+    # The greedy primitives stall on a fully packed rectangle (the 15-puzzle
+    # regime); try the constructive row reduction first, falling back to the
+    # primitive order-sweep for everything it does not cover.
+    reduced = _Solver(grid, agents, max_moves).solve_reduction()
+    if reduced is not None:
+        return _finish(reduced)
     for order in orders:
         solver = _Solver(grid, agents, max_moves)
         moves = solver.solve(order)
         if moves is None:
             continue
-        paths = _moves_to_paths(agents, moves)
-        if stats is not None:
-            stats["moves"] = len(moves)
-        return Solution(paths=paths, cost=sum_of_costs(paths))
+        return _finish(moves)
     return None
