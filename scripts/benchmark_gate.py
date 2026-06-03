@@ -1487,6 +1487,97 @@ def _run_ddm() -> dict:
     }
 
 
+def _run_epea() -> dict:
+    # EPEA* (epea.py) is a Python reproduction of Goldenberg, Felner, Stern,
+    # Sharon, Sturtevant, Holte & Schaeffer's "Enhanced Partial Expansion A*"
+    # (JAIR 2014), with MAPF as the showcase domain. Plain A* over the joint
+    # configuration space (mstar.joint_astar) generates ALL successors of every
+    # expanded node -- including the high-f ones that just sit in OPEN. EPEA*
+    # generates only the successors whose f equals the node's current f, using a
+    # domain Operator Selection Function (OSF), and re-inserts the node with its
+    # f bumped to the next achievable child f -- so high-f children are produced
+    # lazily, and not at all if the search finishes first. Same optimum as CBS;
+    # far fewer generated nodes than the fully-expanding joint A* it beats.
+    #
+    # This gate pins:
+    # (1) SAME OPTIMUM AS CBS: on a random battery, epea_star matches the cbs
+    #     optimum and is collision-free (opt == instances, cf == instances).
+    # (2) PARTIAL EXPANSION CUTS NODE GENERATION: aggregated over the battery,
+    #     EPEA* generates far fewer nodes than joint A* (150867 -> 2605, ~58x)
+    #     and never more on any instance (worse == 0). It pops slightly MORE
+    #     nodes (partial re-expansions) -- the honest trade EPEA* makes.
+    # (3) A frozen showcase (seed 87, 3 agents on 5x5): same optimum 13, but
+    #     generated nodes 6572 -> 84.
+    import random
+
+    from mrn_coord.mapf import GridWorld, cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.epea import epea_star
+    from mrn_coord.mapf.mstar import joint_astar
+
+    def _inst(seed, n, w, h):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        cells = rng.sample(free, 2 * n)
+        return GridWorld(w, h), {i: (cells[i], cells[n + i]) for i in range(n)}
+
+    instances = opt = cf = worse = fewer = 0
+    gen_ja = gen_ep = exp_ja = exp_ep = 0
+    for seed in range(60):
+        for n, w, h in ((2, 5, 5), (3, 5, 5), (3, 4, 4)):
+            grid, agents = _inst(seed, n, w, h)
+            base = cbs(grid, agents, max_expansions=40000)
+            if base is None:
+                continue
+            instances += 1
+            sja: dict = {}
+            sep: dict = {}
+            ja = joint_astar(grid, agents, stats=sja, max_expansions=200000)
+            ep = epea_star(grid, agents, stats=sep, max_expansions=200000)
+            if ep is not None and ep.cost == base.cost:
+                opt += 1
+            if ep is not None and detect_first_conflict(ep.paths) is None:
+                cf += 1
+            if ja is not None and ep is not None:
+                gen_ja += sja["generated"]
+                gen_ep += sep["generated"]
+                exp_ja += sja["expansions"]
+                exp_ep += sep["expansions"]
+                if sep["generated"] < sja["generated"]:
+                    fewer += 1
+                if sep["generated"] > sja["generated"]:
+                    worse += 1
+
+    # A frozen showcase where partial expansion collapses node generation.
+    sgrid, sagents = _inst(87, 3, 5, 5)
+    sbase = cbs(sgrid, sagents)
+    ssja: dict = {}
+    ssep: dict = {}
+    joint_astar(sgrid, sagents, stats=ssja)
+    sep_sol = epea_star(sgrid, sagents, stats=ssep)
+
+    return {
+        "case": "mapf_epea",
+        "instances": instances,
+        "opt": opt,
+        "cf": cf,
+        "battery_gen_joint_astar": gen_ja,
+        "battery_gen_epea": gen_ep,
+        "battery_exp_joint_astar": exp_ja,
+        "battery_exp_epea": exp_ep,
+        "battery_fewer": fewer,
+        "battery_worse": worse,
+        "showcase_cbs_cost": sbase.cost,
+        "showcase_epea_cost": sep_sol.cost,
+        "showcase_gen_joint_astar": ssja["generated"],
+        "showcase_gen_epea": ssep["generated"],
+        "same_optimum_as_cbs": (opt == instances and cf == instances
+                                and sep_sol.cost == sbase.cost),
+        "partial_expansion_cuts_generation": (gen_ep < gen_ja and fewer > 0),
+        "epea_never_generates_more": worse == 0,
+    }
+
+
 def _run_disjoint_vs_standard() -> dict:
     # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
     # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
@@ -3135,6 +3226,10 @@ SUITE = [
     # -- gate pins the verified mechanisms (optimal local database, translation
     # reuse, canonical maneuvers, diversification), incomplete by design
     ("mapf_ddm", _run_ddm),
+    # EPEA* (JAIR 2014): partial expansion with an Operator Selection Function --
+    # generate only the children matching the node's f, same optimum as CBS, far
+    # fewer generated nodes than the fully-expanding joint A*
+    ("mapf_epea", _run_epea),
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),

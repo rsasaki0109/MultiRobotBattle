@@ -1,0 +1,19 @@
+{
+  "battery_exp_epea": 2889,
+  "battery_exp_joint_astar": 2778,
+  "battery_fewer": 180,
+  "battery_gen_epea": 2605,
+  "battery_gen_joint_astar": 150867,
+  "battery_worse": 0,
+  "case": "mapf_epea",
+  "cf": 180,
+  "epea_never_generates_more": true,
+  "instances": 180,
+  "opt": 180,
+  "partial_expansion_cuts_generation": true,
+  "same_optimum_as_cbs": true,
+  "showcase_cbs_cost": 13,
+  "showcase_epea_cost": 13,
+  "showcase_gen_epea": 84,
+  "showcase_gen_joint_astar": 6572
+}

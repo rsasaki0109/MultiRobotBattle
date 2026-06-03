@@ -770,6 +770,36 @@ its edge (rM\* is the fix, left for later). The gate therefore demonstrates the
 mechanism on the regime it was designed for — few, isolated interactions — and
 pins the exact-optimum agreement with CBS everywhere.
 
+#### Enhanced Partial Expansion A* (`epea.py`)
+
+`epea_star(grid, agents)` reproduces Goldenberg, Felner, Stern, Sharon,
+Sturtevant, Holte & Schaeffer, *"Enhanced Partial Expansion A\*"* (JAIR 2014) —
+attacking a different waste in joint-space A* than M\*. Plain A* (`joint_astar`),
+when it expands a node, generates **all** of its successors and pushes them onto
+OPEN — including the many whose `f` exceeds the parent's, which then sit there
+burning memory until the search reaches their `f` level (if ever).
+
+**Partial expansion** generates only the successors whose `f` equals the node's
+current `f`, then re-inserts the node with its `f` bumped to its next child `f`
+(its *stored value*), deferring the higher-`f` children — and skipping them
+entirely if the search finishes first. **EPEA\*** avoids even forming-then-
+discarding the rest with an **Operator Selection Function**: each agent's move
+shifts `f` by a tiny per-agent `δ = (1 unless waiting on goal) + Δdist`, which is
+`0` along a shortest-path step (or staying on goal), `1` for waiting off-goal, `2`
+for a step away; a joint move's `Δf` is the sum of the `δ`, so to expand at offset
+`Δf` the OSF enumerates only the operator tuples summing to it, and the next
+stored value is the smallest achievable larger sum. The heuristic is the
+sum-of-individual-costs (reusing `mstar._dist_to_goal`) and the cost model is
+identical to `joint_astar`, so EPEA\* returns the **same optimum as CBS**.
+
+Gated by `mapf_epea`: on a 180-instance battery EPEA\* matches the `cbs` optimum
+and is collision-free everywhere, and partial expansion collapses node
+**generation 150867 → 2605** (~58×) versus the fully-expanding `joint_astar`,
+**never** generating more on any instance (worse = 0). The honest trade is a few
+percent **more** node *pops* (2778 → 2889) from the partial re-expansions. A
+frozen showcase (seed 87, 3 agents on 5×5) keeps the optimum 13 while cutting
+generated nodes **6572 → 84** (`test_epea`).
+
 ### High level: Standley — operator decomposition + independence detection (`standley.py`)
 
 `od_astar` and `independence_detection` reproduce Trevor Standley's *Finding

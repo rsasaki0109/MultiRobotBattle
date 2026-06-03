@@ -64,6 +64,11 @@ The pieces compose bottom-up:
   their full moves. Same optimum as CBS; on instances with few, isolated
   interactions the collision set — and the search — stays low-dimensional and
   invariant to the rest of the team.
+- :mod:`epea` — Enhanced Partial Expansion A* (Goldenberg et al. 2014): optimal
+  joint-space search that, when it expands a node, generates *only* the children
+  whose ``f`` equals the node's, via an Operator Selection Function, and
+  re-inserts the node at its next child ``f``. Same optimum as CBS; generates far
+  fewer nodes than the fully-expanding joint A* (:func:`joint_astar`).
 - :mod:`standley` — Standley's optimal MAPF (AAAI 2010): two ways to beat the
   ``b**n`` joint branching. ``od_astar`` is *operator decomposition* — assign a
   move to one agent at a time so the effective branching is ``b`` not ``b**n``;
@@ -132,6 +137,7 @@ from .bypass import cbs_bypass
 from .cbs import cbs
 from .cbsh import cbsh
 from .ddm import ddm
+from .epea import epea_star
 from .macbs import macbs
 from .ccbs import ccbs
 from .ecbs import ecbs
@@ -177,6 +183,7 @@ __all__ = [
     "cbs",
     "cbsh",
     "ddm",
+    "epea_star",
     "macbs",
     "ccbs",
     "ecbs",
