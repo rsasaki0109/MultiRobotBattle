@@ -24,6 +24,7 @@ from .lifelong import (
     run_lifelong,
 )
 from .rhcr import run_rhcr
+from .token_passing import run_token_passing
 
 __all__ = [
     "LifelongResult",
@@ -32,6 +33,7 @@ __all__ = [
     "pibt_solve",
     "run_lifelong",
     "run_rhcr",
+    "run_token_passing",
     "auction",
     "hungarian",
 ]

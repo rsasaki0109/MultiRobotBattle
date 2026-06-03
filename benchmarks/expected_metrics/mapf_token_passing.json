@@ -1,0 +1,17 @@
+{
+  "case": "mapf_token_passing",
+  "collision_free_by_construction": true,
+  "cr_pibt_completed": 45,
+  "cr_tp_blocked": 140,
+  "cr_tp_collision_free": 1,
+  "cr_tp_completed": 16,
+  "live_when_well_formed": true,
+  "matches_baselines_when_well_formed": true,
+  "reservation_stalls_when_cramped": true,
+  "win_pibt_completed": 240,
+  "win_rhcr_completed": 240,
+  "win_tp_blocked": 0,
+  "win_tp_collision_free": 1,
+  "win_tp_completed": 240,
+  "win_tp_longest_stall": 4
+}

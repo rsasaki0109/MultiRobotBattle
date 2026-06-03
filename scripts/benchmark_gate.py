@@ -1680,6 +1680,90 @@ def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
     return out
 
 
+def _run_token_passing() -> dict:
+    # Token Passing (token_passing.py), a reproduction of Ma, Li, Kumar & Koenig's
+    # "Lifelong Multi-Agent Path Finding for Online Pickup and Delivery Tasks"
+    # (AAAI 2017). The THIRD lifelong engine and a third paradigm: run_lifelong
+    # steps PIBT (a greedy one-step rule), run_rhcr solves a WINDOWED batch every
+    # few ticks, and Token Passing commits FULL space-time paths into a shared
+    # token of reservations -- so the team is collision-free BY CONSTRUCTION (no
+    # per-step rule, no fallback rollout). Agents update the token one at a time,
+    # each planning a path that avoids every other agent's reserved cells/swaps.
+    #
+    # Two things this gate pins. First, the WELL-FORMED regime (a roomy warehouse,
+    # aisle=2, with parking homes disjoint from the task endpoints so a resting
+    # agent never blocks a task cell): TP is live (no stall, win_tp_blocked == 0)
+    # and matches the throughput of both PIBT and RHCR task-for-task
+    # (matches_baselines) -- its contract is collision-free + complete +
+    # competitive, not higher throughput. Second, the defining INVARIANT and its
+    # SCOPE: TP is collision-free on BOTH maps (collision_free_by_construction),
+    # but on a cramped map (aisle=1) where the well-formed property fails, its
+    # reservation planning STALLS -- agents get blocked (cr_tp_blocked > 0) and
+    # complete far fewer tasks than greedy PIBT (reservation_stalls_when_cramped),
+    # the documented reason RHCR falls back to PIBT in narrow aisles. If the
+    # reservation logic regresses, collision_free_by_construction breaks; if the
+    # paradigm regresses, TP stops matching the baselines on the well-formed map.
+    from mrn_coord.lifelong import (TaskStream, make_warehouse, run_lifelong,
+                                    run_rhcr, run_token_passing)
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    def _collision_free(res) -> bool:
+        paths: dict = {}
+        for snap in res.history:
+            for a, c in snap.items():
+                paths.setdefault(a, []).append(c)
+        return detect_first_conflict(paths) is None
+
+    def _scenario(rows, cols, aisle, agents):
+        grid, eps = make_warehouse(rows=rows, cols=cols, aisle=aisle)
+        n = min(agents, len(eps) // 2)
+        homes = {f"r{i}": eps[i] for i in range(n)}     # parking endpoints
+        tasks = eps[n:]                                  # disjoint task endpoints
+        return grid, homes, tasks
+
+    # well-formed regime: roomy aisle=2 warehouse.
+    grid, homes, tasks = _scenario(3, 4, 2, 8)
+    win_pibt = run_lifelong(grid, dict(homes), TaskStream(list(tasks)),
+                            max_steps=120, allocator="hungarian")
+    win_rhcr = run_rhcr(grid, dict(homes), TaskStream(list(tasks)), max_steps=120,
+                        window=10, replan_period=2, solver="pbs",
+                        allocator="hungarian")
+    win_tp = run_token_passing(grid, dict(homes), TaskStream(list(tasks)),
+                               max_steps=120, allocator="hungarian", homes=homes,
+                               keep_history=True)
+    win_cf = _collision_free(win_tp)
+
+    # cramped regime: aisle=1 -- the well-formed property fails, TP stalls.
+    cgrid, chomes, ctasks = _scenario(2, 3, 1, 5)
+    cr_pibt = run_lifelong(cgrid, dict(chomes), TaskStream(list(ctasks)),
+                           max_steps=40, allocator="hungarian")
+    cr_tp = run_token_passing(cgrid, dict(chomes), TaskStream(list(ctasks)),
+                              max_steps=40, allocator="hungarian", homes=chomes,
+                              horizon=12, keep_history=True)
+    cr_cf = _collision_free(cr_tp)
+
+    return {
+        "case": "mapf_token_passing",
+        "win_tp_completed": win_tp.completed,
+        "win_pibt_completed": win_pibt.completed,
+        "win_rhcr_completed": win_rhcr.completed,
+        "win_tp_blocked": win_tp.blocked,
+        "win_tp_longest_stall": win_tp.longest_stall(),
+        "win_tp_collision_free": int(win_cf),
+        "cr_tp_completed": cr_tp.completed,
+        "cr_pibt_completed": cr_pibt.completed,
+        "cr_tp_blocked": cr_tp.blocked,
+        "cr_tp_collision_free": int(cr_cf),
+        "collision_free_by_construction": win_cf and cr_cf,
+        "matches_baselines_when_well_formed": (
+            win_tp.completed == win_pibt.completed == win_rhcr.completed),
+        "live_when_well_formed": (win_tp.blocked == 0
+                                  and win_tp.longest_stall() <= 8),
+        "reservation_stalls_when_cramped": (cr_tp.blocked > 0
+                                            and cr_tp.completed < cr_pibt.completed),
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -1758,6 +1842,10 @@ SUITE = [
      lambda: _run_rhcr(agents=16, steps=80, rows=3, cols=4, aisle=2, window=10,
                        replan_period=1, solver="pbs", allocator="hungarian",
                        case="mapf_rhcr_open")),
+    # Token Passing (Ma et al. 2017): lifelong MAPF by a shared reservation token
+    # -- collision-free by construction; matches PIBT/RHCR on a well-formed map,
+    # stalls on cramped maps where the well-formed property fails
+    ("mapf_token_passing", _run_token_passing),
     # deterministic livelock escape recovers PIBT convergence (no randomness)
     ("pibt_escape_convergence", _run_pibt_convergence),
     # strong-PIBT spine makes LaCAM's documented scaling actually deliver

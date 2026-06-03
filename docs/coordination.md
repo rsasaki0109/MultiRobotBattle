@@ -1125,6 +1125,51 @@ ros2 run mrn_coord mrn_lifelong_demo --engine rhcr --solver pp --replan 2
 ros2 run mrn_coord mrn_mapf_demo --solver pbs                            # PBS as a standalone MAPF solver
 ```
 
+#### Token Passing (`lifelong/token_passing.py`)
+
+PIBT steps one greedy move; RHCR replans a window. **Token Passing** (Ma, Li,
+Kumar & Koenig, *Lifelong MAPF for Online Pickup and Delivery Tasks*, AAAI 2017)
+is the third engine and a third paradigm — `run_token_passing(...)` commits
+**full space-time paths** into a shared *token* of reservations. Agents update
+the token **one at a time**: a free agent reads it, plans a minimal-time path to
+its goal that avoids every other agent's reserved cells and swaps (the package's
+space-time A\* with the token rendered as vertex/edge constraints), and writes
+that path back. Because each agent commits a complete conflict-free path against
+the others' commitments, the team is **collision-free by construction** — there
+is no per-step rule and no fallback rollout to lean on.
+
+That strength is also the catch: a reservation search can simply *fail* (where
+PIBT/RHCR always have a safe one-step fallback). Token Passing handles this the
+way the paper does — by **parking**: an agent with no reachable task holds a home
+endpoint rather than wandering into others' way, and the instance must be
+**well-formed** — home cells disjoint from the task endpoints, with enough room
+that a resting agent (which reserves its home forever) never blocks a task cell
+another agent must reach. The engine takes a `homes=` map for exactly this.
+
+The gate records **both sides honestly**:
+
+- **Well-formed regime (roomy `aisle=2` warehouse, homes split off the task
+  endpoints).** Token Passing is **live** (`win_tp_blocked == 0`, no stall) and
+  matches the throughput of *both* PIBT and RHCR task-for-task — **240 = 240 =
+  240** completions on the gated `mapf_token_passing` case
+  (`matches_baselines_when_well_formed`). Its contract is collision-free +
+  complete + competitive, not higher throughput; on an open map a full-path
+  reservation planner and a greedy stepper both saturate the task supply.
+- **Cramped regime (`aisle=1`, the well-formed property fails).** Token Passing
+  stays **collision-free** — the defining invariant holds on *both* maps
+  (`collision_free_by_construction`) — but its reservation planning **stalls**:
+  agents get blocked (`cr_tp_blocked > 0`) and complete far fewer tasks than
+  greedy PIBT (**16 vs 45**, `reservation_stalls_when_cramped`). This is the same
+  congestion wall that makes RHCR's windowed PBS defer to a PIBT rollout in
+  narrow aisles — the documented reason the field steps PIBT/LaCAM at extreme
+  density.
+
+So Token Passing's faithful place in the lineup is the **reservation** paradigm:
+the cleanest collision-freeness guarantee (no fallback needed), competitive on
+the well-formed maps it was designed for, and an honest stall where it is not.
+Pure and deterministic; it shares the task allocators with the other engines so
+the comparison isolates the *motion* paradigm.
+
 ### ROS node
 
 `mrn_mapf_planner` is a thin ROS wrapper around the MAPF core. It reads a
