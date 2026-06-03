@@ -1,0 +1,10 @@
+{
+  "case": "icts_vs_cbs",
+  "instances": 35,
+  "opt_match": 35,
+  "nodes": 197,
+  "joint_searches_pairwise": 55,
+  "joint_searches_none": 197,
+  "pruned": 142,
+  "pruning_helps": true
+}

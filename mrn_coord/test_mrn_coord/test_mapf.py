@@ -13,6 +13,7 @@ from mrn_coord.mapf import (
     detect_first_conflict,
     ecbs,
     eecbs,
+    icts,
     makespan,
     manhattan,
     pad_paths,
@@ -346,6 +347,80 @@ class TestEECBS(unittest.TestCase):
         agents = {"a": ((0, 0), (2, 0)), "b": ((2, 0), (0, 0))}
         self.assertIsNone(
             eecbs(grid, agents, w=1.5, heuristic=None, max_expansions=500))
+
+
+class TestICTS(unittest.TestCase):
+    """ICTS: cost-tree optimal search; pairwise pruning cuts joint searches."""
+
+    def test_matches_cbs_optimum(self):
+        # Both pruning settings must return the SAME optimal sum-of-costs as
+        # plain CBS, with a valid collision-free solution honoring endpoints.
+        for seed in range(12):
+            grid, agents = _rand_instance(6, 6, 5, seed)
+            base = cbs(grid, agents, max_expansions=50000)
+            if base is None:
+                continue
+            for prune in ("pairwise", None):
+                sol = icts(grid, agents, prune=prune, max_nodes=20000)
+                self.assertIsNotNone(sol, f"seed={seed} prune={prune}")
+                self.assertIsNone(detect_first_conflict(sol.paths))
+                self.assertEqual(sol.cost, base.cost,
+                                 f"seed={seed} prune={prune}")
+                for a, (start, goal) in agents.items():
+                    self.assertEqual(sol.paths[a][0], start)
+                    self.assertEqual(sol.paths[a][-1], goal)
+
+    def test_pairwise_pruning_cuts_joint_searches(self):
+        # Pairwise pruning must never run MORE joint searches than the no-prune
+        # ablation (which searches every node), and far fewer in aggregate on a
+        # conflict-heavy battery — while reaching the identical optimum.
+        tot_pair = tot_none = 0
+        for seed in range(10):
+            grid, agents = _rand_instance(6, 6, 5, seed, obstacle=0.12)
+            if cbs(grid, agents, max_expansions=20000) is None:
+                continue
+            sp = {}
+            sol = icts(grid, agents, prune="pairwise", stats=sp,
+                       max_nodes=20000)
+            sn = {}
+            soln = icts(grid, agents, prune=None, stats=sn, max_nodes=20000)
+            self.assertIsNotNone(sol)
+            self.assertEqual(sol.cost, soln.cost, f"seed={seed}")
+            self.assertLessEqual(sp["joint_searches"], sn["joint_searches"],
+                                 f"seed={seed}")
+            # Every node the no-prune ablation visits triggers a joint search.
+            self.assertEqual(sn["joint_searches"], sn["nodes"], f"seed={seed}")
+            # Pruned + searched accounts for every node visited under pruning.
+            self.assertEqual(sp["pruned"] + sp["joint_searches"], sp["nodes"],
+                             f"seed={seed}")
+            tot_pair += sp["joint_searches"]
+            tot_none += sn["joint_searches"]
+        self.assertLess(tot_pair, tot_none)
+
+    def test_deterministic(self):
+        grid, agents = _rand_instance(6, 6, 5, 3, obstacle=0.12)
+        runs = []
+        for _ in range(2):
+            sp = {}
+            sol = icts(grid, agents, stats=sp, max_nodes=20000)
+            runs.append((sol.cost, sp["nodes"], sp["joint_searches"]))
+        self.assertEqual(runs[0], runs[1])
+
+    def test_single_step_instance(self):
+        # A trivial instance: two agents one step apart, no interaction. Root of
+        # the increasing cost tree is already conflict-free.
+        grid = GridWorld(3, 3)
+        agents = {0: ((0, 0), (1, 0)), 1: ((0, 2), (1, 2))}
+        sol = icts(grid, agents)
+        self.assertEqual(sol.cost, 2)
+        self.assertIsNone(detect_first_conflict(sol.paths))
+
+    def test_unsolvable_corridor_returns_none(self):
+        # 1-wide corridor swap is infeasible: no cost vector ever admits a
+        # conflict-free joint path, so ICTS exhausts its node budget -> None.
+        grid = GridWorld(3, 1)
+        agents = {"a": ((0, 0), (2, 0)), "b": ((2, 0), (0, 0))}
+        self.assertIsNone(icts(grid, agents, max_nodes=500))
 
 
 class TestPrioritized(unittest.TestCase):

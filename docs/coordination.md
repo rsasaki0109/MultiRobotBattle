@@ -222,6 +222,42 @@ prioritization is already reproduced and measured in `cbsh.py`. The cost bound
 itself (`≤ w·optimal`) is checked in the unit tests, where the CBS optimum is on
 hand; the gate stays on the cheap expansion-count contract.
 
+### High level: ICTS (`icts.py`)
+
+`icts(grid, agents)` is an optimal solver from a paradigm **orthogonal** to the
+whole CBS family above. Instead of branching on *constraints*, the Increasing
+Cost Tree Search (Sharon, Stern, Goldenberg & Felner, AIJ 2013) branches on
+per-agent *costs*. Its high-level **increasing cost tree** has a node for each
+cost vector `(C₁, …, Cₖ)`; the root gives every agent its individual
+shortest-path cost, and a child increments one agent's cost by `1`. The tree is
+searched in non-decreasing total cost `ΣCᵢ`, so the first cost vector that admits
+a conflict-free joint plan is optimal in sum-of-costs — the *same* optimum
+`cbs.py` returns. The low-level test for a cost vector builds each agent's
+**MDD** at cost `Cᵢ` (`mdd.py`, the very same diagrams CBSH uses) and searches
+the *cross-product* of the MDDs for one conflict-free assignment of paths.
+
+That cross-product search is exponential in the number of agents — ICTS's known
+weakness, and why it suits few-but-tightly-coupled teams rather than large open
+ones. Its signature accelerator, reused here verbatim, is **pairwise pruning**:
+before the full `k`-agent search, every *pair* of agents is checked in isolation
+with `mdd.are_dependent` (the identical 2-agent MDD test behind CBSH's dependency
+graph); if any pair has no conflict-free pair of cost-`Cᵢ` paths, the whole node
+is hopeless and is skipped without the joint search.
+
+`benchmark_gate.py::icts_vs_cbs` pins two things on a small few-agent battery
+(three 4–5-agent configs, first 12 seeds, 35 solvable instances). First,
+**optimality**: ICTS's cost equals `cbs`'s on every instance, under *both* the
+pruning setting and the `prune=None` ablation (`opt_match == instances`).
+Second, the **pruning mechanism**: the ablation runs a joint search at every
+node (`joint_searches_none == nodes`, 197), while pairwise pruning skips the
+hopeless ones — **197 → 55** joint searches, the other 142 nodes pruned before
+any search (`pruned + joint_searches == nodes`). Both settings return the
+identical optimum, so pruning changes only the work, never the answer. **Honest
+scope:** ICTS is *not* a universal speed win over CBS — on large open teams the
+cross-product search dominates and CBS wins; the gate's battery stays in the
+few-coupled-agents regime ICTS was designed for, and pins the pruning mechanism
+rather than claiming a blanket victory.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of
@@ -385,8 +421,10 @@ ros2 run mrn_coord mrn_mapf_bench --solver prioritized
 
 CBS is optimal but scales to small teams; to keep the optimum while reaching
 larger teams use **CBSH** (`cbsh.py`, the same optimum with a CG/DG/WDG
-heuristic — ~13× fewer high-level expansions here); for a bigger jump trade
-optimality for **ECBS**
+heuristic — ~13× fewer high-level expansions here), or — for few but
+tightly-coupled agents — the orthogonal **ICTS** (`icts.py`, the same optimum by
+searching a cost tree instead of a constraint tree, with pairwise MDD pruning);
+for a bigger jump trade optimality for **ECBS**
 (`--solver ecbs`, bounded-suboptimal — much further reach for a small cost
 premium), or **EECBS** (`eecbs.py`, ECBS plus CBSH's admissible bound + EES —
 ~1.9× fewer expansions than ECBS at a near-optimal `w`, when you want the

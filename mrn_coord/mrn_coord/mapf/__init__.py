@@ -17,6 +17,10 @@ The pieces compose bottom-up:
 - :mod:`cbsh` — CBS with improved heuristics (Li et al. 2019): the same optimal
   search, but an admissible CG/DG/WDG heuristic plus cardinal-conflict
   prioritization cut the high-level node expansions by a large factor.
+- :mod:`icts` — the Increasing Cost Tree Search (Sharon et al. 2013): an optimal
+  paradigm orthogonal to CBS — branch on per-agent *costs*, not constraints, and
+  test each cost vector by searching the cross-product of the agents' MDDs, with
+  pairwise-dependency pruning to skip hopeless nodes.
 - :mod:`ecbs` — Enhanced CBS: bounded-suboptimal (``cost <= w * optimal``) via
   focal search at both levels; expands far fewer nodes than CBS for a little
   cost slack, so it scales to more agents.
@@ -42,6 +46,7 @@ from .cbs import cbs
 from .cbsh import cbsh
 from .ecbs import ecbs
 from .eecbs import eecbs
+from .icts import icts
 from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
 from .pbs import pbs, pbs_paths
@@ -72,6 +77,7 @@ __all__ = [
     "cbsh",
     "ecbs",
     "eecbs",
+    "icts",
     "lacam",
     "lacam_ltm",
     "mapf_lns",

@@ -561,6 +561,72 @@ def _run_eecbs_vs_ecbs() -> dict:
             "monotone": exp_wdg <= exp_dg <= exp_cg <= exp_none}
 
 
+def _run_icts_vs_cbs() -> dict:
+    # ICTS (icts) is a Python reproduction of Sharon, Stern, Goldenberg & Felner's
+    # "The increasing cost tree search for optimal multi-agent pathfinding" (AIJ
+    # 2013). It is an optimal paradigm ORTHOGONAL to CBS: it branches on per-agent
+    # COSTS (the Increasing Cost Tree) rather than on constraints, and tests each
+    # cost vector by searching the cross-product of the agents' MDDs for a
+    # conflict-free joint path. It returns the SAME optimal sum-of-costs as plain
+    # cbs (opt_match). The win it does claim -- and what this gate pins -- is its
+    # signature accelerator: PAIRWISE PRUNING. Before each expensive k-agent joint
+    # search, every pair of agents is checked in isolation (the same 2-agent MDD
+    # dependency test cbsh's WDG uses); a node with any dependent pair is hopeless
+    # and skipped. With pruning the joint searches drop sharply versus the
+    # ablation icts(prune=None), which searches every node (joint_searches_none ==
+    # nodes). Both settings find the identical optimum -- pruning changes only the
+    # work. If pruning ever regresses, joint_searches_pairwise rises toward
+    # joint_searches_none and the gate trips.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.icts import icts
+
+    def _instance(w, h, n, seed, obstacle):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obstacle}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        starts = free[:n]
+        goals = free[n:2 * n]
+        grid = GridWorld(w, h, frozenset(blocked))
+        return grid, {i: (starts[i], goals[i]) for i in range(n)}
+
+    instances = opt_match = nodes = 0
+    js_pairwise = js_none = pruned = 0
+    # First 12 seeds of three small configs. ICTS's joint search is exponential
+    # in the agent count, so the battery stays few-but-coupled (4-5 agents):
+    # exactly the regime where ICTS is meant to compete (no cherry-picking --
+    # plain `range(12)`).
+    for w, h, n, obstacle in ((6, 6, 5, 0.12), (7, 7, 5, 0.0), (6, 6, 4, 0.15)):
+        for seed in range(12):
+            grid, agents = _instance(w, h, n, seed, obstacle)
+            base = cbs(grid, agents, max_expansions=20000)
+            if base is None:
+                continue
+            sp: dict = {}
+            sol = icts(grid, agents, prune="pairwise", stats=sp,
+                       max_nodes=20000)
+            sn: dict = {}
+            soln = icts(grid, agents, prune=None, stats=sn, max_nodes=20000)
+            if sol is None or soln is None:
+                continue
+            instances += 1
+            opt_match += int(sol.cost == base.cost and soln.cost == base.cost)
+            nodes += sp["nodes"]
+            js_pairwise += sp["joint_searches"]
+            js_none += sn["joint_searches"]
+            pruned += sp["pruned"]
+    return {"case": "icts_vs_cbs", "instances": instances,
+            "opt_match": opt_match, "nodes": nodes,
+            "joint_searches_pairwise": js_pairwise,
+            "joint_searches_none": js_none, "pruned": pruned,
+            "pruning_helps": js_pairwise < js_none}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -667,6 +733,9 @@ SUITE = [
     ("cbsh_vs_cbs", _run_cbsh_vs_cbs),
     # EECBS: admissible WDG bound + EES cut bounded-suboptimal expansions vs ECBS
     ("eecbs_vs_ecbs", _run_eecbs_vs_ecbs),
+    # ICTS: cost-tree optimal search (same optimum as CBS); pairwise pruning
+    # cuts the k-agent joint searches
+    ("icts_vs_cbs", _run_icts_vs_cbs),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),
