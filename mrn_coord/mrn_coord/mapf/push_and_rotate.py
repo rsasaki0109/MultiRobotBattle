@@ -24,6 +24,15 @@ result is *complete* — it solves every solvable instance with at least one emp
 vertex — but *suboptimal*: it trades optimality for a guarantee and polynomial
 time, exactly where optimal search (CBS) blows up on dense maps.
 
+For a *fully packed* rectangle (the 15-puzzle regime, where the greedy primitives
+stall for want of slack) the solver dispatches a constructive row/column
+reduction instead: a direct one for two or more empty cells, and -- because that
+reduction can strand a *single* blank in a finished corner -- a tracked-agent BFS
+endgame for exactly one empty cell (place each tile, or last-two pair, by an exact
+search over the unsolved region that tracks only the agents being placed; every
+other tile is an anonymous filler, so the state stays tiny and the blank can never
+be stranded). Both stay constructive: still one agent into an adjacent empty cell.
+
 Every primitive only ever steps one agent to an adjacent *empty* cell, so any
 returned plan is collision-free and ends with all agents on their goals *by
 construction*; the open question a reproduction must answer empirically is
@@ -569,6 +578,131 @@ class _Solver:
             return None
         return self.moves
 
+    # -- single-blank endgame (the 15-puzzle proper) ----------------------- #
+    # With exactly one empty cell a packed rectangle is the (W*H - 1)-puzzle, and
+    # the row/column reduction above can paint the lone blank into a corner where
+    # every neighbour is a frozen tile (with two empties the spare slack escapes;
+    # with one it does not). The fix is to stop steering the blank by hand: place
+    # each tile -- or each last-two pair -- with an exact BFS over the *whole*
+    # unsolved region that tracks ONLY the one or two agents being placed. Every
+    # other tile is an interchangeable filler, so the state is just
+    # ``(blank cell, tracked-agent cells)`` -- tiny and independent of region size
+    # -- and the search, being exhaustive, can never strand the blank: if a
+    # legal move sequence places the target, BFS finds it. The reduction order
+    # keeps each subproblem solvable; the BFS keeps each step constructive (it
+    # only ever steps one agent into an adjacent empty cell, so validity by
+    # construction is preserved).
+    def _bfs_place(self, region, goals, node_cap=2_000_000):
+        """Move the agents named in ``goals`` (cell -> agent) onto their cells by an
+        exact BFS over ``region`` (cells outside ``region`` are walls). Untracked
+        tiles are anonymous fillers, so the state is ``(blank, tracked cells)``;
+        blank transitions are recorded and replayed on the real occupancy, so
+        filler anonymity is free. Requires exactly one empty cell in ``region``."""
+        radj = {c: [d for d in self._adj[c] if d in region] for c in region}
+        agents = sorted(goals.values())
+        want = {a: gc for gc, a in goals.items()}
+        blanks = [c for c in region if c not in self.occ]
+        if len(blanks) != 1:
+            return False
+        pos0 = {}
+        for c in region:
+            a = self.occ.get(c)
+            if a in want:
+                pos0[a] = c
+        if len(pos0) != len(agents):
+            return False                       # a tracked agent is not in region
+        start = (blanks[0], tuple(pos0[a] for a in agents))
+
+        def is_goal(st):
+            return all(st[1][i] == want[a] for i, a in enumerate(agents))
+
+        seen = {start: None}
+        q = deque([start])
+        found = None
+        while q:
+            st = q.popleft()
+            if is_goal(st):
+                found = st
+                break
+            if len(seen) > node_cap:
+                return False
+            blank, ps = st
+            for v in radj[blank]:
+                nps = list(ps)
+                for i in range(len(agents)):
+                    if ps[i] == v:             # a tracked tile slides into blank
+                        nps[i] = blank
+                        break
+                nst = (v, tuple(nps))
+                if nst not in seen:
+                    seen[nst] = (st, blank, v)  # blank moved blank->v
+                    q.append(nst)
+        if found is None:
+            return False
+        chain = []
+        cur = found
+        while seen[cur] is not None:
+            prev, bfrom, bto = seen[cur]
+            chain.append((bfrom, bto))
+            cur = prev
+        for bfrom, bto in reversed(chain):     # replay: tile at bto slides to bfrom
+            tile = self.occ.get(bto)
+            if tile is None or not self._move(tile, bfrom):
+                return False
+        return True
+
+    def solve_unit(self):
+        """Solve a fully packed rectangle that has exactly one empty cell by the
+        tracked-agent reduction. Returns the move list, or ``None`` if the region
+        is not such a rectangle (caller falls back to the order-sweep)."""
+        cells = sorted(self._adj)
+        xs = [c[0] for c in cells]
+        ys = [c[1] for c in cells]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        W, H = x1 - x0 + 1, y1 - y0 + 1
+        if len(cells) != W * H or W < 2 or H < 2:
+            return None
+        if sum(1 for c in cells if self._empty(c)) != 1:
+            return None
+        want = {self.goal[a]: a for a in self.pos}
+        allcells = set(cells)
+        frozen = set()
+
+        def region():
+            return allcells - frozen
+
+        # rows top-down, leaving the bottom two rows ...
+        y = y0
+        while (y1 - y) >= 2:
+            for x in range(x0, x1 - 1):                 # cols 0..W-3 one at a time
+                t = (x, y)
+                if not self._bfs_place(region(), {t: want[t]}):
+                    return None
+                frozen.add(t)
+            cL, cR = (x1 - 1, y), (x1, y)               # the last two as a pair
+            if not self._bfs_place(region(), {cL: want[cL], cR: want[cR]}):
+                return None
+            frozen.add(cL)
+            frozen.add(cR)
+            y += 1
+        # ... then the two-row strip: columns left-to-right, leaving a 2x2 corner.
+        ybot = y1
+        x = x0
+        while (x1 - x) >= 2:
+            cT, cB = (x, y), (x, ybot)
+            if not self._bfs_place(region(), {cT: want[cT], cB: want[cB]}):
+                return None
+            frozen.add(cT)
+            frozen.add(cB)
+            x += 1
+        quad = {(xx, yy) for xx in range(x, x1 + 1) for yy in range(y, y1 + 1)}
+        goals = {c: want[c] for c in quad if c in want}
+        if not self._bfs_place(quad, goals):
+            return None
+        if any(self.pos[a] != self.goal[a] for a in self.pos):
+            return None
+        return self.moves
+
     # -- top level --------------------------------------------------------- #
     def solve(self, order):
         for a in order:
@@ -662,8 +796,13 @@ def push_and_rotate(grid: GridWorld, agents: dict, *, max_moves: int = 100_000,
         return Solution(paths=paths, cost=sum_of_costs(paths))
 
     # The greedy primitives stall on a fully packed rectangle (the 15-puzzle
-    # regime); try the constructive row reduction first, falling back to the
-    # primitive order-sweep for everything it does not cover.
+    # regime); dispatch the constructive endgames first, falling back to the
+    # primitive order-sweep for everything they do not cover. A single empty cell
+    # needs the tracked-agent BFS (``solve_unit``) because the row reduction can
+    # strand the lone blank; two or more empties use the row reduction directly.
+    unit = _Solver(grid, agents, max_moves).solve_unit()
+    if unit is not None:
+        return _finish(unit)
     reduced = _Solver(grid, agents, max_moves).solve_reduction()
     if reduced is not None:
         return _finish(reduced)

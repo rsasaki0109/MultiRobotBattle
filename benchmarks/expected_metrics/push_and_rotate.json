@@ -20,5 +20,12 @@
   "packed_cbs_busts": 24,
   "complete_packed": true,
   "packed_all_valid": true,
-  "packed_beats_search": true
+  "packed_beats_search": true,
+  "unit_instances": 18,
+  "unit_solved": 18,
+  "unit_valid": 18,
+  "unit_cbs_busts": 18,
+  "complete_single_blank": true,
+  "single_blank_all_valid": true,
+  "single_blank_beats_search": true
 }

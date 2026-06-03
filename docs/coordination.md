@@ -489,14 +489,26 @@ agent stands on its goal:
 - **rotate** — Push-and-Rotate's addition for a cyclic component where no degree-3
   hub is reachable: bring one empty cell onto the cycle and rotate the whole ring
   by one, advancing an agent past a blocker it could never swap with.
-- **grid reduction** — the dispatch for a *fully packed* rectangle (the 15-puzzle
-  regime), where the greedy primitives stall at once for want of slack. It is
-  still **constructive, not a search**: place the rectangle top row by top row
-  (each interior tile walked to its cell with the blank as a cursor; the two
-  rightmost tiles of a row placed as a pair by the standard corner rotation that
-  never strands the blank), then peel the remaining two-row strip column by column
-  down to a `2×3` corner that an exact micro-search finishes. Every step still
-  moves one agent into an adjacent empty cell.
+- **grid reduction** — the dispatch for a *fully packed* rectangle with **two or
+  more** empty cells (the 15-puzzle regime), where the greedy primitives stall at
+  once for want of slack. It is still **constructive, not a search**: place the
+  rectangle top row by top row (each interior tile walked to its cell with the
+  blank as a cursor; the two rightmost tiles of a row placed as a pair by the
+  standard corner rotation that never strands the blank), then peel the remaining
+  two-row strip column by column down to a `2×3` corner that an exact micro-search
+  finishes. Every step still moves one agent into an adjacent empty cell.
+- **single-blank reduction** — the dispatch for a packed rectangle with **exactly
+  one** empty cell (the `W·H−1`-puzzle proper). Here the grid reduction above can
+  paint the lone blank into a corner whose every neighbour is a finished tile —
+  with two empties the spare slack escapes, with one it does not. The fix is to
+  stop steering the blank by hand: still reduce row by row then column by column,
+  but place each tile — or each last-two pair — with an exact BFS over the *whole*
+  unsolved region that tracks **only the one or two agents being placed**. Every
+  other tile is an interchangeable filler, so the state is just `(blank cell,
+  tracked-agent cells)` — tiny and independent of region size — and the search,
+  being exhaustive, can never strand the blank: if a legal move sequence places
+  the target, BFS finds it. Each step is still one agent into an adjacent empty
+  cell, so validity by construction holds.
 
 Agents are placed in priority order and a placed agent is protected. The decisive
 property is structural: **every primitive only ever steps one agent to an
@@ -504,7 +516,7 @@ adjacent *empty* cell**, so any plan it returns is collision-free and ends with
 all agents on their goals *by construction* — there is no separate validity to
 check, only **completeness** (does it finish?) and the price in optimality.
 
-The `push_and_rotate` gate pins three regimes. **Complete-with-slack, valid, and
+The `push_and_rotate` gate pins four regimes. **Complete-with-slack, valid, and
 suboptimal:** on a moderate battery (three configs, plain `range(10)`) every
 instance CBS proves solvable is also solved by the primitives
 (`complete_match == cbs_solved == 30/30`), every plan is collision-free and
@@ -520,11 +532,15 @@ the row/column reduction solves **every** instance (`complete_packed`,
 `packed_solved == 24/24`), every plan is valid by construction
 (`packed_all_valid`), and optimal CBS busts a 300-node budget on **all** of them
 (`packed_beats_search`, `packed_cbs_busts == 24/24`) — the constructive method
-wins precisely where search blows up. **Honest scope:** the **single-blank** case
-(exactly one empty cell, the tightest 15-puzzle *parity* regime) is only partially
-covered — the reduction's blank maneuvering is too coarse there — so the packed
-gate is pinned at `≥ 2` empty cells; that last frontier is the one piece of de
-Wilde's machinery left unreproduced.
+wins precisely where search blows up. **The single-blank case, now closed:** on
+fully packed `4×4`/`5×5`/`6×6` rectangles with **exactly one** empty cell (the
+tightest 15-puzzle regime, the previously-open frontier), the tracked-agent BFS
+endgame solves **every** instance (`complete_single_blank`,
+`unit_solved == 18/18`), every plan is valid by construction
+(`single_blank_all_valid`), and CBS busts a 300-node budget on **all** of them
+(`single_blank_beats_search`, `unit_cbs_busts == 18/18`). With this the packed
+regime is closed for **1–3** empty cells, leaving no frontier in de Wilde's
+machinery unreproduced here.
 
 ### High level: LaCAM (`lacam.py`)
 

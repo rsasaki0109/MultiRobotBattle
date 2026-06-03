@@ -1118,9 +1118,8 @@ def _run_push_and_rotate() -> dict:
     # construction too. This pins: every instance solved (complete_packed) and
     # valid (packed_all_valid), and that optimal CBS busts a 300-node budget on
     # every one of them (packed_cbs_busts == packed_instances) -- the constructive
-    # method wins precisely where search cannot. Honest scope (see docs): the
-    # single-blank case (exactly one empty cell, the tightest 15-puzzle parity
-    # regime) is only partially covered and is gated at >= 2 empty cells.
+    # method wins precisely where search cannot. The single-blank case (exactly one
+    # empty cell, the tightest 15-puzzle regime) is gated separately in (4) below.
     def _packed(w, h, blanks, seed):
         rng = random.Random(seed * 131 + w * 7 + h * 3 + blanks)
         grid = GridWorld(w, h)
@@ -1158,6 +1157,27 @@ def _run_push_and_rotate() -> dict:
             if cbs(grid, agents, max_expansions=300) is None:
                 packed_cbs_busts += 1
 
+    # (4) SINGLE-BLANK PACKED -- the tightest sub-case, exactly one empty cell, i.e.
+    # the (W*H - 1)-puzzle proper. Here the row/column reduction can paint the lone
+    # blank into a corner (with two empties the spare slack escapes; with one it
+    # does not), so Push-and-Rotate places each tile -- or last-two pair -- with an
+    # exact BFS over the whole unsolved region that tracks ONLY the agents being
+    # placed; every other tile is an anonymous filler, so the state is tiny and the
+    # exhaustive search can never strand the blank. This closes the gap the >=2-cell
+    # regime left open. Pins: every single-blank instance solved (complete_single_
+    # blank) and valid, and CBS busts a 300-node budget on every one of them.
+    unit_instances = unit_solved = unit_valid = unit_cbs_busts = 0
+    for w, h in ((4, 4), (5, 5), (6, 6)):
+        for seed in range(6):
+            grid, agents = _packed(w, h, 1, seed)
+            sol = push_and_rotate(grid, agents)
+            unit_instances += 1
+            if sol is not None:
+                unit_solved += 1
+                unit_valid += int(_valid(sol, agents))
+            if cbs(grid, agents, max_expansions=300) is None:
+                unit_cbs_busts += 1
+
     return {"case": "push_and_rotate", "instances": instances,
             "cbs_solved": cbs_solved, "pnr_solved": pnr_solved,
             "complete_match": complete_match, "valid": valid,
@@ -1172,7 +1192,12 @@ def _run_push_and_rotate() -> dict:
             "packed_valid": packed_valid, "packed_cbs_busts": packed_cbs_busts,
             "complete_packed": packed_solved == packed_instances,
             "packed_all_valid": packed_valid == packed_instances,
-            "packed_beats_search": packed_cbs_busts == packed_instances}
+            "packed_beats_search": packed_cbs_busts == packed_instances,
+            "unit_instances": unit_instances, "unit_solved": unit_solved,
+            "unit_valid": unit_valid, "unit_cbs_busts": unit_cbs_busts,
+            "complete_single_blank": unit_solved == unit_instances,
+            "single_blank_all_valid": unit_valid == unit_instances,
+            "single_blank_beats_search": unit_cbs_busts == unit_instances}
 
 
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",

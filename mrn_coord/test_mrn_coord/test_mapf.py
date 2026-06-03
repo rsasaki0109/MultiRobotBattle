@@ -967,6 +967,24 @@ class TestPushAndRotate(unittest.TestCase):
                 for a, (s, g) in agents.items():
                     self.assertEqual(sol.paths[a][-1], g)
 
+    def test_solves_single_blank_fifteen_puzzle(self):
+        # The tightest sub-case: a fully packed rectangle with exactly ONE empty
+        # cell -- the (W*H-1)-puzzle. The row/column reduction can strand the lone
+        # blank, so the solver falls to a tracked-agent BFS over the whole unsolved
+        # region (placing one or two tiles at a time, every other tile an anonymous
+        # filler). It stays complete and on-goal by construction where CBS busts.
+        for w, h in ((4, 4), (5, 5), (6, 6)):
+            for seed in range(4):
+                grid, agents = self._packed(w, h, 1, seed)
+                self.assertIsNone(cbs(grid, agents, max_expansions=300),
+                                  f"{w}x{h}/1 seed={seed}")
+                sol = self._solve(w, h, agents)
+                self.assertIsNotNone(sol, f"{w}x{h}/1 seed={seed}")
+                self.assertIsNone(detect_first_conflict(sol.paths),
+                                  f"{w}x{h}/1 seed={seed}")
+                for a, (s, g) in agents.items():
+                    self.assertEqual(sol.paths[a][-1], g)
+
 
 class TestPrioritized(unittest.TestCase):
     def test_parallel_succeeds(self):
