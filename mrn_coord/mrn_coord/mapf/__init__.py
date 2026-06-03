@@ -46,6 +46,11 @@ The pieces compose bottom-up:
 - :mod:`lacam` — LaCAM: complete satisficing search over whole configurations
   using PIBT as a successor generator with lazy constraints; scales to large
   teams (not cost-optimal).
+- :mod:`flow` — anonymous makespan-optimal MAPF (Yu & LaValle 2013): when targets
+  are interchangeable, minimum-makespan routing reduces to integer MAX FLOW on a
+  time-expanded network — polynomial, no search tree, with a self-certified
+  optimum. A relaxation of labeled MAPF (its makespan lower-bounds any labeled
+  solution's).
 - :mod:`lns` — MAPF-LNS: anytime large-neighborhood search that destroys and
   repairs a few agents at a time, polishing any feasible solution toward the
   optimum at scale.
@@ -62,6 +67,7 @@ from .cbsh import cbsh
 from .ccbs import ccbs
 from .ecbs import ecbs
 from .eecbs import eecbs
+from .flow import anonymous_makespan
 from .icts import icts
 from .mutex import classify_conflict, generate_mutexes, pc_constraints
 from .lacam import lacam, lacam_ltm
@@ -95,6 +101,7 @@ __all__ = [
     "ccbs",
     "ecbs",
     "eecbs",
+    "anonymous_makespan",
     "icts",
     "classify_conflict",
     "generate_mutexes",

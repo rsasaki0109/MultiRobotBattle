@@ -775,6 +775,93 @@ class TestCCBS(unittest.TestCase):
         self.assertIsNone(sol)
 
 
+class TestFlow(unittest.TestCase):
+    """Anonymous makespan-optimal MAPF via network flow: certified, valid."""
+
+    def _solve(self, w, h, starts, goals, **kw):
+        from mrn_coord.mapf import GridWorld
+        from mrn_coord.mapf.flow import anonymous_makespan
+        return anonymous_makespan(GridWorld(w, h), starts, goals, **kw)
+
+    def test_already_at_goal_set_is_makespan_zero(self):
+        # Targets are interchangeable: if the start set equals the goal set, no
+        # one moves -- makespan 0.
+        st = {}
+        res = self._solve(3, 3, [(0, 0), (2, 0)], [(2, 0), (0, 0)], stats=st)
+        self.assertEqual(res[1], 0)
+        self.assertTrue(st["certified"])
+
+    def test_paths_are_valid_and_certified(self):
+        from mrn_coord.mapf import GridWorld
+        from mrn_coord.mapf.conflicts import detect_first_conflict
+        starts, goals = [(0, 0), (4, 4)], [(4, 0), (0, 4)]
+        st = {}
+        res = self._solve(5, 5, starts, goals, stats=st)
+        self.assertIsNotNone(res)
+        paths, T = res
+        self.assertTrue(st["certified"])
+        self.assertTrue(all(len(p) == T + 1 for p in paths))
+        self.assertEqual(sorted(p[0] for p in paths), sorted(starts))
+        self.assertEqual(sorted(p[-1] for p in paths), sorted(goals))
+        self.assertIsNone(detect_first_conflict({i: p for i, p in enumerate(paths)}))
+
+    def test_matches_brute_force_optimum(self):
+        # The self-certified makespan equals a brute-force anonymous joint-BFS
+        # optimum on tiny instances.
+        import itertools
+        import random
+        from collections import deque
+        from mrn_coord.mapf import GridWorld
+        from mrn_coord.mapf.flow import _neighbors4
+
+        def brute(grid, starts, goals):
+            goalset = frozenset(goals)
+            start = tuple(starts)
+            if frozenset(start) == goalset:
+                return 0
+            seen = {start}
+            q = deque([(start, 0)])
+            while q:
+                cfg, d = q.popleft()
+                opts = [[c] + _neighbors4(grid, c) for c in cfg]
+                for nxt in itertools.product(*opts):
+                    if len(set(nxt)) != len(nxt):
+                        continue
+                    if any(cfg[i] == nxt[j] and cfg[j] == nxt[i]
+                           for i in range(len(cfg))
+                           for j in range(i + 1, len(cfg))):
+                        continue
+                    if nxt in seen:
+                        continue
+                    if frozenset(nxt) == goalset:
+                        return d + 1
+                    seen.add(nxt)
+                    q.append((nxt, d + 1))
+            return None
+
+        rng = random.Random(7)
+        for _ in range(20):
+            w, h = rng.choice([(3, 3), (4, 3), (3, 4)])
+            n = rng.choice([2, 3])
+            free = [(x, y) for x in range(w) for y in range(h)]
+            rng.shuffle(free)
+            starts, goals = free[:n], free[n:2 * n]
+            grid = GridWorld(w, h)
+            res = self._solve(w, h, starts, goals)
+            self.assertEqual(res[1], brute(grid, starts, goals),
+                             f"{w}x{h} {starts}->{goals}")
+
+    def test_corridor_swap_anonymous_trivial_labeled_impossible(self):
+        # On a 1-wide corridor the LABELED swap is impossible (cbs -> None), but
+        # interchangeable targets make it trivial for the flow solver.
+        from mrn_coord.mapf import GridWorld, cbs
+        starts, goals = [(0, 0), (2, 0)], [(2, 0), (0, 0)]
+        self.assertIsNotNone(self._solve(3, 1, starts, goals))
+        self.assertIsNone(
+            cbs(GridWorld(3, 1), {0: (starts[0], goals[0]),
+                                  1: (starts[1], goals[1])}, max_expansions=2000))
+
+
 class TestPrioritized(unittest.TestCase):
     def test_parallel_succeeds(self):
         grid = GridWorld(5, 2)

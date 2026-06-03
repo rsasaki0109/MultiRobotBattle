@@ -1,0 +1,15 @@
+{
+  "case": "flow_anonymous_makespan",
+  "instances": 40,
+  "solved": 40,
+  "certified": 40,
+  "collision_free": 40,
+  "makespan_sum": 112,
+  "both_solved": 40,
+  "anon_le_cbs": 40,
+  "strictly_cheaper": 27,
+  "corridors": 3,
+  "anon_solved": 3,
+  "labeled_cbs_none": 3,
+  "optimal": true
+}

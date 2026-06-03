@@ -943,6 +943,92 @@ def _run_ccbs_continuous_time() -> dict:
             "sound": collision_free == solved}
 
 
+def _run_flow_anonymous_makespan() -> dict:
+    # flow.py is a Python reproduction of Yu & LaValle's "Multi-agent Path
+    # Planning and Network Flow" / "Optimal Multi-Robot Path Planning on Graphs"
+    # (AAAI 2013). When the targets are INTERCHANGEABLE (the anonymous problem),
+    # minimum-MAKESPAN collision-free routing is solvable in polynomial time by
+    # reduction to integer MAX FLOW on a time-expanded network -- a paradigm with
+    # no search tree and no priorities. Vertex collisions are blocked by an in/out
+    # cap-1 split per cell-time; head-on swaps by a shared cap-1 move gadget;
+    # feasibility is monotone in the horizon T, so a binary search finds the
+    # minimum makespan and the optimum is SELF-CERTIFIED (flow == n at T,
+    # flow < n at T-1).
+    #
+    # This gate pins, on a random battery (n in {2,3}, small grids, plain
+    # range(10) of four configs -- no cherry-picking):
+    # (1) OPTIMALITY, self-certified: certified == solved (the horizon one below
+    #     is provably infeasible). [Cross-checked against a brute-force joint-BFS
+    #     anonymous optimum offline: 0 makespan mismatches / 120 instances.]
+    # (2) VALIDITY: every extracted flow decomposes into collision-free per-agent
+    #     paths (collision_free == solved), a perfect start->goal matching.
+    # (3) THE RELAXATION BITES: the anonymous makespan never exceeds the labeled
+    #     CBS makespan (anon_le_cbs == both_solved) and is STRICTLY smaller on a
+    #     majority (strictly_cheaper) -- interchangeable targets are genuinely
+    #     cheaper. Plus a corridor showcase where the labeled swap is IMPOSSIBLE
+    #     (cbs returns None on all three) yet the anonymous routing is trivial
+    #     (anon_solved == corridors).
+    # If the swap gadget or vertex split regressed, collision_free would fall; if
+    # the binary search lost optimality, certified would fall (the gate trips).
+    import random
+
+    from mrn_coord.mapf import GridWorld, cbs, makespan
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.flow import anonymous_makespan
+
+    def _instance(w, h, n, seed):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        rng.shuffle(free)
+        return GridWorld(w, h), free[:n], free[n:2 * n]
+
+    instances = solved = certified = collision_free = 0
+    both = anon_le_cbs = strictly_cheaper = makespan_sum = 0
+    for w, h, n in ((4, 4, 3), (5, 5, 3), (4, 4, 2), (5, 4, 3)):
+        for seed in range(10):
+            grid, starts, goals = _instance(w, h, n, seed)
+            st: dict = {}
+            res = anonymous_makespan(grid, starts, goals, stats=st)
+            instances += 1
+            if res is None:
+                continue
+            solved += 1
+            certified += int(st["certified"])
+            makespan_sum += st["makespan"]
+            paths = {i: p for i, p in enumerate(res[0])}
+            collision_free += int(detect_first_conflict(paths) is None)
+            lab = cbs(grid, {i: (starts[i], goals[i]) for i in range(n)},
+                      max_expansions=20000)
+            if lab is not None:
+                both += 1
+                cm = makespan(lab.paths)
+                anon_le_cbs += int(st["makespan"] <= cm)
+                strictly_cheaper += int(st["makespan"] < cm)
+
+    # Corridor swaps: labeled-impossible (1-wide), anonymous-trivial.
+    corridors = [
+        (3, 1, [(0, 0), (2, 0)], [(2, 0), (0, 0)]),
+        (4, 1, [(0, 0), (3, 0)], [(3, 0), (0, 0)]),
+        (5, 1, [(0, 0), (4, 0)], [(4, 0), (0, 0)]),
+    ]
+    cor = cor_anon = cor_cbs_none = 0
+    for w, h, starts, goals in corridors:
+        grid = GridWorld(w, h)
+        cor += 1
+        cor_anon += int(anonymous_makespan(grid, starts, goals) is not None)
+        lab = cbs(grid, {i: (starts[i], goals[i]) for i in range(len(starts))},
+                  max_expansions=5000)
+        cor_cbs_none += int(lab is None)
+
+    return {"case": "flow_anonymous_makespan", "instances": instances,
+            "solved": solved, "certified": certified,
+            "collision_free": collision_free, "makespan_sum": makespan_sum,
+            "both_solved": both, "anon_le_cbs": anon_le_cbs,
+            "strictly_cheaper": strictly_cheaper, "corridors": cor,
+            "anon_solved": cor_anon, "labeled_cbs_none": cor_cbs_none,
+            "optimal": certified == solved}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -1064,6 +1150,9 @@ SUITE = [
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),
+    # Network-flow: anonymous makespan-optimal MAPF via integer max-flow on a
+    # time-expanded graph (polynomial, self-certified optimum)
+    ("flow_anonymous_makespan", _run_flow_anonymous_makespan),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

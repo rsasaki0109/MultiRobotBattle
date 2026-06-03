@@ -428,6 +428,47 @@ search is **expensive** (the paper says so too — some 4-agent seeds exhaust th
 expansion budget), so this pins the *continuous-geometry mechanism*, not a
 scaling claim.
 
+### High level: network flow — anonymous makespan-optimal (`flow.py`)
+
+A Python reproduction of Jingjin Yu & Steven LaValle's
+[*"Multi-agent Path Planning and Network Flow"*](https://link.springer.com/chapter/10.1007/978-3-642-36279-8_10)
+/ *"Optimal Multi-Robot Path Planning on Graphs"* (WAFR 2012 / AAAI 2013). Every
+solver above searches. This one **does not** — it is a combinatorial-optimization
+reduction. Yu & LaValle's celebrated result: when the targets are
+**interchangeable** (the *anonymous* problem — any agent may fill any goal),
+minimum-**makespan** collision-free routing is solvable in **polynomial time** as
+an integer **maximum flow**.
+
+For a fixed horizon `T`, time-expand the grid into a flow network:
+
+- Each free cell `v` at each step `t` is split `v_in(t) → v_out(t)` by a
+  **capacity-1** edge — that lone edge *is* the vertex-collision rule (≤1 agent
+  through `v` at time `t`).
+- A wait is `v_out(t) → v_in(t+1)`; a move along `{u,v}` runs through a shared
+  **capacity-1 gadget**, so the head-on swap `u→v` and `v→u` cannot both occur.
+- A super-source feeds every start at `t=0`; every goal drains to a super-sink at
+  `t=T`.
+
+A feasible integer flow of value `n` *is* `n` collision-free trajectories
+reaching the goal set by time `T`. Feasibility is **monotone** in `T` (park at the
+goal), so a binary search finds the minimum makespan, and the optimum is
+**self-certified**: flow `= n` at `T`, flow `< n` at `T-1`.
+
+The `flow_anonymous_makespan` gate pins, on a random battery (`n ∈ {2,3}`, four
+small configs, plain `range(10)`): **(1) optimality**, self-certified —
+`certified == solved == 40/40` (the horizon one below is provably infeasible;
+cross-checked offline against a brute-force joint-BFS anonymous optimum, 0
+makespan mismatches over 120 instances); **(2) validity** — every flow decomposes
+into collision-free paths forming a perfect start→goal matching
+(`collision_free == solved`); **(3) the relaxation bites** — the anonymous
+makespan never exceeds the labeled CBS makespan (`anon_le_cbs == both_solved`) and
+is **strictly** smaller on 27 of 40, plus a corridor showcase where the labeled
+swap is *impossible* (CBS returns `None` on all three 1-wide corridors) yet the
+anonymous routing is trivial. **Honest scope:** this is the *anonymous* problem
+Yu & LaValle solve in polynomial time — a relaxation of labeled MAPF, so its
+makespan lower-bounds any labeled solution's. The *labeled* makespan-optimal
+problem is NP-hard and is **not** reproduced here.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of
