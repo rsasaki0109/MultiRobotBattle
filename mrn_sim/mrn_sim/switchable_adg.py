@@ -94,6 +94,42 @@ def build_adg(paths):
     return cells, edges
 
 
+def build_sadg(paths):
+    """Build the Switchable ADG for re-ordering: ``(cells, edges)`` with a
+    precedence edge for **every pair** of agents sharing a cell — not just
+    consecutive ones as in :func:`build_adg`.
+
+    This distinction matters the moment a cell is shared by *three or more*
+    agents. :func:`build_adg`'s consecutive-pair chain ``a1 -> a2 -> a3`` encodes
+    the total order only *transitively*; reversing the middle edge to ``a3 -> a2``
+    leaves ``a1`` and ``a3`` mutually unconstrained, so a re-ordering can let both
+    onto the cell at once. Materialising **all** pairs keeps mutual exclusion
+    enforced for every pair independently, so any acyclic orientation is a genuine
+    total order at each cell — collision-free under arbitrary re-ordering. (The
+    plain ADG never hit this because reversals there were only ever validated on
+    2-agent cells.) Initial orientations match the planned arrival order, so on a
+    cell shared by two this is identical to :func:`build_adg`.
+    """
+    cells, steps = _milestones(paths)
+    last = {a: len(cells[a]) - 1 for a in cells}
+    occ: dict = {}
+    for a in cells:
+        for k, c in enumerate(cells[a]):
+            occ.setdefault(c, []).append((steps[a][k], a, k))
+    edges = []
+    for c, lst in occ.items():
+        lst.sort()                                   # planned order by arrival
+        for j in range(len(lst)):
+            for i in range(j):
+                _, first, kf = lst[i]
+                _, second, ks = lst[j]
+                if first == second:
+                    continue
+                switchable = kf < last[first] and ks < last[second]
+                edges.append(AdgEdge(c, first, kf, second, ks, switchable))
+    return cells, edges
+
+
 def _precedences(cells, edges):
     """Directed precedence edges over ``(agent, milestone)`` nodes.
 
@@ -240,3 +276,199 @@ def simulate(cells, edges, start_delay, *, switchable, max_ticks=None,
 
     finished = all(done[a] == last[a] for a in ids)
     return AdgRunResult(max_ticks, finished, switches, not finished, history)
+
+
+# --------------------------------------------------------------------------- #
+# Receding-Horizon re-ordering (Berndt et al., T-RO 2024)                      #
+#                                                                              #
+# The reactive ``simulate(switchable=True)`` above flips one edge at a time,   #
+# myopically: it reverses any switchable edge whose waiter is stuck behind a   #
+# not-moving blocker. That is locally sensible but globally short-sighted —    #
+# letting one ready robot jump ahead can delay another that many more robots   #
+# wait on, raising the *cumulative* completion time. The T-RO 2024 method      #
+# instead solves, at every step, a small integer program over the switchable   #
+# edges in a horizon: choose the acyclic (deadlock-free) orientation that       #
+# MINIMIZES the cumulative route-completion time, predicted by rolling the      #
+# schedule out under the currently-observed delays — then re-solve as          #
+# execution proceeds (receding horizon, recursively feasible).                 #
+# --------------------------------------------------------------------------- #
+def _is_acyclic(cells, edges) -> bool:
+    """Does the precedence graph (under the edges' current orientations) hold no
+    cycle? A cycle is a deadlock, so an orientation is admissible iff acyclic."""
+    adj = _precedences(cells, edges)
+    color: dict = {}                                  # 0 = visiting, 1 = done
+
+    def visit(u):
+        color[u] = 0
+        for v in adj.get(u, ()):  # noqa: SIM118
+            c = color.get(v)
+            if c == 0:
+                return False                          # back-edge -> cycle
+            if c is None and not visit(v):
+                return False
+        color[u] = 1
+        return True
+
+    # Any cycle lies entirely among nodes with out-edges, so iterating the
+    # adjacency keys suffices to detect one.
+    return all(visit(u) for u in list(adj) if color.get(u) is None)
+
+
+def _rollout(cells, edges, done0, rem0, max_ticks):
+    """Predict completion from state ``done0`` with FIXED edge orientations and
+    per-robot remaining freeze ``rem0`` (ticks a robot still cannot move). Returns
+    ``(finish_tick_per_agent, finished)``; unfinished robots are charged
+    ``max_ticks`` (a penalty that keeps deadlocked orientations uncompetitive)."""
+    done = dict(done0)
+    rem = dict(rem0)
+    last = {a: len(cells[a]) - 1 for a in cells}
+    finish = {a: (0 if done[a] == last[a] else None) for a in cells}
+
+    def ready(a):
+        if done[a] >= last[a]:
+            return False
+        if done[a] == 0 and rem.get(a, 0) > 0:
+            return False
+        nk = done[a] + 1
+        for e in edges:
+            wa, wk = e.waiter()
+            if wa == a and wk == nk:
+                ba, bk = e.blocker()
+                if done[ba] < bk:
+                    return False
+        return True
+
+    t = 0
+    while t < max_ticks and not all(done[a] == last[a] for a in cells):
+        adv = {a: ready(a) for a in cells}
+        for a in cells:
+            if done[a] == 0 and rem.get(a, 0) > 0:
+                rem[a] -= 1
+        for a in cells:
+            if adv[a]:
+                done[a] += 1
+                if done[a] == last[a] and finish[a] is None:
+                    finish[a] = t + 1
+        t += 1
+    finished = all(done[a] == last[a] for a in cells)
+    for a in finish:
+        if finish[a] is None:
+            finish[a] = max_ticks
+    return finish, finished
+
+
+def _live_switchables(cells, edges, done):
+    """Switchable edges whose ordering decision is still open — **neither occupant
+    has yet entered** the shared cell (``done < milestone`` for both), so either
+    order is still physically realizable. Once a robot is *on* the cell the order
+    is committed; reversing then would push the other robot onto an occupied cell
+    (a collision), so such edges are excluded — this is what keeps re-ordering
+    recursively feasible."""
+    out = []
+    for e in edges:
+        if not e.switchable:
+            continue
+        if done[e.first] < e.kf and done[e.second] < e.ks:
+            out.append(e)
+    return out
+
+
+def reorder_milp(cells, edges, done, rem, horizon, max_ticks):
+    """Re-order: pick, for the next ``horizon`` open switchable edges, the acyclic
+    orientation that minimizes predicted cumulative completion time, and apply it.
+
+    This is the (small) integer program of Berndt et al. solved exactly by
+    enumeration — bounded to ``horizon`` edges so it stays low-dimensional. Other
+    edges keep their current orientation. Returns the number of edges whose
+    orientation changed. Ties break toward fewer reversals then lexicographically,
+    so the result is deterministic."""
+    cand = _live_switchables(cells, edges, done)
+    cand.sort(key=lambda e: (min(e.kf, e.ks), e.first, e.second))
+    cand = cand[:horizon]
+    if not cand:
+        return 0
+    base = [e.reversed for e in cand]
+
+    best = None                                       # (cost, nflips, bits)
+    for mask in range(1 << len(cand)):
+        bits = [(mask >> i) & 1 for i in range(len(cand))]
+        for e, b in zip(cand, bits):
+            e.reversed = bool(b)
+        if not _is_acyclic(cells, edges):
+            continue
+        finish, finished = _rollout(cells, edges, done, rem, max_ticks)
+        cost = sum(finish.values())
+        nflips = sum(1 for b, b0 in zip(bits, base) if b != b0)
+        key = (0 if finished else 1, cost, nflips, tuple(bits))
+        if best is None or key < best[0]:
+            best = (key, bits)
+    if best is None:                                  # no acyclic option (shouldn't happen)
+        for e, b in zip(cand, base):
+            e.reversed = b
+        return 0
+    changed = 0
+    for e, b, b0 in zip(cand, best[1], base):
+        e.reversed = bool(b)
+        changed += int(bool(b) != b0)
+    return changed
+
+
+def simulate_rhc(cells, edges, start_delay, *, horizon=4, max_ticks=None,
+                 keep_history=False):
+    """Run the SADG under start-delays with **receding-horizon re-ordering**.
+
+    At every tick, before advancing, re-solve :func:`reorder_milp` on the current
+    state (the receding horizon) so the passing order is continually re-optimized
+    for minimum cumulative completion time, always keeping the graph acyclic.
+    Collision-free *and* deadlock-free by construction, like :func:`simulate`, but
+    globally cheaper than the reactive single-flip. Returns an
+    :class:`AdgRunResult` (``switches`` counts applied reversals)."""
+    ids = list(cells)
+    last = {a: len(cells[a]) - 1 for a in ids}
+    done = {a: 0 for a in ids}
+    if max_ticks is None:
+        max_ticks = sum(last.values()) + sum(start_delay.values()) + len(ids) + 5
+    switches = 0
+    history = [] if keep_history else None
+
+    def ready_to_advance(a, tick):
+        if done[a] >= last[a] or tick < start_delay.get(a, 0):
+            return False
+        nk = done[a] + 1
+        for e in edges:
+            wa, wk = e.waiter()
+            if wa == a and wk == nk:
+                ba, bk = e.blocker()
+                if done[ba] < bk:
+                    return False
+        return True
+
+    for tick in range(max_ticks):
+        if keep_history:
+            history.append({a: cells[a][done[a]] for a in ids})
+        if all(done[a] == last[a] for a in ids):
+            return AdgRunResult(tick, True, switches, False, history)
+        rem = {a: max(0, start_delay.get(a, 0) - tick) if done[a] == 0 else 0
+               for a in ids}
+        switches += reorder_milp(cells, edges, done, rem, horizon, max_ticks)
+        advanced = {a: ready_to_advance(a, tick) for a in ids}
+        for a in ids:
+            if advanced[a]:
+                done[a] += 1
+
+    finished = all(done[a] == last[a] for a in ids)
+    return AdgRunResult(max_ticks, finished, switches, not finished, history)
+
+
+def cumulative_completion(cells, history) -> int:
+    """Cumulative route-completion time over an executed ``history``: the sum, per
+    robot, of the first tick it stands on its goal cell (the T-RO objective).
+    Robots that never arrive are charged the horizon length."""
+    goal = {a: cells[a][-1] for a in cells}
+    finish: dict = {}
+    for t, snap in enumerate(history):
+        for a, c in snap.items():
+            if a not in finish and c == goal[a]:
+                finish[a] = t
+    horizon = len(history)
+    return sum(finish.get(a, horizon) for a in cells)

@@ -510,6 +510,54 @@ the **robustness** layer above the TPG: it keeps the discrete plan's collision-
 and deadlock-free guarantees under arbitrary delays while re-ordering away the
 stalls a fixed schedule would suffer — exactly where it is safe to.
 
+### Receding-horizon re-ordering — the MILP, not the single flip (`build_sadg`, `simulate_rhc`)
+
+The reactive flip above is *myopic*: it reverses one edge at a time, whenever a
+ready robot is stuck behind a delayed one. Letting that one robot jump ahead can
+delay another that many more robots wait on, so the *cumulative* completion time
+rises even as one robot is helped. The full method of
+[Berndt, van Duijkeren, Palmieri, Kleiner & Keviczky, *"Receding Horizon
+Re-ordering of Multi-Agent Execution Schedules"* (T-RO 2024)](https://arxiv.org/abs/2312.04190)
+instead solves, at every step, a small **integer program** over the switchable
+edges in a horizon: choose the acyclic (deadlock-free) orientation that
+**minimises the cumulative route-completion time**, predicted by rolling the
+schedule out under the observed delays — re-solved as execution proceeds (the
+receding horizon). `simulate_rhc(cells, edges, delay, horizon=H)` reproduces it,
+enumerating the ≤`H` soonest open switchable edges (the integer program solved
+exactly, kept low-dimensional by the horizon) and applying the cheapest acyclic
+orientation each tick.
+
+**A correctness subtlety, found the hard way.** `build_adg` records only
+*consecutive* passing-order edges, so a cell shared by **three or more** agents
+carries the chain `a₁→a₂→a₃` — a total order only *transitively*. Reverse the
+middle edge and `a₁`, `a₃` become mutually unconstrained, so a re-ordering can put
+both on the cell at once: the reactive greedy on `build_adg` is genuinely **not
+collision-free** there (it only ever got validated on 2-agent cells, where the
+chain *is* the order). `build_sadg` materialises an edge for **every pair**, so
+any acyclic orientation is a true total order at each cell — collision-free under
+arbitrary re-ordering. On a cell shared by only two it is identical to
+`build_adg`.
+
+The `mapf_rhc_reorder` gate pins:
+
+- **Hard guarantees hold under re-ordering.** Over a 40-plan random battery
+  (×one-robot delays, 320 runs), every fixed and every re-ordered run is
+  collision-free, deadlock-free and finishes (`hard_guarantees`).
+- **Re-ordering reduces cumulative completion.** On a frozen demo plan the
+  receding-horizon optimum drops it **26 → 24** with no makespan regression
+  (`reorder_reduces_completion`), while a horizon of **1** sees no improvement —
+  so it is the deeper **lookahead** that pays (`horizon_helps`).
+- **The all-pairs fix is load-bearing.** On a constructed 3-agent-shared-cell
+  plan the all-pairs SADG re-orders (a switch fires) and stays collision-free
+  where the consecutive-edge reactive greedy executes a **real collision**
+  (`all_pairs_fix_is_load_bearing`).
+
+**Honest scope:** `simulate_rhc` is a closed-loop *heuristic* — its per-tick MILP
+is exact over the horizon, but committing-then-re-solving is not globally optimal,
+so cumulative completion can occasionally end slightly above the fixed order on an
+instance the lookahead misreads (a handful out of the 320). The guarantees it
+never trades away are the hard ones: collision-free, deadlock-free, finishing.
+
 ## Bodied AMR execution: footprint and turning (`amr_footprint.py`)
 
 `mapf_exec` closes the *timing* gap for a disc robot; `amr_footprint.execute_amr`

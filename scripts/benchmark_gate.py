@@ -2312,6 +2312,135 @@ def _run_switchable_adg() -> dict:
     }
 
 
+def _run_rhc_reorder() -> dict:
+    # The receding-horizon RE-ORDERING half of Berndt, van Duijkeren, Palmieri,
+    # Kleiner & Keviczky, "Receding Horizon Re-ordering of Multi-Agent Execution
+    # Schedules" (T-RO 2024). The reactive Switchable ADG above (mapf_switchable_adg)
+    # flips ONE passing-order edge at a time, myopically. The T-RO method instead
+    # solves, every step, a small integer program over the switchable edges in a
+    # horizon: pick the acyclic (deadlock-free) orientation that MINIMIZES the
+    # cumulative route-completion time, predicted by rolling the schedule out under
+    # the observed delays -- re-solved as execution proceeds (receding horizon).
+    #
+    # Reproduced as build_sadg + simulate_rhc(horizon=H). A KEY correctness point,
+    # found the hard way: build_adg records only CONSECUTIVE passing-order edges, so
+    # at a cell shared by THREE+ agents the order a1->a2->a3 is only transitive --
+    # reversing the middle edge leaves a1, a3 unconstrained and a re-ordering can put
+    # both on the cell at once (the reactive greedy on build_adg is genuinely NOT
+    # collision-free there; it only ever got validated on 2-agent cells). build_sadg
+    # materialises ALL pairs, so any acyclic orientation is a true total order per
+    # cell -- collision-free under arbitrary re-ordering. This gate pins:
+    # (1) HARD GUARANTEES on a random battery (40 prioritized plans x one-robot
+    #     delays): every run, fixed AND re-ordered, is collision-free, deadlock-free
+    #     and finishes (cf_ok == deadlock_free == finished == battery_runs).
+    # (2) RE-ORDERING REDUCES cumulative completion (demo, hardcoded plan): the
+    #     receding-horizon optimum drops it 26 -> 24 with no makespan regression,
+    #     while a horizon of 1 sees no improvement -- so deeper LOOKAHEAD is what
+    #     pays (horizon_helps).
+    # (3) THE ALL-PAIRS FIX is load-bearing: on a constructed 3-agent-shared-cell
+    #     plan the all-pairs SADG re-orders (a switch fires) and stays collision-free
+    #     where the consecutive-edge reactive greedy executes a real collision
+    #     (sadg_cf and not adg_greedy_cf).
+    import random
+
+    from mrn_coord.mapf import GridWorld, prioritized_planning
+    from mrn_sim.switchable_adg import (build_adg, build_sadg,
+                                        cumulative_completion,
+                                        schedule_is_collision_free, simulate,
+                                        simulate_rhc)
+
+    def _rhc(paths, delay, h):
+        cells, edges = build_sadg(paths)
+        return cells, simulate_rhc(cells, edges, delay, horizon=h,
+                                   keep_history=True)
+
+    # (2) Demonstrator plan (a prioritized-planning solution, frozen here so the
+    # gate is self-contained). Delay the robot scheduled last through a junction;
+    # only a multi-edge horizon finds the helpful re-ordering.
+    demo_paths = {
+        0: [(4, 0), (5, 0), (5, 1)],
+        1: [(4, 2), (3, 2), (2, 2), (2, 1), (2, 0)],
+        2: [(0, 2), (1, 2), (1, 3), (2, 3), (3, 3), (4, 3), (4, 4), (4, 5)],
+        3: [(2, 4), (3, 4), (4, 4), (4, 3), (4, 2), (4, 1)],
+    }
+    dc, d_fix = _rhc(demo_paths, {3: 4}, 0)
+    _, d_h1 = _rhc(demo_paths, {3: 4}, 1)
+    _, d_rhc = _rhc(demo_paths, {3: 4}, 8)
+    fix_cc = cumulative_completion(dc, d_fix.history)
+    h1_cc = cumulative_completion(dc, d_h1.history)
+    rhc_cc = cumulative_completion(dc, d_rhc.history)
+
+    # (3) Constructed plan with a 3-agent-shared cell: all-pairs SADG stays safe,
+    # consecutive-edge reactive greedy collides.
+    safe_paths = {
+        0: [(0, 3), (1, 3), (2, 3), (3, 3), (4, 3), (5, 3), (5, 2)],
+        1: [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (4, 4), (4, 3), (4, 2), (4, 1)],
+        2: [(5, 4), (4, 4), (3, 4), (3, 4), (3, 3)],
+        3: [(3, 5), (4, 5), (4, 4), (4, 3), (4, 4), (4, 3), (5, 3), (4, 3)],
+        4: [(1, 4), (1, 4), (1, 3)],
+    }
+    sc, s_rhc = _rhc(safe_paths, {2: 3}, 8)
+    ac, ae = build_adg(safe_paths)
+    s_greedy = simulate(ac, ae, {2: 3}, switchable=True, keep_history=True)
+
+    # (1) Random hard-guarantee battery.
+    def _inst(seed, n=4, w=6, h=6):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        cells = rng.sample(free, 2 * n)
+        return GridWorld(w, h), {i: (cells[i], cells[n + i]) for i in range(n)}
+
+    runs = cf_ok = dl_free = fin_ok = reduced = 0
+    for seed in range(40):
+        g, agents = _inst(seed)
+        sol = prioritized_planning(g, agents)
+        if sol is None:
+            continue
+        for da in agents:
+            for d in (2, 4):
+                cells, edges = build_sadg(sol.paths)
+                import copy
+                rf = simulate_rhc(cells, copy.deepcopy(edges), {da: d},
+                                  horizon=0, keep_history=True)
+                rr = simulate_rhc(cells, copy.deepcopy(edges), {da: d},
+                                  horizon=8, keep_history=True)
+                runs += 1
+                cf_ok += int(schedule_is_collision_free(rf.history)
+                             and schedule_is_collision_free(rr.history))
+                dl_free += int(not rf.deadlock and not rr.deadlock)
+                fin_ok += int(rf.finished and rr.finished)
+                reduced += int(cumulative_completion(cells, rr.history)
+                               < cumulative_completion(cells, rf.history))
+
+    return {
+        "case": "mapf_rhc_reorder",
+        "battery_runs": runs,
+        "battery_collision_free": cf_ok,
+        "battery_deadlock_free": dl_free,
+        "battery_finished": fin_ok,
+        "battery_reorder_reduced_cc": reduced,
+        "demo_fixed_cc": fix_cc,
+        "demo_horizon1_cc": h1_cc,
+        "demo_rhc_cc": rhc_cc,
+        "demo_rhc_makespan": d_rhc.makespan,
+        "demo_fixed_makespan": d_fix.makespan,
+        "demo_rhc_switches": d_rhc.switches,
+        "safety_sadg_switches": s_rhc.switches,
+        "safety_sadg_collision_free": int(schedule_is_collision_free(s_rhc.history)),
+        "safety_sadg_finished": int(s_rhc.finished),
+        "safety_adg_greedy_collision_free": int(
+            schedule_is_collision_free(s_greedy.history)),
+        "hard_guarantees": (runs > 0 and cf_ok == dl_free == fin_ok == runs),
+        "reorder_reduces_completion": (rhc_cc < fix_cc
+                                       and d_rhc.makespan <= d_fix.makespan),
+        "horizon_helps": (h1_cc == fix_cc and rhc_cc < h1_cc),
+        "all_pairs_fix_is_load_bearing": (
+            s_rhc.switches > 0
+            and schedule_is_collision_free(s_rhc.history)
+            and not schedule_is_collision_free(s_greedy.history)),
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -2397,6 +2526,10 @@ SUITE = [
     ("mapf_tpts", _run_tpts),
     ("mapf_online_lns", _run_online_lns),
     ("mapf_switchable_adg", _run_switchable_adg),
+    # RHC re-ordering (T-RO 2024): the receding-horizon MILP over the Switchable
+    # ADG that minimizes cumulative completion -- globally smarter than the myopic
+    # single-flip, collision-free via an all-pairs SADG (fixes a 3+-agent-cell leak)
+    ("mapf_rhc_reorder", _run_rhc_reorder),
     # deterministic livelock escape recovers PIBT convergence (no randomness)
     ("pibt_escape_convergence", _run_pibt_convergence),
     # strong-PIBT spine makes LaCAM's documented scaling actually deliver

@@ -1,0 +1,22 @@
+{
+  "all_pairs_fix_is_load_bearing": true,
+  "battery_collision_free": 320,
+  "battery_deadlock_free": 320,
+  "battery_finished": 320,
+  "battery_reorder_reduced_cc": 46,
+  "battery_runs": 320,
+  "case": "mapf_rhc_reorder",
+  "demo_fixed_cc": 26,
+  "demo_fixed_makespan": 11,
+  "demo_horizon1_cc": 26,
+  "demo_rhc_cc": 24,
+  "demo_rhc_makespan": 11,
+  "demo_rhc_switches": 2,
+  "hard_guarantees": true,
+  "horizon_helps": true,
+  "reorder_reduces_completion": true,
+  "safety_adg_greedy_collision_free": 0,
+  "safety_sadg_collision_free": 1,
+  "safety_sadg_finished": 1,
+  "safety_sadg_switches": 1
+}
