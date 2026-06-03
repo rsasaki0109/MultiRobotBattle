@@ -25,6 +25,7 @@ from .lifelong import (
 )
 from .rhcr import run_rhcr
 from .token_passing import run_token_passing
+from .token_passing_swaps import PickupDelivery, run_tpts
 
 __all__ = [
     "LifelongResult",
@@ -34,6 +35,8 @@ __all__ = [
     "run_lifelong",
     "run_rhcr",
     "run_token_passing",
+    "PickupDelivery",
+    "run_tpts",
     "auction",
     "hungarian",
 ]

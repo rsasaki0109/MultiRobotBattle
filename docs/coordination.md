@@ -1170,6 +1170,42 @@ the well-formed maps it was designed for, and an honest stall where it is not.
 Pure and deterministic; it shares the task allocators with the other engines so
 the comparison isolates the *motion* paradigm.
 
+#### Token Passing with Task Swaps — TPTS (`lifelong/token_passing_swaps.py`)
+
+Plain Token Passing freezes a task to whoever grabbed it first. **TPTS** (Ma et
+al. 2017, *Algorithm 2* — the paper's improvement over TP) lets a better-placed
+robot take it back. `run_tpts(...)` makes every task a real **pickup → delivery**
+pair: an agent first drives to the pickup, *collects the package*, then drives to
+the delivery. A task is `open → assigned → executing → done`, and **only an
+`assigned` task is swappable** — once a package is in hand the carrier is
+committed. The defining rule: when an agent becomes free it may **steal** an
+`assigned` task whose holder is *strictly farther* from the pickup, freeing that
+holder to re-enter assignment. Tasks therefore migrate to the robots that can
+serve them soonest. Motion is the same shared-token reservation scheme as TP, so
+it stays **collision-free by construction**; `swaps=False` recovers plain
+two-leg Token Passing, so a single run pair isolates exactly what the swap buys.
+
+The `mapf_tpts` gate pins this on two maps:
+
+- **A constructed forced-swap instance (open 12×3 grid).** `r1` collects a task
+  under it and frees up beside `T0`'s pickup while `r0` — the only other free
+  agent — is still walking toward the farther `T0` it was handed. TPTS fires
+  **exactly one** steal (`forced_swap_is_single`): `r1` takes `T0`, `r0` grabs
+  the near `T1`. That single swap drops average service **5.33 → 4.00** and the
+  worst wait **10 → 6** (`swap_improves_service`, `swap_lowers_max_wait`); plain
+  TP fires zero (`swaps_fire_only_when_enabled`) and pays the longer crossing
+  trips.
+- **A realistic well-formed warehouse batch** (roomy `aisle=2`, 10 pickup→
+  delivery tasks). Swaps fire a few times and shorten average service **18.6 →
+  18.2** without ever losing a delivery (`delivers_all_either_way`).
+
+Collision-free holds with swaps **on and off** on both maps
+(`collision_free_by_construction`). The steal is a *greedy* heuristic, not a
+global re-optimization, so it is not an unconditional win — on some mid-density
+configs a single greedy swap can nudge average service the wrong way — which is
+why the gate pins it on the regime the mechanism is meant for and isolates the
+swap with the on/off pair rather than claiming a blanket throughput gain.
+
 ### ROS node
 
 `mrn_mapf_planner` is a thin ROS wrapper around the MAPF core. It reads a

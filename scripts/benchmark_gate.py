@@ -1764,6 +1764,104 @@ def _run_token_passing() -> dict:
     }
 
 
+def _run_tpts() -> dict:
+    # Token Passing with Task Swaps (token_passing_swaps.py), a reproduction of
+    # Algorithm 2 of Ma, Li, Kumar & Koenig's "Lifelong Multi-Agent Path Finding
+    # for Online Pickup and Delivery Tasks" (AAAI 2017) -- the paper's improvement
+    # over plain Token Passing. Every task is now a real pickup->delivery pair; a
+    # task is swappable only while ASSIGNED (en route to pickup), never once
+    # EXECUTING (the package is in hand). The defining rule: a freshly-free agent
+    # may STEAL an assigned task from a holder that is farther from the pickup, so
+    # tasks migrate to better-placed robots instead of being frozen to whoever
+    # grabbed them first. Motion is the same shared-token reservation scheme as TP
+    # -- collision-free BY CONSTRUCTION -- and ``swaps=False`` recovers plain
+    # two-leg TP, so a single run pair isolates exactly what the swap rule buys.
+    #
+    # Two things this gate pins. (1) A CONSTRUCTED forced-swap instance on an open
+    # grid: r1 collects a task under it and frees up next to T0's pickup while r0,
+    # the only other free agent, is still trudging toward the farther T0 it was
+    # handed -- so TPTS fires EXACTLY ONE steal (r1 takes T0, r0 grabs the near
+    # T1). That single swap drops average service 5.33->4.00 and max wait 10->6;
+    # plain TP (swaps off) fires zero and pays the longer trips. (2) A realistic
+    # well-formed warehouse batch where swaps fire a few times and shorten service
+    # without ever losing a delivery. Collision-free holds with swaps on AND off,
+    # on BOTH maps. If the steal logic regresses, the swap count or the service
+    # win breaks; if the reservation logic regresses, collision-free breaks.
+    from mrn_coord.lifelong import make_warehouse
+    from mrn_coord.lifelong.token_passing_swaps import PickupDelivery, run_tpts
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    def _cf(res) -> bool:
+        paths: dict = {}
+        for snap in res.history:
+            for a, c in snap.items():
+                paths.setdefault(a, []).append(c)
+        return detect_first_conflict(paths) is None
+
+    # (1) constructed forced-swap instance on an open 12x3 grid (no obstacles, so
+    # planning is fast and never stalls).
+    grid = GridWorld(12, 3, blocked=frozenset())
+    homes = {"r0": (0, 1), "r1": (10, 1)}
+
+    def ctor_tasks():
+        return [
+            PickupDelivery((10, 1), (6, 1)),   # r1 collects at once, frees at (6,1)
+            PickupDelivery((7, 1), (7, 2)),    # T0: handed to r0, then stolen by r1
+            PickupDelivery((1, 1), (1, 2)),    # T1: r0 takes it once freed
+        ]
+
+    coff = run_tpts(grid, dict(homes), ctor_tasks(), swaps=False, max_steps=40,
+                    homes=homes, keep_history=True)
+    con = run_tpts(grid, dict(homes), ctor_tasks(), swaps=True, max_steps=40,
+                   homes=homes, keep_history=True)
+
+    # (2) realistic well-formed warehouse: roomy aisle=2, parking homes disjoint
+    # from the pickup/delivery endpoints, a 10-task batch.
+    wgrid, eps = make_warehouse(rows=3, cols=4, aisle=2)
+    whomes = {f"r{i}": eps[i] for i in range(4)}
+    wpool = eps[4:]
+    wpairs = [(wpool[i], wpool[i + 1]) for i in range(0, len(wpool) - 1, 2)]
+
+    def wh_tasks():
+        return [PickupDelivery(p, d) for p, d in wpairs]
+
+    woff = run_tpts(wgrid, dict(whomes), wh_tasks(), swaps=False, max_steps=60,
+                    homes=whomes, keep_history=True)
+    won = run_tpts(wgrid, dict(whomes), wh_tasks(), swaps=True, max_steps=60,
+                   homes=whomes, keep_history=True)
+
+    cf_all = _cf(coff) and _cf(con) and _cf(woff) and _cf(won)
+    return {
+        "case": "mapf_tpts",
+        "ctor_off_completed": coff.completed,
+        "ctor_on_completed": con.completed,
+        "ctor_off_avg_service": round(coff.avg_service_time, 3),
+        "ctor_on_avg_service": round(con.avg_service_time, 3),
+        "ctor_off_max_wait": coff.max_wait,
+        "ctor_on_max_wait": con.max_wait,
+        "ctor_off_swaps": coff.swaps_fired,
+        "ctor_on_swaps": con.swaps_fired,
+        "wh_off_completed": woff.completed,
+        "wh_on_completed": won.completed,
+        "wh_off_avg_service": round(woff.avg_service_time, 3),
+        "wh_on_avg_service": round(won.avg_service_time, 3),
+        "wh_off_swaps": woff.swaps_fired,
+        "wh_on_swaps": won.swaps_fired,
+        "collision_free_by_construction": cf_all,
+        "swaps_fire_only_when_enabled": (
+            coff.swaps_fired == 0 and woff.swaps_fired == 0
+            and con.swaps_fired > 0 and won.swaps_fired > 0),
+        "forced_swap_is_single": con.swaps_fired == 1,
+        "swap_improves_service": (
+            con.avg_service_time < coff.avg_service_time
+            and won.avg_service_time < woff.avg_service_time),
+        "swap_lowers_max_wait": con.max_wait < coff.max_wait,
+        "delivers_all_either_way": (
+            con.completed == coff.completed and won.completed == woff.completed),
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -1846,6 +1944,7 @@ SUITE = [
     # -- collision-free by construction; matches PIBT/RHCR on a well-formed map,
     # stalls on cramped maps where the well-formed property fails
     ("mapf_token_passing", _run_token_passing),
+    ("mapf_tpts", _run_tpts),
     # deterministic livelock escape recovers PIBT convergence (no randomness)
     ("pibt_escape_convergence", _run_pibt_convergence),
     # strong-PIBT spine makes LaCAM's documented scaling actually deliver

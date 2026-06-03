@@ -1,0 +1,23 @@
+{
+  "case": "mapf_tpts",
+  "collision_free_by_construction": true,
+  "ctor_off_avg_service": 5.333,
+  "ctor_off_completed": 3,
+  "ctor_off_max_wait": 10,
+  "ctor_off_swaps": 0,
+  "ctor_on_avg_service": 4.0,
+  "ctor_on_completed": 3,
+  "ctor_on_max_wait": 6,
+  "ctor_on_swaps": 1,
+  "delivers_all_either_way": true,
+  "forced_swap_is_single": true,
+  "swap_improves_service": true,
+  "swap_lowers_max_wait": true,
+  "swaps_fire_only_when_enabled": true,
+  "wh_off_avg_service": 18.6,
+  "wh_off_completed": 10,
+  "wh_off_swaps": 0,
+  "wh_on_avg_service": 18.2,
+  "wh_on_completed": 10,
+  "wh_on_swaps": 3
+}
