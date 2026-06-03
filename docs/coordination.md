@@ -1206,6 +1206,54 @@ configs a single greedy swap can nudge average service the wrong way — which i
 why the gate pins it on the regime the mechanism is meant for and isolates the
 swap with the on/off pair rather than claiming a blanket throughput gain.
 
+#### Online LNS — repair, don't rebuild (`lifelong/online_lns.py`)
+
+RHCR solves a fresh Windowed MAPF instance *from scratch* every boundary. That
+replan-everyone strategy is **CENTRAL**, the expensive baseline the lifelong
+literature contrasts against. **Online LNS** (`run_online_lns(...)`) keeps the
+team's committed paths between boundaries and only *repairs* what must change —
+the agents that just finished a task (their old path is spent) plus a small
+**Large-Neighborhood** destroy set around the worst detour — each repaired agent
+replanning around everyone else's frozen path, exactly the destroy/repair of
+one-shot `mapf_lns`. A single `mode` flag (`"central"` / `"lns"`) selects between
+the two, so one run pair isolates what reusing the previous plan buys.
+
+The collision-free guarantee rests on one invariant: **between boundaries every
+agent follows its committed, mutually collision-free path verbatim.** Two bugs
+violated it before the gate was clean, both worth recording:
+
+- *Freeze-on-completion.* Treating the first goal-touch as completion and pinning
+  the agent there breaks a path another agent was legitimately routed *through*
+  that cell (the space-time A\* can return a path that touches the goal, vacates
+  for a reservation, and returns). Fix: completion is bookkeeping only — the new
+  goal takes effect at the next boundary; the agent keeps executing its committed
+  path until then (RHCR's commit semantics).
+- *Blocked-and-hold.* If a repaired agent finds no path, holding it in place
+  collides with an earlier-planned agent routed through that cell. Fix: repair is
+  **all-or-nothing** — a boundary where any agent fails is rejected wholesale and
+  the prior (collision-free) plan is kept; the agent retries next boundary. Same
+  reject-on-failure rule as one-shot `mapf_lns`.
+
+The `mapf_online_lns` gate pins the trade **on both sides**:
+
+- **Well-formed, moderate density** (roomy `aisle=2`, 6 agents). Online LNS serves
+  *exactly* as many tasks as CENTRAL — **74 == 74** — while replanning far fewer
+  agents per boundary (**131 vs 162**, no rejected boundary)
+  (`lns_matches_throughput_with_fewer_replans`). On an open map, re-planning the
+  agents whose situation did not change buys CENTRAL no throughput, so reuse is
+  free saving — the anytime, incremental win.
+- **High density** (10 agents). Minimal repair can no longer keep up: LNS
+  boundaries get **rejected** and throughput collapses (**48 vs 139**,
+  `central_wins_at_high_density`) — the regime where CENTRAL's full replan earns
+  its cost. LNS still never does *more* planning work than CENTRAL
+  (`lns_never_does_more_work`), and motion is collision-free in **both** modes on
+  **both** maps.
+
+So online LNS's faithful place is the **incremental-repair** trade: match the
+centralized planner's throughput for a fraction of its replanning effort where
+the map has slack, and degrade honestly (fewer replans, lower throughput) where
+it does not — never at the cost of the collision-free guarantee.
+
 ### ROS node
 
 `mrn_mapf_planner` is a thin ROS wrapper around the MAPF core. It reads a

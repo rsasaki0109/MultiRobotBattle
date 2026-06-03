@@ -23,6 +23,7 @@ from .lifelong import (
     pibt_solve,
     run_lifelong,
 )
+from .online_lns import run_online_lns
 from .rhcr import run_rhcr
 from .token_passing import run_token_passing
 from .token_passing_swaps import PickupDelivery, run_tpts
@@ -37,6 +38,7 @@ __all__ = [
     "run_token_passing",
     "PickupDelivery",
     "run_tpts",
+    "run_online_lns",
     "auction",
     "hungarian",
 ]

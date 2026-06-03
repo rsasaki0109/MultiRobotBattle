@@ -1862,6 +1862,85 @@ def _run_tpts() -> dict:
     }
 
 
+def _run_online_lns() -> dict:
+    # Online LNS for lifelong MAPF (online_lns.py). RHCR solves a fresh Windowed
+    # MAPF instance from scratch every boundary -- the CENTRAL strategy, replan
+    # EVERY agent. Online LNS instead keeps the team's committed paths and only
+    # REPAIRS what must change (agents that just finished a task) plus a small
+    # Large-Neighborhood destroy set, each repaired agent replanning around the
+    # others' frozen paths -- collision-free by construction, like one-shot
+    # mapf_lns. A single `mode` flag selects between the two, so one run pair
+    # isolates exactly what reusing the previous plan buys.
+    #
+    # This gate pins the trade honestly on both sides. (1) WELL-FORMED moderate
+    # density (roomy aisle=2, 6 agents): online LNS serves EXACTLY as many tasks
+    # as CENTRAL (74 == 74) while replanning far fewer agents per boundary
+    # (131 vs 162, no rejected boundaries) -- the anytime/incremental win, since
+    # on an open map re-planning the unchanged agents buys CENTRAL no throughput.
+    # (2) HIGH density (10 agents, tight aisles of motion): minimal repair can no
+    # longer keep up -- LNS boundaries get rejected (repair finds no path for some
+    # agent, so the prior collision-free plan is kept) and throughput collapses
+    # (48 vs 139), the regime where CENTRAL's full replan earns its cost. Motion
+    # is collision-free by construction in BOTH modes on BOTH maps. If the repair
+    # logic regresses, collision-free breaks; if the reuse logic regresses, the
+    # replan saving disappears.
+    from mrn_coord.lifelong import TaskStream, make_warehouse, run_online_lns
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    def _cf(res) -> bool:
+        paths: dict = {}
+        for snap in res.history:
+            for a, c in snap.items():
+                paths.setdefault(a, []).append(c)
+        return detect_first_conflict(paths) is None
+
+    def _pair(aisle, n, steps, period, k):
+        grid, eps = make_warehouse(rows=3, cols=4, aisle=aisle)
+        starts = {f"r{i}": eps[i] for i in range(n)}
+        out = {}
+        for mode in ("central", "lns"):
+            st: dict = {}
+            res = run_online_lns(grid, dict(starts), TaskStream(list(eps)),
+                                 mode=mode, max_steps=steps, replan_period=period,
+                                 neighborhood=k, allocator="hungarian",
+                                 keep_history=True, stats=st)
+            out[mode] = (res, st)
+        return out
+
+    # (1) well-formed, moderate density -> equal throughput, fewer replans.
+    win = _pair(aisle=2, n=6, steps=80, period=3, k=4)
+    wc, wcs = win["central"]
+    wl, wls = win["lns"]
+    # (2) high density -> minimal repair rejects, CENTRAL's full replan wins.
+    td = _pair(aisle=2, n=10, steps=100, period=5, k=2)
+    tc, tcs = td["central"]
+    tl, tls = td["lns"]
+
+    cf_all = _cf(wc) and _cf(wl) and _cf(tc) and _cf(tl)
+    return {
+        "case": "mapf_online_lns",
+        "win_central_completed": wc.completed,
+        "win_lns_completed": wl.completed,
+        "win_central_replans": wcs["replans"],
+        "win_lns_replans": wls["replans"],
+        "win_lns_rejected": wls["rejected"],
+        "td_central_completed": tc.completed,
+        "td_lns_completed": tl.completed,
+        "td_central_replans": tcs["replans"],
+        "td_lns_replans": tls["replans"],
+        "td_lns_rejected": tls["rejected"],
+        "collision_free_by_construction": cf_all,
+        "lns_matches_throughput_with_fewer_replans": (
+            wl.completed == wc.completed
+            and wls["replans"] < wcs["replans"]
+            and wls["rejected"] == 0),
+        "central_wins_at_high_density": (
+            tc.completed > tl.completed and tls["rejected"] > 0),
+        "lns_never_does_more_work": (
+            wls["replans"] <= wcs["replans"] and tls["replans"] <= tcs["replans"]),
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -1945,6 +2024,7 @@ SUITE = [
     # stalls on cramped maps where the well-formed property fails
     ("mapf_token_passing", _run_token_passing),
     ("mapf_tpts", _run_tpts),
+    ("mapf_online_lns", _run_online_lns),
     # deterministic livelock escape recovers PIBT convergence (no randomness)
     ("pibt_escape_convergence", _run_pibt_convergence),
     # strong-PIBT spine makes LaCAM's documented scaling actually deliver

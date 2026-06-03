@@ -1,0 +1,17 @@
+{
+  "case": "mapf_online_lns",
+  "central_wins_at_high_density": true,
+  "collision_free_by_construction": true,
+  "lns_matches_throughput_with_fewer_replans": true,
+  "lns_never_does_more_work": true,
+  "td_central_completed": 139,
+  "td_central_replans": 194,
+  "td_lns_completed": 48,
+  "td_lns_rejected": 7,
+  "td_lns_replans": 66,
+  "win_central_completed": 74,
+  "win_central_replans": 162,
+  "win_lns_completed": 74,
+  "win_lns_rejected": 0,
+  "win_lns_replans": 131
+}
