@@ -768,6 +768,76 @@ def _run_mutex_cardinal_detection() -> dict:
             "pc_constraints_empty": pc_empty}
 
 
+def _run_disjoint_vs_standard() -> dict:
+    # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
+    # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
+    # Finding with Conflict-Based Search" (ICAPS 2019). Standard CBS resolves a
+    # vertex conflict (a1, a2, v, t) by forbidding v-at-t to a1 in one child and
+    # to a2 in the other; the two subtrees OVERLAP -- every solution in which
+    # neither agent sits on v at t satisfies both, so it is re-searched twice.
+    # Disjoint splitting picks ONE agent ai and branches on ai-IS-at-(v,t)
+    # (a positive constraint, which by vertex exclusivity also pins every other
+    # agent OFF v at t) versus ai-is-NOT. Those children PARTITION the solution
+    # space, so nothing is searched twice. It returns the SAME optimal
+    # sum-of-costs as standard CBS (opt_match) -- the win it claims, and what
+    # this gate pins, is FEWER high-level expansions, the saving growing with
+    # congestion (where the redundant subtrees are largest).
+    #
+    # The positive half rides on plan_path's positive_vertex/positive_edge
+    # support (verified separately: a must-occupy (v,t) path equals the path
+    # found by forbidding every OTHER cell at t). Edge conflicts keep the
+    # standard split (the positive-edge derivation for all other agents is
+    # finicky and swaps are rare); mixing is still sound and optimal because
+    # each individual split covers the whole solution space.
+    #
+    # Battery: congested few-but-coupled instances (where disjoint is meant to
+    # help), first 12 seeds of three configs, no cherry-picking (plain
+    # range(12)). Pins: (1) opt_match == instances (disjoint never drops the
+    # optimum -- if a positive constraint ever lost a solution this falls);
+    # (2) all_valid (every disjoint solution is conflict-free); (3) the
+    # collapse: exp_disjoint < exp_standard. If disjoint splitting regressed,
+    # exp_disjoint would rise back toward (or past) exp_standard and the gate
+    # trips.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    def _instance(w, h, n, seed, obstacle):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obstacle}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        grid = GridWorld(w, h, frozenset(blocked))
+        return grid, {i: (free[i], free[n + i]) for i in range(n)}
+
+    instances = opt_match = exp_standard = exp_disjoint = 0
+    all_valid = True
+    for w, h, n, obstacle in ((6, 6, 7, 0.05), (7, 7, 8, 0.05), (8, 8, 8, 0.05)):
+        for seed in range(12):
+            grid, agents = _instance(w, h, n, seed, obstacle)
+            ss: dict = {}
+            std = cbs(grid, agents, disjoint=False, stats=ss,
+                      max_expansions=60000)
+            sd: dict = {}
+            dis = cbs(grid, agents, disjoint=True, stats=sd,
+                      max_expansions=60000)
+            if std is None or dis is None:
+                continue
+            instances += 1
+            opt_match += int(std.cost == dis.cost)
+            exp_standard += ss["expansions"]
+            exp_disjoint += sd["expansions"]
+            all_valid = all_valid and detect_first_conflict(dis.paths) is None
+    return {"case": "disjoint_vs_standard", "instances": instances,
+            "opt_match": opt_match, "exp_standard": exp_standard,
+            "exp_disjoint": exp_disjoint, "all_valid": all_valid,
+            "reduces": exp_disjoint < exp_standard}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -883,6 +953,9 @@ SUITE = [
     # Mutex propagation: a verified cardinal-conflict detector (Theorem 2 holds;
     # catches cardinals the width test misses)
     ("mutex_cardinal_detection", _run_mutex_cardinal_detection),
+    # Disjoint splitting: positive/negative on one agent partitions the solution
+    # space CBS's two-negative split overlaps (same optimum, fewer expansions)
+    ("disjoint_vs_standard", _run_disjoint_vs_standard),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

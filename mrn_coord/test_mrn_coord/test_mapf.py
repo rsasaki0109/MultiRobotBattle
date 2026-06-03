@@ -98,6 +98,39 @@ class TestSpaceTimeAStar(unittest.TestCase):
         self.assertEqual(path[-1], (2, 0))
         self.assertNotEqual(cell_at(path, 2), (2, 0))
 
+    def test_positive_vertex_forces_occupancy(self):
+        # The must-occupy half of disjoint splitting: pinning the agent to a
+        # non-goal cell at a time must equal the path found by forbidding every
+        # OTHER cell at that time (the brute-force encoding of "be here now").
+        grid = GridWorld(5, 5)
+        start, goal, v, t = (0, 0), (4, 0), (2, 2), 4
+        pinned = plan_path(grid, start, goal, positive_vertex={(v, t)})
+        self.assertIsNotNone(pinned)
+        self.assertEqual(cell_at(pinned, t), v)
+        forbid = {(c, t) for c in
+                  ((x, y) for x in range(5) for y in range(5)) if c != v}
+        brute = plan_path(grid, start, goal, vertex_constraints=frozenset(forbid))
+        self.assertEqual(sum_of_costs({0: pinned}), sum_of_costs({0: brute}))
+
+    def test_positive_on_goal_is_free_under_stay(self):
+        # A positive constraint ON the goal is satisfied for free by arriving and
+        # staying (stay-at-goal): it must NOT inflate the cost past the natural
+        # shortest path. (Regression: an earlier version padded to the constraint
+        # time and overcounted.)
+        grid = GridWorld(5, 1)
+        plain = plan_path(grid, (0, 0), (4, 0))
+        pinned = plan_path(grid, (0, 0), (4, 0), positive_vertex={((4, 0), 9)})
+        self.assertEqual(sum_of_costs({0: pinned}), sum_of_costs({0: plain}))
+        self.assertEqual(cell_at(pinned, 9), (4, 0))
+
+    def test_contradictory_positive_is_infeasible(self):
+        # Two must-occupy cells at the same time can't both hold -> no path.
+        grid = GridWorld(5, 1)
+        self.assertIsNone(plan_path(
+            grid, (0, 0), (4, 0),
+            positive_vertex={((1, 0), 2), ((3, 0), 2)},
+        ))
+
 
 class TestConflicts(unittest.TestCase):
     def test_vertex_conflict(self):
@@ -169,6 +202,77 @@ class TestCBS(unittest.TestCase):
         sol = cbs(grid, {"a": ((0, 0), (3, 0))})
         self.assertIsNotNone(sol)
         self.assertEqual(sol.cost, 3)
+
+
+class TestDisjoint(unittest.TestCase):
+    """Disjoint splitting: same optimum as standard CBS, fewer expansions."""
+
+    def test_matches_standard_optimum_on_random(self):
+        # Disjoint splitting must return the SAME optimal sum-of-costs as
+        # standard CBS on every instance, with a valid collision-free solution
+        # honoring endpoints. (Regression: an early version dropped the optimum
+        # when a positive constraint landed on an agent's goal.)
+        for w, h, n, obs in ((6, 6, 5, 0.12), (7, 7, 6, 0.05), (6, 6, 6, 0.0)):
+            for seed in range(10):
+                grid, agents = _rand_instance(w, h, n, seed, obstacle=obs)
+                std = cbs(grid, agents, disjoint=False, max_expansions=50000)
+                dis = cbs(grid, agents, disjoint=True, max_expansions=50000)
+                if std is None:
+                    self.assertIsNone(dis, f"{w}x{h} seed={seed}")
+                    continue
+                self.assertIsNotNone(dis, f"{w}x{h} seed={seed}")
+                self.assertEqual(dis.cost, std.cost, f"{w}x{h} seed={seed}")
+                self.assertIsNone(detect_first_conflict(dis.paths))
+                for a, (start, goal) in agents.items():
+                    self.assertEqual(dis.paths[a][0], start)
+                    self.assertEqual(dis.paths[a][-1], goal)
+
+    def test_partition_cuts_expansions_on_congestion(self):
+        # On a congested battery disjoint splitting must expand no MORE in
+        # aggregate than the standard two-negative split (and fewer in practice),
+        # because its children partition rather than overlap the solution space —
+        # while reaching the identical optimum on each instance.
+        tot_std = tot_dis = 0
+        for seed in range(12):
+            grid, agents = _rand_instance(8, 8, 8, seed, obstacle=0.05)
+            ss, sd = {}, {}
+            std = cbs(grid, agents, disjoint=False, stats=ss,
+                      max_expansions=60000)
+            dis = cbs(grid, agents, disjoint=True, stats=sd,
+                      max_expansions=60000)
+            if std is None or dis is None:
+                continue
+            self.assertEqual(std.cost, dis.cost, f"seed={seed}")
+            tot_std += ss["expansions"]
+            tot_dis += sd["expansions"]
+        self.assertLess(tot_dis, tot_std)
+
+    def test_off_is_byte_identical_to_plain_cbs(self):
+        # disjoint defaults OFF; the default path must be the standard split,
+        # unchanged — same cost AND same expansion count as an explicit
+        # disjoint=False call.
+        grid, agents = _rand_instance(7, 7, 6, 4, obstacle=0.05)
+        sa, sb = {}, {}
+        default = cbs(grid, agents, stats=sa, max_expansions=50000)
+        explicit = cbs(grid, agents, disjoint=False, stats=sb,
+                       max_expansions=50000)
+        self.assertEqual(default.cost, explicit.cost)
+        self.assertEqual(sa["expansions"], sb["expansions"])
+
+    def test_deterministic(self):
+        grid, agents = _rand_instance(8, 8, 8, 1, obstacle=0.05)
+        runs = []
+        for _ in range(2):
+            sd = {}
+            sol = cbs(grid, agents, disjoint=True, stats=sd,
+                      max_expansions=60000)
+            runs.append((sol.cost, sd["expansions"]))
+        self.assertEqual(runs[0], runs[1])
+
+    def test_unsolvable_corridor_returns_none(self):
+        grid = GridWorld(3, 1)
+        agents = {"a": ((0, 0), (2, 0)), "b": ((2, 0), (0, 0))}
+        self.assertIsNone(cbs(grid, agents, disjoint=True, max_expansions=2000))
 
 
 def _rand_instance(w, h, n, seed, obstacle=0.0):

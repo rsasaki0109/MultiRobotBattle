@@ -13,7 +13,11 @@ The pieces compose bottom-up:
 - :mod:`conflicts` — vertex and edge (swap) conflict detection between planned
   paths, with stay-at-goal semantics.
 - :mod:`cbs` — Conflict-Based Search: an optimal (sum-of-costs) two-level
-  search that resolves conflicts by branching constraints.
+  search that resolves conflicts by branching constraints. With
+  ``disjoint=True`` it uses disjoint splitting (Li et al. 2019): it branches one
+  agent positive/negative on the conflict cell so the children *partition* the
+  solution space the standard two-negative split overlaps — same optimum, fewer
+  expansions.
 - :mod:`cbsh` — CBS with improved heuristics (Li et al. 2019): the same optimal
   search, but an admissible CG/DG/WDG heuristic plus cardinal-conflict
   prioritization cut the high-level node expansions by a large factor.

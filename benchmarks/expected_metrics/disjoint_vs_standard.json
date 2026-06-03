@@ -1,0 +1,9 @@
+{
+  "case": "disjoint_vs_standard",
+  "instances": 36,
+  "opt_match": 36,
+  "exp_standard": 2325,
+  "exp_disjoint": 1726,
+  "all_valid": true,
+  "reduces": true
+}

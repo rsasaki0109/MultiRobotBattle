@@ -117,6 +117,52 @@ python3 scripts/compare_mapf_libmrp.py --write        # refresh benchmarks/mapf_
 The `mapf-libmrp-equivalence` CI job does exactly this on every push, so CBS
 computing the true optimum is a guarded contract, not a claim.
 
+#### Disjoint splitting (`cbs(disjoint=True)`)
+
+A Python reproduction of Li, Harabor, Stuckey, Ma & Koenig's
+[*"Disjoint Splitting for Multi-Agent Path Finding with Conflict-Based
+Search"*](https://ojs.aaai.org/index.php/ICAPS/article/view/3487) (ICAPS 2019).
+
+Standard CBS resolves a vertex conflict `(a1, a2, v, t)` by giving each child one
+**negative** constraint: child 1 forbids `a1` from `v` at `t`, child 2 forbids
+`a2`. The catch is that the two subtrees **overlap** — any solution in which
+*neither* agent sits on `v` at `t` satisfies both children, so CBS re-searches it
+in both. That redundancy compounds with every split.
+
+**Disjoint splitting** removes it. It picks *one* agent `ai` from the conflict
+and branches on a yes/no question about that single agent:
+
+- **positive child** — `ai` *is* at `v` at `t` (a **positive**, must-occupy
+  constraint). Because vertex occupancy is exclusive, "ai is here" implies *no
+  other agent* is, so this child also pins every other agent **off** `v` at `t` —
+  without dropping a single valid solution.
+- **negative child** — `ai` is *not* at `v` at `t` (the usual negative
+  constraint).
+
+Every solution answers that question exactly one way, so the children
+**partition** the solution space instead of overlapping it. Same optimal
+sum-of-costs, fewer high-level expansions — the saving grows with congestion,
+where the redundant subtrees are largest.
+
+The positive half rides on the low level: `plan_path` gained
+`positive_vertex` / `positive_edge` (must-occupy) constraints that prune every
+successor violating them and hold the agent past the pinned timestep before it
+may settle at its goal — *except* when the pin is on the goal itself, which
+stay-at-goal semantics satisfy for free (a subtle case: forcing the path to the
+pin time there would overcount the cost). A must-occupy `(v, t)` path is verified
+to equal the path found by forbidding every *other* cell at `t`.
+
+**Honest scope:** disjoint splitting is applied to **vertex** conflicts; the rare
+swap (edge) conflicts keep the standard split — the positive-edge derivation for
+all other agents is finicky and contributes little redundancy. Mixing is still
+sound and optimal because each individual split fully covers the solution space.
+The `disjoint_vs_standard` gate pins the win on a congested battery: the same
+optimum on every instance (`opt_match == instances`), every solution
+collision-free, and the aggregate high-level expansions cut **2325 → 1726**
+(≈1.35×, rising to ≈3× on the densest `8×8` config). `disjoint` defaults **off**,
+so the plain `cbs` path — and the libMultiRobotPlanning equivalence contract
+above — is byte-identical.
+
 ### High level: CBS with improved heuristics (`cbsh.py`)
 
 `cbsh(grid, agents, heuristic="wdg")` returns the **same optimum** as `cbs` but
