@@ -104,6 +104,13 @@ The pieces compose bottom-up:
   optimality.
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
+- :mod:`whca` — Windowed Hierarchical Cooperative A* (Silver 2005): cooperative
+  planning made scalable. The *hierarchical* heuristic is the true shortest-path
+  distance to the goal on the static map (Reverse Resumable A*), perfect enough
+  to prune the dead ends Manhattan walks into; the *window* limits cooperation to
+  a ``w``-step lookahead that rolls forward each round with a rotating priority
+  order — bounding the search depth and breaking the transient deadlocks a single
+  fixed priority order livelocks on. Collision-free by construction, incomplete.
 - :mod:`pbs` — Priority-Based Search: searches over priority *orderings* (PP at
   the low level), resolving the head-on deadlocks fixed-order PP cannot; the
   windowed solver behind lifelong RHCR.
@@ -137,6 +144,7 @@ from .conflicts import (
 from .grid import Cell, GridWorld, manhattan
 from .path_follower import pure_pursuit
 from .prioritized import prioritized_planning
+from .whca import whca_star
 from .push_and_rotate import push_and_rotate
 from .sipp import plan_sipp
 from .solution import Solution, makespan, pad_paths, render_ascii, sum_of_costs
@@ -177,6 +185,7 @@ __all__ = [
     "pbs",
     "pbs_paths",
     "prioritized_planning",
+    "whca_star",
     "push_and_rotate",
     "pure_pursuit",
     "Solution",

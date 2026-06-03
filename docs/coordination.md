@@ -1028,6 +1028,38 @@ goals, and forbidding swaps against their moves). Cheap and often good enough,
 but a bad order can leave a later agent with no path even when one exists — so
 it can return `None` on solvable instances, unlike CBS.
 
+#### Windowed Hierarchical Cooperative A* (`whca.py`)
+
+`whca_star(grid, agents, window=w)` is David Silver's *Cooperative Pathfinding*
+(AIIDE 2005) — the scalable, online face of prioritized planning. It layers three
+ideas on top of CA* (cooperative A* = prioritized planning with a shared
+reservation table):
+
+- **Hierarchical (HCA\*).** The heuristic is the *true* shortest-path distance to
+  the goal on the static map — not Manhattan — computed on demand by **Reverse
+  Resumable A\* (RRA\*)**, a backward A* from the goal that resumes only as far as
+  each queried cell. Being perfect on the obstacle map, it stops the low-level
+  search from exploring the dead ends Manhattan walks into: on a wall the agent
+  must detour around, the cooperative A* expands **101** states with the true
+  distance versus **551** with Manhattan.
+- **Windowed (WHCA\*).** Cooperation happens only within a `window`-step
+  lookahead: each agent searches and reserves just `w` steps ahead toward its
+  goal, then the team advances, the window rolls forward, and everyone replans.
+  Beyond the window agents ignore each other, which bounds the per-round search
+  depth so it scales to large teams.
+- **Rotating priority.** Each window the priority order rotates by one, so an
+  agent blocked behind a higher-priority neighbour this round leads the next.
+
+It is **collision-free by construction** (every committed segment is laid into
+the reservation table in priority order) but, like prioritized planning,
+**incomplete**. Its edge over a single fixed priority order is the rolling
+window: on a battery of congested 7×7 instances where plain prioritized planning
+*and* full-horizon non-rotating WHCA* (i.e. prioritized planning with the true
+distance — same priority order, no window) both fail, the rolling window resolves
+**20** of them collision-free (`mapf_whca`, `test_whca`) — isolating the win to
+the window + rotation rather than the better heuristic. A `window` ≥ the makespan
+recovers plain HCA*.
+
 ### Solution helpers (`solution.py`)
 
 `Solution(paths, cost)` plus `sum_of_costs`, `makespan`, `pad_paths` (hold the

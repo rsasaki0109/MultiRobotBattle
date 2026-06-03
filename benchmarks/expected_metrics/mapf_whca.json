@@ -1,0 +1,22 @@
+{
+  "battery_collision_free": 180,
+  "battery_instances": 180,
+  "battery_solved": 180,
+  "case": "mapf_whca",
+  "hca_true_expansions": 101,
+  "hierarchical_heuristic_prunes": true,
+  "manhattan_expansions": 551,
+  "rolling_window_beats_fixed_priority": true,
+  "rra_cells": 58,
+  "rra_mismatches": 0,
+  "showcase_cf": true,
+  "showcase_fullhorizon_none": true,
+  "showcase_prioritized_none": true,
+  "showcase_whca_cost": 48,
+  "true_distance_is_exact": true,
+  "win_isolated": 20,
+  "win_prio_failed": 57,
+  "win_tested": 400,
+  "win_whca_solved_cf": 20,
+  "windowed_complete_and_collision_free_here": true
+}

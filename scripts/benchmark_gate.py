@@ -1043,6 +1043,167 @@ def _run_macbs() -> dict:
     }
 
 
+def _run_whca() -> dict:
+    # Windowed Hierarchical Cooperative A* (whca.py) is a Python reproduction of
+    # David Silver's "Cooperative Pathfinding" (AIIDE 2005). It layers three
+    # ideas on prioritized planning:
+    #   - Cooperative A* (CA*): plan agents in priority order, each reserving its
+    #     space-time path so later agents avoid it (== prioritized_planning).
+    #   - Hierarchical (HCA*): use the TRUE shortest-path distance to the goal on
+    #     the static map (Reverse Resumable A*, RRA*) as the heuristic instead of
+    #     Manhattan -- perfect on the obstacle map, so the cooperative A* stops
+    #     exploring the dead ends a wall creates.
+    #   - Windowed (WHCA*): cooperate only within a w-step lookahead window, then
+    #     roll the window and replan with a ROTATING priority order. The window
+    #     bounds the search depth (it scales) and the rotation lets a blocked
+    #     agent lead next window, breaking transient deadlocks a single fixed
+    #     priority order livelocks on. Collision-free by construction.
+    #
+    # This gate pins:
+    # (1) THE ABSTRACT HEURISTIC IS EXACT: RRA*'s true distance equals a BFS from
+    #     the goal on an obstacle map (rra_mismatches == 0).
+    # (2) HIERARCHICAL CUTS THE SEARCH: on a map where a wall makes Manhattan
+    #     badly misleading, the cooperative A* with the true-distance heuristic
+    #     expands far fewer states than with Manhattan (101 vs 551).
+    # (3) WINDOWED EXECUTION IS COLLISION-FREE AND REACHES EVERY GOAL across a
+    #     random battery, for small and large windows alike.
+    # (4) ROLLING WINDOWS BEAT FIXED PRIORITY: on a battery where plain
+    #     prioritized planning (and full-horizon, non-rotating WHCA*, which is
+    #     prioritized planning with the true-distance heuristic) FAIL, the
+    #     windowed rolling WHCA* routes every agent collision-free -- isolating
+    #     the win to the window + rotation, not the heuristic.
+    import random
+    from collections import deque
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.grid import manhattan
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.prioritized import prioritized_planning
+    from mrn_coord.mapf.whca import RRAStar, _segment_search, whca_star
+
+    # (1) RRA* (true distance) == BFS from the goal.
+    def _bfs(grid, goal):
+        d = {goal: 0}
+        q = deque([goal])
+        while q:
+            c = q.popleft()
+            for nb in grid.neighbors(c):
+                if nb != c and nb not in d:
+                    d[nb] = d[c] + 1
+                    q.append(nb)
+        return d
+
+    hgrid = GridWorld(8, 8, blocked=frozenset((3, y) for y in range(0, 6)))
+    bfs = _bfs(hgrid, (7, 7))
+    rra = RRAStar(hgrid, (7, 7), (0, 0))
+    rra_mismatches = sum(1 for c in bfs if rra.distance(c) != bfs[c])
+
+    # (2) Hierarchical heuristic vs Manhattan on a wall the agent must go around.
+    wgrid = GridWorld(11, 11, blocked=frozenset((5, y) for y in range(0, 9)))
+    wstart, wgoal = (0, 0), (10, 0)
+    wrra = RRAStar(wgrid, wgoal, wstart)
+    st_true: dict = {}
+    _segment_search(wgrid, wstart, wgoal, 0, 999, {}, set(), wrra.distance,
+                    stats=st_true)
+    st_man: dict = {}
+    _segment_search(wgrid, wstart, wgoal, 0, 999, {}, set(),
+                    lambda c: manhattan(c, wgoal), stats=st_man)
+
+    # (3) Random battery: collision-free + reaches every goal for small/large w.
+    def _inst(seed, n, w, h):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        cells = rng.sample(free, 2 * n)
+        return GridWorld(w, h), {i: (cells[i], cells[n + i]) for i in range(n)}
+
+    batt_inst = batt_solved = batt_cf = 0
+    for win in (4, 8, 16):
+        for seed in range(60):
+            grid, agents = _inst(seed, 5, 8, 8)
+            batt_inst += 1
+            sol = whca_star(grid, agents, window=win)
+            if sol is None:
+                continue
+            batt_solved += 1
+            if detect_first_conflict(sol.paths) is None:
+                batt_cf += 1
+
+    # (4) Rolling windows beat fixed priority. Congested obstacle instances where
+    # prioritized planning fails; count where windowed WHCA* solves CF and where
+    # full-horizon non-rotating WHCA* ALSO fails (isolating the window+rotation).
+    def _cinst(seed, n, w, h, blk):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        nb = int(len(free) * blk)
+        blocked: set = set()
+        while len(blocked) < nb:
+            blocked.add(rng.choice(free))
+        free2 = [c for c in free if c not in blocked]
+        if len(free2) < 2 * n:
+            return None
+        cells = rng.sample(free2, 2 * n)
+        return (GridWorld(w, h, blocked=frozenset(blocked)),
+                {i: (cells[i], cells[n + i]) for i in range(n)})
+
+    # WHCA* is incomplete, so it does not solve *every* prioritized failure --
+    # what it must do is solve a non-trivial set of them, and on each one it
+    # solves, the fixed-priority baselines (plain prioritized planning AND
+    # full-horizon non-rotating WHCA*, i.e. prioritized planning with the
+    # true-distance heuristic) must BOTH fail -- isolating the win to the rolling
+    # window, not the heuristic.
+    win_tested = win_prio_failed = win_whca_solved_cf = win_isolated = 0
+    for seed in range(400):
+        r = _cinst(seed, 6, 7, 7, 0.18)
+        if r is None:
+            continue
+        grid, agents = r
+        win_tested += 1
+        if prioritized_planning(grid, agents) is not None:
+            continue
+        win_prio_failed += 1
+        wh = whca_star(grid, agents, window=8)
+        if wh is None or detect_first_conflict(wh.paths) is not None:
+            continue
+        win_whca_solved_cf += 1
+        # prioritized already failed here; confirm full-horizon non-rotating does too
+        if whca_star(grid, agents, window=400, rotate_priority=False) is None:
+            win_isolated += 1
+
+    # A frozen showcase from that battery (seed 20): 6 agents, prioritized and
+    # full-horizon non-rotating both fail; windowed rolling WHCA* solves it.
+    sgrid, sagents = _cinst(20, 6, 7, 7, 0.18)
+    s_wh = whca_star(sgrid, sagents, window=8)
+
+    return {
+        "case": "mapf_whca",
+        "rra_cells": len(bfs),
+        "rra_mismatches": rra_mismatches,
+        "hca_true_expansions": st_true["expansions"],
+        "manhattan_expansions": st_man["expansions"],
+        "battery_instances": batt_inst,
+        "battery_solved": batt_solved,
+        "battery_collision_free": batt_cf,
+        "win_tested": win_tested,
+        "win_prio_failed": win_prio_failed,
+        "win_whca_solved_cf": win_whca_solved_cf,
+        "win_isolated": win_isolated,
+        "showcase_whca_cost": s_wh.cost if s_wh else -1,
+        "showcase_prioritized_none": prioritized_planning(sgrid, sagents) is None,
+        "showcase_fullhorizon_none": whca_star(sgrid, sagents, window=400,
+                                               rotate_priority=False) is None,
+        "showcase_cf": (s_wh is not None
+                        and detect_first_conflict(s_wh.paths) is None),
+        "true_distance_is_exact": rra_mismatches == 0,
+        "hierarchical_heuristic_prunes":
+            st_true["expansions"] < st_man["expansions"],
+        "windowed_complete_and_collision_free_here":
+            batt_solved == batt_inst and batt_cf == batt_inst,
+        "rolling_window_beats_fixed_priority":
+            (win_whca_solved_cf > 0
+             and win_isolated == win_whca_solved_cf),
+    }
+
+
 def _run_disjoint_vs_standard() -> dict:
     # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
     # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
@@ -2677,6 +2838,11 @@ SUITE = [
     # same optimum as CBS for any conflict bound B, but a bottleneck that explodes
     # the CBS tree collapses into one joint solve (B interpolates decoupled<->coupled)
     ("mapf_macbs", _run_macbs),
+    # WHCA*: windowed hierarchical cooperative A* (Silver 2005) -- RRA* true
+    # distance + a rolling cooperation window with rotating priority. Scales,
+    # collision-free by construction, and resolves transient deadlocks that a
+    # single fixed priority order (prioritized planning) livelocks on
+    ("mapf_whca", _run_whca),
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),
