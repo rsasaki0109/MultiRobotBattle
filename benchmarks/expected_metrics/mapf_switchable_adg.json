@@ -1,0 +1,17 @@
+{
+  "case": "mapf_switchable_adg",
+  "collision_free_by_construction": true,
+  "cor_fix_finished": 1,
+  "cor_sw_finished": 1,
+  "cor_sw_switches": 0,
+  "deadlock_free_always": true,
+  "noop_fix_makespan": 16,
+  "noop_sw_makespan": 16,
+  "noop_sw_switches": 0,
+  "switch_helps_when_first_mover_delayed": true,
+  "switch_is_noop_when_it_cannot_help": true,
+  "unsafe_reversals_refused": true,
+  "win_fix_makespan": 15,
+  "win_sw_makespan": 10,
+  "win_sw_switches": 1
+}

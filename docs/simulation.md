@@ -470,6 +470,46 @@ whole stack: the discrete plan is necessary but not sufficient — bridging it t
 the moving robots takes a schedule-aware executor, a reactive controller, or a
 runtime safety guarantee, all of which live here.
 
+## Robust execution under delays: the Switchable ADG (`switchable_adg.py`)
+
+The TPG above gives the right *order* at every shared cell, but a *fixed* order
+is brittle: if the robot scheduled to cross a junction first is the one that gets
+delayed, everyone behind it stalls for the whole delay, even when the junction is
+free. The **Action Dependency Graph** (ADG; Hönig et al.) is the same passing-
+order precedence in graph form — acyclic, so executing it is collision-free
+*and* deadlock-free whatever the timing. The **Switchable ADG** (Berndt,
+Palmieri et al., *Receding-Horizon Re-ordering of Multi-Agent Execution
+Schedules*, IROS 2020 / T-RO 2024) makes each passing-order edge **reversible**:
+when a ready robot is stuck behind a delayed one, flip the order so it goes first
+— **provided the flip keeps the graph acyclic**. Acyclic ⇔ deadlock-free, so the
+safety check is a single reachability query; re-ordering recovers the throughput
+a fixed order throws away with the *same* hard guarantees.
+
+`build_adg(paths)` extracts the ADG (reusing the TPG milestone extraction);
+`simulate(cells, edges, start_delay, switchable=...)` runs a discrete delay-
+execution in two modes, so one run pair isolates what re-ordering buys. The
+`mapf_switchable_adg` gate pins three things:
+
+- **Win — re-ordering recovers a delay.** On a plus crossing, the robot that
+  crosses the centre first is given a short path and then delayed; the fixed ADG
+  makes the long-haul robot wait it out (**makespan 15**), the switchable ADG
+  flips the single crossing edge so the long robot goes first (**makespan 10**,
+  one switch) — `switch_helps_when_first_mover_delayed`.
+- **No gratuitous switching.** Delay the *second*-crossing robot instead and a
+  flip cannot help: the switchable run fires **zero** switches and matches the
+  fixed makespan exactly (`switch_is_noop_when_it_cannot_help`).
+- **Deadlock safety is real.** In a head-on single-file corridor *every*
+  passing-order reversal would close a cycle, so the acyclicity guard refuses
+  them all (zero switches) and the run still finishes on the fixed order —
+  `unsafe_reversals_refused`, never a deadlock.
+
+Both modes are collision-free by construction on every run
+(`collision_free_by_construction`), and no run ever deadlocks
+(`deadlock_free_always`). So the Switchable ADG's place in the execution stack is
+the **robustness** layer above the TPG: it keeps the discrete plan's collision-
+and deadlock-free guarantees under arbitrary delays while re-ordering away the
+stalls a fixed schedule would suffer — exactly where it is safe to.
+
 ## Bodied AMR execution: footprint and turning (`amr_footprint.py`)
 
 `mapf_exec` closes the *timing* gap for a disc robot; `amr_footprint.execute_amr`

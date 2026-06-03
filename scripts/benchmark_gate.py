@@ -1941,6 +1941,96 @@ def _run_online_lns() -> dict:
     }
 
 
+def _run_switchable_adg() -> dict:
+    # Switchable Action Dependency Graph (mrn_sim/switchable_adg.py), a
+    # reproduction of Berndt, Palmieri et al.'s "Receding-Horizon Re-ordering of
+    # Multi-Agent Execution Schedules" (IROS 2020 / T-RO 2024). A MAPF plan is
+    # collision-free only on schedule; the ADG (Hoenig et al.) records the passing
+    # ORDER at every shared cell as precedence edges and executes while merely
+    # respecting them -- collision-free whatever the timing, deadlock-free because
+    # the graph is acyclic. But a FIXED order stalls everyone behind a delayed
+    # first-mover. The Switchable ADG makes each passing-order edge reversible:
+    # flip it so a ready robot goes first, PROVIDED the flip keeps the graph
+    # acyclic (a single reachability query) -- recovering throughput with the same
+    # collision-free AND deadlock-free guarantees.
+    #
+    # Three things this gate pins. (1) WIN: on a plus crossing, the robot scheduled
+    # to cross the centre first is given a short path and then delayed; fixed order
+    # makes the long-haul robot wait it out (makespan 15), the switchable ADG flips
+    # the single crossing edge so the long robot goes first (makespan 10, one
+    # switch). (2) NO-OP: delay the *second*-crossing (long) robot instead and
+    # flipping cannot help -- the switchable run fires zero switches and matches
+    # fixed exactly, so re-ordering never fires gratuitously. (3) DEADLOCK SAFETY:
+    # in a head-on single-file corridor every passing-order reversal would close a
+    # cycle, so the acyclicity guard refuses them all (zero switches) and the run
+    # still finishes deadlock-free on the fixed order. Collision-free holds on every
+    # run. If the reorder logic regresses, the WIN makespan or switch count breaks;
+    # if the acyclicity guard regresses, the corridor deadlocks.
+    from mrn_coord.mapf import GridWorld, cbs
+    from mrn_sim.switchable_adg import (build_adg, schedule_is_collision_free,
+                                        simulate)
+
+    def _plus(n):
+        mid = n // 2
+        free = set()
+        for x in range(n):
+            free.add((x, mid))
+        for y in range(n):
+            free.add((mid, y))
+        blocked = {(x, y) for x in range(n) for y in range(n)} - free
+        return GridWorld(n, n, blocked=frozenset(blocked)), mid
+
+    def _corridor(L, ax):
+        free = set((x, 1) for x in range(L))
+        free.add((ax, 2))
+        blocked = {(x, y) for x in range(L) for y in range(3)} - free
+        return GridWorld(L, 3, blocked=frozenset(blocked))
+
+    def _pair(paths, delay):
+        cf_cells, cf_edges = build_adg(paths)
+        fix = simulate(cf_cells, cf_edges, delay, switchable=False, keep_history=True)
+        sw_cells, sw_edges = build_adg(paths)
+        sw = simulate(sw_cells, sw_edges, delay, switchable=True, keep_history=True)
+        return fix, sw
+
+    # plus crossing: r_block crosses the centre first (short path), r_main second.
+    pg, mid = _plus(9)
+    cross = cbs(pg, {"r_main": ((0, mid), (8, mid)),
+                     "r_block": ((mid, mid - 1), (mid, mid + 1))})
+    wf, ws = _pair(cross.paths, {"r_block": 8})       # delay the first-mover -> WIN
+    nf, ns = _pair(cross.paths, {"r_main": 8})        # delay the second-mover -> no-op
+
+    # head-on corridor with one passing bay: every reversal would deadlock.
+    cg = _corridor(7, 3)
+    head = cbs(cg, {"r0": ((0, 1), (6, 1)), "r1": ((6, 1), (0, 1))})
+    cf, cs = _pair(head.paths, {"r0": 8})
+
+    runs = [wf, ws, nf, ns, cf, cs]
+    cf_all = all(schedule_is_collision_free(r.history) for r in runs)
+    finished_all = all(r.finished for r in runs)
+    deadlock_any = any(r.deadlock for r in runs)
+    return {
+        "case": "mapf_switchable_adg",
+        "win_fix_makespan": wf.makespan,
+        "win_sw_makespan": ws.makespan,
+        "win_sw_switches": ws.switches,
+        "noop_fix_makespan": nf.makespan,
+        "noop_sw_makespan": ns.makespan,
+        "noop_sw_switches": ns.switches,
+        "cor_sw_switches": cs.switches,
+        "cor_fix_finished": int(cf.finished),
+        "cor_sw_finished": int(cs.finished),
+        "collision_free_by_construction": cf_all,
+        "deadlock_free_always": finished_all and not deadlock_any,
+        "switch_helps_when_first_mover_delayed": (
+            ws.makespan < wf.makespan and ws.switches > 0),
+        "switch_is_noop_when_it_cannot_help": (
+            ns.makespan == nf.makespan and ns.switches == 0),
+        "unsafe_reversals_refused": (
+            cs.switches == 0 and cs.finished and not cs.deadlock),
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -2025,6 +2115,7 @@ SUITE = [
     ("mapf_token_passing", _run_token_passing),
     ("mapf_tpts", _run_tpts),
     ("mapf_online_lns", _run_online_lns),
+    ("mapf_switchable_adg", _run_switchable_adg),
     # deterministic livelock escape recovers PIBT convergence (no randomness)
     ("pibt_escape_convergence", _run_pibt_convergence),
     # strong-PIBT spine makes LaCAM's documented scaling actually deliver
