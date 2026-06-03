@@ -878,6 +878,43 @@ SOC (1695 vs 1665 over 8 instances), so the claim can't be silently overstated,
 and a future change that *did* make adaptive win would trip the gate and force
 the claim to be re-pinned.
 
+#### MAPF-LNS2 — repairing to feasibility (`lns2.py`)
+
+`mapf_lns` is an *optimizer*: it starts from a **feasible** solution and polishes
+sum-of-costs, every repair collision-free by construction. **MAPF-LNS2** (Li,
+Chen, Harabor, Stuckey & Koenig, *"MAPF-LNS2: Fast Repairing for MAPF via Large
+Neighborhood Search"*, AAAI 2022) attacks the prior, harder question — *finding a
+feasible solution at all* on instances so dense that prioritized planning and CBS
+give up — by turning feasibility into an optimization. It starts from each
+agent's individual shortest path (so the start state is riddled with collisions)
+and **minimizes the number of colliding agent-pairs** with LNS until it reaches
+zero.
+
+Two pieces differ from the cost-LNS. The low level is **collision-minimizing**
+(`_plan_min_collision`): where the optimizer treats other paths as hard walls,
+here they are *soft* — a replanned agent may pass through an occupied cell but
+each overlap counts a collision, and a lexicographic `(collisions, length)`
+space-time A\* finds the fewest-collision path. That is what makes progress on a
+tangle with no collision-free completion *yet*. And a round destroys a
+neighborhood grown from a **colliding** connected component (padded with
+bystanders that may need to step aside), repairs those agents one by one against
+everyone else's current path, and keeps the result when it has no more collisions
+than before.
+
+It is anytime and **incomplete** — the returned solution is only guaranteed
+collision-free when `stats["feasible"]` (the count reached zero within budget),
+and that flag is decided by the *exact* global collision count, so the soft low
+level can be approximate without weakening the guarantee. The `mapf_lns2` gate
+pins three things: (1) **repair** — six 8×8/9-agent instances started from an
+aggregate 22 collisions are all driven to zero (`repair_feasible == 6`, every
+solution truly collision-free); (2) **scale** — three dense 6×6/14-agent
+instances on which a 2000-node CBS busts (`scale_cbs_busts == 3`) are still
+repaired to feasibility from 34 collisions; (3) **soundness** — the `feasible`
+flag agrees with an independent `detect_first_conflict` on every instance
+(`counts_match_cf`). **Honest scope:** the claim is "drives *these* to zero
+within budget", not completeness — a harder instance can stall above zero, which
+is exactly why the flag, not the mere return value, certifies feasibility.
+
 ### High level: prioritized planning (`prioritized.py`)
 
 `prioritized_planning(grid, agents, order)` is the fast, **incomplete**

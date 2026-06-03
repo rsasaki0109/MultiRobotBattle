@@ -79,6 +79,10 @@ The pieces compose bottom-up:
 - :mod:`lns` — MAPF-LNS: anytime large-neighborhood search that destroys and
   repairs a few agents at a time, polishing any feasible solution toward the
   optimum at scale.
+- :mod:`lns2` — MAPF-LNS2 (Li et al. 2022): the feasibility counterpart, which
+  minimizes the *number of collisions* with a collision-minimizing low level —
+  repairing a colliding shortest-path start to a feasible solution where CBS and
+  prioritized planning bust their budget.
 - :mod:`push_and_rotate` — Push and Swap / Push and Rotate (Luna & Bekris 2011;
   de Wilde et al. 2014): a constructive, primitive-based solver (push / swap /
   rotate) rather than a search — collision-free and on-goal by construction,
@@ -106,6 +110,7 @@ from .icts import icts
 from .mutex import classify_conflict, generate_mutexes, pc_constraints
 from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
+from .lns2 import mapf_lns2
 from .mstar import joint_astar, mstar
 from .satmdd import satmdd
 from .standley import independence_detection, od_astar
@@ -153,6 +158,7 @@ __all__ = [
     "independence_detection",
     "satmdd",
     "mapf_lns",
+    "mapf_lns2",
     "pbs",
     "pbs_paths",
     "prioritized_planning",

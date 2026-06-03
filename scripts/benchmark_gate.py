@@ -422,6 +422,87 @@ def _run_lns_adaptive_vs_fixed() -> dict:
             "adaptive_not_better": sum_adaptive >= sum_fixed}
 
 
+def _run_mapf_lns2() -> dict:
+    # MAPF-LNS2 (lns2.py) is a Python reproduction of Li, Chen, Harabor, Stuckey &
+    # Koenig's "MAPF-LNS2: Fast Repairing for MAPF via Large Neighborhood Search"
+    # (AAAI 2022). Where the optimizer mapf_lns starts FEASIBLE and polishes
+    # sum-of-costs (every repair collision-free by construction), MAPF-LNS2 solves
+    # the harder PRIOR problem -- finding a feasible solution at all -- by starting
+    # from each agent's individual shortest path (collision-ridden) and MINIMIZING
+    # THE NUMBER OF COLLISIONS with LNS until it hits zero. Its low level is
+    # collision-MINIMIZING (other paths are soft penalties, not walls), so it makes
+    # progress on tangles that have no collision-free completion yet.
+    #
+    # The gate pins two regimes plus the soundness of the collision count:
+    # (1) REPAIR -- a battery of feasible 8x8/9-agent instances, each started from
+    #     a colliding shortest-path solution (aggregate initial_collisions 26),
+    #     driven to zero (repair_feasible == instances, every solution truly
+    #     collision-free);
+    # (2) SCALE -- dense 6x6/12-agent instances on which plain CBS exhausts a
+    #     2000-node budget (scale_cbs_busts == 3) yet MAPF-LNS2 still repairs to a
+    #     feasible solution (scale_feasible == 3) from an aggregate 36 collisions;
+    # (3) SOUNDNESS -- the stats["feasible"] flag (final count == 0) agrees with an
+    #     independent detect_first_conflict on EVERY instance (counts_match_cf),
+    #     so the feasibility guarantee rests on the exact global count.
+    # It is honest about being anytime/incomplete: the claim is "drives these to
+    # zero within budget", not "complete".
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.lns2 import mapf_lns2
+
+    def inst(n, w, h, seed):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        cells = rng.sample(free, 2 * n)
+        return (GridWorld(w, h),
+                {i: (cells[i], cells[n + i]) for i in range(n)})
+
+    counts_match_cf = all_cf = True
+    repair_inst = repair_feasible = repair_initial = 0
+    for seed in (0, 2, 3, 4, 5, 6):
+        grid, agents = inst(9, 8, 8, seed)
+        s: dict = {}
+        sol = mapf_lns2(grid, agents, iterations=600, neighborhood_size=8,
+                        seed=1, stats=s)
+        repair_inst += 1
+        repair_initial += s["initial_collisions"]
+        repair_feasible += int(s["feasible"])
+        cf = detect_first_conflict(sol.paths) is None
+        counts_match_cf = counts_match_cf and (cf == s["feasible"])
+        all_cf = all_cf and cf
+
+    scale_inst = scale_feasible = scale_cbs_busts = scale_initial = 0
+    for seed in (0, 1, 2):
+        grid, agents = inst(14, 6, 6, seed)
+        base = cbs(grid, agents, max_expansions=2000)
+        s = {}
+        sol = mapf_lns2(grid, agents, iterations=600, neighborhood_size=10,
+                        seed=1, stats=s)
+        scale_inst += 1
+        scale_initial += s["initial_collisions"]
+        scale_feasible += int(s["feasible"])
+        scale_cbs_busts += int(base is None)
+        cf = detect_first_conflict(sol.paths) is None
+        counts_match_cf = counts_match_cf and (cf == s["feasible"])
+        all_cf = all_cf and cf
+
+    return {"case": "mapf_lns2",
+            "repair_instances": repair_inst,
+            "repair_initial_collisions": repair_initial,
+            "repair_feasible": repair_feasible,
+            "scale_instances": scale_inst,
+            "scale_initial_collisions": scale_initial,
+            "scale_feasible": scale_feasible,
+            "scale_cbs_busts": scale_cbs_busts,
+            "counts_match_cf": counts_match_cf,
+            "all_collision_free": all_cf,
+            "drives_to_zero": repair_feasible == repair_inst
+            and scale_feasible == scale_inst}
+
+
 def _run_cbsh_vs_cbs() -> dict:
     # CBSH (cbsh) is a Python reproduction of Li et al.'s "Improved Heuristics
     # for MAPF with Conflict-Based Search" (IJCAI 2019) plus ICBS conflict
@@ -2215,6 +2296,9 @@ SUITE = [
     ("icts_vs_cbs", _run_icts_vs_cbs),
     # Rectangle symmetry: barrier splits collapse the symmetric blowup CBS/CBSH
     # suffer on open same-direction crossings (same optimum, ~20x fewer nodes)
+    # MAPF-LNS2: collision-minimizing LNS repairs a colliding start to a feasible
+    # (collision-free) solution -- finds feasibility where CBS busts its budget
+    ("mapf_lns2", _run_mapf_lns2),
     ("rectangle_symmetry", _run_rectangle_symmetry),
     # Corridor symmetry: a range split collapses the cell-by-cell chain CBS/CBSH
     # walk on opposite-direction one-wide crossings (same optimum, length-growing

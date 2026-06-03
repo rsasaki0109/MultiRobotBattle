@@ -1,0 +1,13 @@
+{
+  "all_collision_free": true,
+  "case": "mapf_lns2",
+  "counts_match_cf": true,
+  "drives_to_zero": true,
+  "repair_feasible": 6,
+  "repair_initial_collisions": 22,
+  "repair_instances": 6,
+  "scale_cbs_busts": 3,
+  "scale_feasible": 3,
+  "scale_initial_collisions": 34,
+  "scale_instances": 3
+}
