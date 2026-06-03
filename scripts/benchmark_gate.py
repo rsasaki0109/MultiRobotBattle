@@ -931,6 +931,118 @@ def _run_mutex_cardinal_detection() -> dict:
             "pc_constraints_empty": pc_empty}
 
 
+def _run_macbs() -> dict:
+    # Meta-Agent CBS (macbs.py) is a Python reproduction of Sharon, Stern, Felner
+    # & Sturtevant's "Conflict-based search for optimal multi-agent pathfinding"
+    # (AAAI 2012; AIJ 2015, the meta-agent section). Plain CBS is fully DECOUPLED
+    # (plan each agent alone, branch one constraint per conflict) -- great when
+    # agents barely interact, but on a tight bottleneck two agents collide over
+    # and over and CBS re-splits the same conflict deep into the tree (an
+    # exponential blow-up). MA-CBS interpolates toward a COUPLED search with one
+    # knob, the conflict bound B: when two meta-agents have conflicted more than B
+    # times, instead of splitting it MERGES them into one meta-agent solved by a
+    # coupled (joint, time-expanded) low level. B = inf never merges (== standard
+    # CBS); B = 0 merges on first conflict (collapses toward a single joint search).
+    # EVERY B yields the same optimal sum-of-costs; what changes is WHERE the work
+    # happens -- a bottleneck that explodes the CBS tree is absorbed into one
+    # coupled solve. (Cousin of mstar's group-merging, but merging by conflict
+    # FREQUENCY rather than a single collision.)
+    #
+    # This gate pins:
+    # (1) OPTIMALITY for every B: on a random battery, macbs(B) matches the cbs
+    #     optimum and is collision-free for B in {inf, 2, 1, 0} (opt_all_B ==
+    #     instances), and B = inf performs zero merges with all-singleton groups
+    #     (binf_no_merge == instances) -- i.e. it IS standard CBS at B = inf.
+    # (2) MERGING CUTS THE SEARCH: on a 3-agent symmetry bottleneck the high-level
+    #     expansions collapse 71 (B=inf) -> 11 (B=1) -> 3 (B=0) for the SAME
+    #     optimum, the conflicting agents absorbed into one coupled meta-agent
+    #     (bottleneck_b0_max_group_size == 3); and a corridor swap collapses
+    #     16 -> 2.
+    import random
+
+    from mrn_coord.mapf import GridWorld, cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.macbs import macbs
+
+    BIG = 10 ** 9
+
+    def _inst(seed, n, w, h):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        cells = rng.sample(free, 2 * n)
+        return GridWorld(w, h), {i: (cells[i], cells[n + i]) for i in range(n)}
+
+    # (1) Optimality battery.
+    instances = opt_all_B = cf_bad = binf_no_merge = 0
+    for seed in range(40):
+        for n, w, h in ((3, 5, 5), (3, 4, 4), (4, 5, 4)):
+            grid, agents = _inst(seed, n, w, h)
+            base = cbs(grid, agents, max_expansions=40000)
+            if base is None:
+                continue
+            instances += 1
+            ok = True
+            for b in (BIG, 2, 1, 0):
+                sol = macbs(grid, agents, merge_bound=b, max_expansions=40000)
+                if sol is None or sol.cost != base.cost:
+                    ok = False
+                elif detect_first_conflict(sol.paths) is not None:
+                    cf_bad += 1
+            opt_all_B += int(ok)
+            si: dict = {}
+            macbs(grid, agents, merge_bound=BIG, max_expansions=40000, stats=si)
+            binf_no_merge += int(si["merges"] == 0 and si["max_group_size"] == 1)
+
+    # (2a) A 3-agent symmetry bottleneck (a frozen random instance).
+    bgrid = GridWorld(4, 4)
+    bagents = {0: ((2, 3), (1, 0)), 1: ((0, 3), (1, 1)), 2: ((3, 2), (0, 0))}
+    bcbs = cbs(bgrid, bagents)
+    binf: dict = {}
+    sol_inf = macbs(bgrid, bagents, merge_bound=BIG, stats=binf)
+    b1: dict = {}
+    macbs(bgrid, bagents, merge_bound=1, stats=b1)
+    b0: dict = {}
+    sol_b0 = macbs(bgrid, bagents, merge_bound=0, stats=b0)
+
+    # (2b) A corridor swap: one pocket, head-on.
+    cfree = set((x, 0) for x in range(5))
+    cfree.add((2, 1))
+    cblocked = {(x, y) for x in range(5) for y in range(2)} - cfree
+    cgrid = GridWorld(5, 2, blocked=frozenset(cblocked))
+    cagents = {0: ((0, 0), (4, 0)), 1: ((4, 0), (0, 0))}
+    cinf: dict = {}
+    macbs(cgrid, cagents, merge_bound=BIG, stats=cinf)
+    c0: dict = {}
+    sol_c0 = macbs(cgrid, cagents, merge_bound=0, stats=c0)
+
+    return {
+        "case": "mapf_macbs",
+        "instances": instances,
+        "opt_all_B": opt_all_B,
+        "cf_bad": cf_bad,
+        "binf_no_merge": binf_no_merge,
+        "bottleneck_cbs_cost": bcbs.cost,
+        "bottleneck_cost": sol_inf.cost,
+        "bottleneck_binf_expansions": binf["expansions"],
+        "bottleneck_b1_expansions": b1["expansions"],
+        "bottleneck_b0_expansions": b0["expansions"],
+        "bottleneck_b0_cost": sol_b0.cost,
+        "bottleneck_b0_max_group_size": b0["max_group_size"],
+        "corridor_cost": sol_c0.cost,
+        "corridor_binf_expansions": cinf["expansions"],
+        "corridor_b0_expansions": c0["expansions"],
+        "corridor_b0_max_group_size": c0["max_group_size"],
+        "optimal_for_every_B": (opt_all_B == instances and cf_bad == 0),
+        "cbs_reproduced_at_inf": (binf_no_merge == instances
+                                  and sol_inf.cost == bcbs.cost),
+        "merging_cuts_search": (b0["expansions"] < binf["expansions"]
+                                and sol_b0.cost == bcbs.cost
+                                and c0["expansions"] < cinf["expansions"]),
+        "coupling_collapse": (b0["max_group_size"] == 3
+                              and c0["max_group_size"] == 2),
+    }
+
+
 def _run_disjoint_vs_standard() -> dict:
     # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
     # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
@@ -2561,6 +2673,10 @@ SUITE = [
     # Disjoint splitting: positive/negative on one agent partitions the solution
     # space CBS's two-negative split overlaps (same optimum, fewer expansions)
     ("disjoint_vs_standard", _run_disjoint_vs_standard),
+    # Meta-Agent CBS: merge over-conflicting agents into a coupled meta-agent --
+    # same optimum as CBS for any conflict bound B, but a bottleneck that explodes
+    # the CBS tree collapses into one joint solve (B interpolates decoupled<->coupled)
+    ("mapf_macbs", _run_macbs),
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),

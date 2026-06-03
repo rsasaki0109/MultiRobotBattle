@@ -163,6 +163,57 @@ collision-free, and the aggregate high-level expansions cut **2325 → 1726**
 so the plain `cbs` path — and the libMultiRobotPlanning equivalence contract
 above — is byte-identical.
 
+#### Meta-Agent CBS (`macbs.py`)
+
+`macbs(grid, agents, merge_bound=B)` is a Python reproduction of the *meta-agent*
+extension in Sharon, Stern, Felner & Sturtevant,
+[*"Conflict-based search for optimal multi-agent pathfinding"*](https://doi.org/10.1016/j.artint.2014.11.006)
+(AAAI 2012; AIJ 2015). Plain `cbs` is **fully decoupled** — it plans each agent
+alone and branches one constraint per conflict. That is ideal when agents barely
+interact, but on a tight bottleneck two agents collide again and again and CBS
+pays by re-splitting the same conflict deep into the constraint tree (an
+exponential blow-up). A **fully coupled** joint search (`joint_astar`) never blows
+up on conflicts but its state space is the product of all agents'.
+
+MA-CBS interpolates between the two with one knob, the **conflict bound `B`**:
+
+- The high level is CBS, but its "agents" are **meta-agents** — groups of one or
+  more original agents. A constraint on a meta-agent forbids the cell/edge to
+  *every* member.
+- A global counter `CM[i][j]` tallies how often agents `i` and `j` have conflicted
+  across the whole search. When the two meta-agents owning a fresh conflict have
+  conflicted more than `B` times, instead of splitting they are **merged** into
+  one meta-agent.
+- A meta-agent is planned by a **coupled** low level — a time-expanded joint A\*
+  over the group's configuration space, internally collision-free, honouring every
+  external constraint, with the same stay-at-goal sum-of-costs as `cbs` (the
+  `settled`-bit cost model of `mstar`). Conflicts *between* meta-agents are still
+  resolved by CBS branching.
+
+`B = ∞` never merges, so MA-CBS **is** standard CBS; `B = 0` merges on the first
+conflict, collapsing toward a single coupled search. Every `B` returns the **same
+optimal sum-of-costs** — what changes is *where* the work happens. The
+`mapf_macbs` gate pins: **(1) optimality for every `B`** — on a random battery,
+`macbs(B)` matches the `cbs` optimum and is collision-free for `B ∈ {∞, 2, 1, 0}`
+(120/120), and `B = ∞` performs zero merges with all-singleton groups (it *is*
+CBS); **(2) merging cuts the search** — on a 3-agent symmetry bottleneck the
+high-level expansions collapse **71 → 11 → 3** as `B` drops ∞→1→0 for the same
+optimum, the conflicting agents absorbed into one coupled meta-agent (final group
+size 3); a corridor swap collapses **16 → 2**. This is the optimal-MAPF cousin of
+`mstar`'s subdimensional merging and Standley's independence detection — but it
+merges by conflict *frequency*, not a single collision.
+
+**Pitfalls worth recording.** Two bugs cost real time. (a) On a merge the combined
+constraints must **drop the ones that came from conflicts between the merged
+agents** (internal) — keeping them over-constrains the meta-agent and silently
+loses the optimum (corridor came out 13 instead of 11); each constraint is tagged
+with its opponent so a merge can tell internal from external. (b) The coupled low
+level must **not let an agent settle for free on arrival** at its goal — only by
+*staying* on a goal already reached; settling on arrival lets one agent freeze
+early and block another into a detour, overshooting the optimum by one. Both are
+covered by the `B ∈ {∞,2,1,0}` × random-battery optimality check (3750 solves, 0
+mismatches).
+
 ### High level: CBS with improved heuristics (`cbsh.py`)
 
 `cbsh(grid, agents, heuristic="wdg")` returns the **same optimum** as `cbs` but

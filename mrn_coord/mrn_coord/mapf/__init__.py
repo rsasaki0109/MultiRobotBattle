@@ -21,6 +21,12 @@ The pieces compose bottom-up:
 - :mod:`cbsh` — CBS with improved heuristics (Li et al. 2019): the same optimal
   search, but an admissible CG/DG/WDG heuristic plus cardinal-conflict
   prioritization cut the high-level node expansions by a large factor.
+- :mod:`macbs` — Meta-Agent CBS (Sharon et al. 2012/2015): the same optimal CBS,
+  but with a conflict bound ``B`` — two "agents" that conflict more than ``B``
+  times are *merged* into a meta-agent solved by a coupled (joint) low level.
+  ``B=∞`` is standard CBS; ``B=0`` collapses toward a single joint search;
+  every ``B`` returns the same optimum, absorbing a tree-exploding bottleneck
+  into one coupled solve.
 - :mod:`icts` — the Increasing Cost Tree Search (Sharon et al. 2013): an optimal
   paradigm orthogonal to CBS — branch on per-agent *costs*, not constraints, and
   test each cost vector by searching the cross-product of the agents' MDDs, with
@@ -107,6 +113,7 @@ The pieces compose bottom-up:
 from .bcp import bcp
 from .cbs import cbs
 from .cbsh import cbsh
+from .macbs import macbs
 from .ccbs import ccbs
 from .ecbs import ecbs
 from .eecbs import eecbs
@@ -148,6 +155,7 @@ __all__ = [
     "bcp",
     "cbs",
     "cbsh",
+    "macbs",
     "ccbs",
     "ecbs",
     "eecbs",

@@ -1,0 +1,22 @@
+{
+  "binf_no_merge": 120,
+  "bottleneck_b0_cost": 13,
+  "bottleneck_b0_expansions": 3,
+  "bottleneck_b0_max_group_size": 3,
+  "bottleneck_b1_expansions": 11,
+  "bottleneck_binf_expansions": 71,
+  "bottleneck_cbs_cost": 13,
+  "bottleneck_cost": 13,
+  "case": "mapf_macbs",
+  "cbs_reproduced_at_inf": true,
+  "cf_bad": 0,
+  "corridor_b0_expansions": 2,
+  "corridor_b0_max_group_size": 2,
+  "corridor_binf_expansions": 16,
+  "corridor_cost": 11,
+  "coupling_collapse": true,
+  "instances": 120,
+  "merging_cuts_search": true,
+  "opt_all_B": 120,
+  "optimal_for_every_B": true
+}
