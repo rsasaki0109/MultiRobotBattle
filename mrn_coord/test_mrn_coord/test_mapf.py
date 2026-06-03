@@ -423,6 +423,106 @@ class TestICTS(unittest.TestCase):
         self.assertIsNone(icts(grid, agents, max_nodes=500))
 
 
+_CROSSINGS = [
+    (6, 6, {0: ((2, 0), (4, 5)), 1: ((1, 1), (4, 2))}),
+    (7, 7, {0: ((1, 1), (5, 6)), 1: ((0, 2), (6, 3))}),
+    (7, 7, {0: ((2, 0), (6, 6)), 1: ((0, 2), (6, 4))}),
+    (7, 7, {0: ((2, 0), (4, 6)), 1: ((0, 2), (5, 6))}),
+]
+
+
+class TestRectangle(unittest.TestCase):
+    """Rectangle symmetry: barrier splits keep the optimum, collapse the blowup."""
+
+    def test_detects_known_rectangle(self):
+        # A phase-locked same-direction crossing has a rectangle; the detector
+        # returns a non-empty barrier for each agent.
+        from mrn_coord.mapf.mdd import build_mdd
+        from mrn_coord.mapf.rectangle import find_rectangle_barriers
+        m0 = build_mdd(GridWorld(5, 5), (1, 0), (3, 2), 4)
+        m1 = build_mdd(GridWorld(5, 5), (0, 1), (2, 3), 4)
+        found = find_rectangle_barriers(m0, m1, 2)
+        self.assertIsNotNone(found)
+        barrier0, barrier1, _ = found
+        self.assertTrue(barrier0 and barrier1)
+
+    def test_barrier_split_preserves_optimum(self):
+        # On each crossing, rectangle reasoning must return the SAME optimal cost
+        # as CBS (and plain CBSH), with a valid collision-free solution, while
+        # actually firing at least one barrier split.
+        for w, h, agents in _CROSSINGS:
+            grid = GridWorld(w, h)
+            base = cbs(grid, agents, max_expansions=20000)
+            s = {}
+            sol = cbsh(grid, agents, heuristic="wdg", rectangle=True, stats=s,
+                       max_expansions=20000)
+            self.assertIsNotNone(sol)
+            self.assertEqual(sol.cost, base.cost)
+            self.assertIsNone(detect_first_conflict(sol.paths))
+            self.assertGreater(s["rectangles"], 0)
+            for a, (start, goal) in agents.items():
+                self.assertEqual(sol.paths[a][0], start)
+                self.assertEqual(sol.paths[a][-1], goal)
+
+    def test_rectangle_collapses_expansions(self):
+        # Barrier splitting must expand strictly fewer high-level nodes than the
+        # same solver with rectangle reasoning off — that is the whole point.
+        tot_on = tot_off = 0
+        for w, h, agents in _CROSSINGS:
+            grid = GridWorld(w, h)
+            son = {}
+            cbsh(grid, agents, heuristic="wdg", rectangle=True, stats=son,
+                 max_expansions=20000)
+            soff = {}
+            cbsh(grid, agents, heuristic="wdg", rectangle=False, stats=soff,
+                 max_expansions=20000)
+            self.assertLessEqual(son["expansions"], soff["expansions"])
+            tot_on += son["expansions"]
+            tot_off += soff["expansions"]
+        self.assertLess(tot_on * 5, tot_off)
+
+    def test_off_matches_plain_cbsh(self):
+        # The feature is opt-in: rectangle=False must behave exactly like the
+        # default cbsh (same cost and same expansion count) on every instance.
+        for seed in range(8):
+            grid, agents = _rand_instance(6, 6, 6, seed, obstacle=0.12)
+            s_default = {}
+            d = cbsh(grid, agents, heuristic="wdg", stats=s_default,
+                     max_expansions=20000)
+            s_off = {}
+            o = cbsh(grid, agents, heuristic="wdg", rectangle=False, stats=s_off,
+                     max_expansions=20000)
+            if d is None:
+                self.assertIsNone(o)
+                continue
+            self.assertEqual(d.cost, o.cost)
+            self.assertEqual(s_default["expansions"], s_off["expansions"])
+
+    def test_optimum_preserved_on_random(self):
+        # Even where rectangles rarely fire, enabling the feature must never
+        # change the optimum or break the solution on random instances.
+        for seed in range(12):
+            grid, agents = _rand_instance(6, 6, 5, seed)
+            base = cbs(grid, agents, max_expansions=20000)
+            if base is None:
+                continue
+            sol = cbsh(grid, agents, heuristic="wdg", rectangle=True,
+                       max_expansions=20000)
+            self.assertIsNotNone(sol, f"seed={seed}")
+            self.assertEqual(sol.cost, base.cost, f"seed={seed}")
+            self.assertIsNone(detect_first_conflict(sol.paths))
+
+    def test_deterministic(self):
+        grid = GridWorld(7, 7)
+        agents = {0: ((2, 0), (4, 6)), 1: ((0, 2), (5, 6))}
+        runs = []
+        for _ in range(2):
+            s = {}
+            sol = cbsh(grid, agents, heuristic="wdg", rectangle=True, stats=s)
+            runs.append((sol.cost, s["expansions"], s["rectangles"]))
+        self.assertEqual(runs[0], runs[1])
+
+
 class TestPrioritized(unittest.TestCase):
     def test_parallel_succeeds(self):
         grid = GridWorld(5, 2)

@@ -154,6 +154,43 @@ cut overall, ~21× on the conflict-heavy grid). Honest scope: the heaviest term
 of the paper, *bypass*, is not implemented; this is the heuristic + conflict
 prioritization, which is where most of the cut comes from.
 
+#### Rectangle symmetry reasoning (`cbsh(rectangle=True)`, `rectangle.py`)
+
+The heuristic above prices conflicts but still resolves them one cell at a time —
+and against a **rectangle symmetry** that is fatal. When two agents cross the
+same open region *in the same direction*, every pair of their Manhattan-optimal
+paths collides somewhere inside a shared rectangle; resolving one colliding cell
+just slides the collision over, so CBS must grind through an exponential number
+of symmetric permutations. This is a Python reproduction of Li, Harabor,
+Stuckey, Felner & Koenig, *"Symmetry-Breaking Constraints for Grid-Based MAPF"*
+(AAAI 2019).
+
+A **barrier constraint** kills the whole symmetry in one split. For the
+rectangle with start corner `Rs` and goal corner `Rg`, agent `a₁`'s exit border
+`R₁·Rg` (the `y = Rg.y` edge) and `a₂`'s exit border `R₂·Rg` (the `x = Rg.x`
+edge), the two children block `a₁` from its *entire* exit border — every cell, at
+the Manhattan time it would arrive — or block `a₂` from its. The two barriers are
+**mutually disjunctive** (if both agents crossed their full borders on time they
+would collide), so the split keeps CBS optimal and complete while collapsing all
+the permutations at once. `rectangle.py` finds the rectangle from the MDD
+*singletons* that bracket a vertex conflict (so it fires on path segments, not
+just whole paths) and builds the two barriers; the barrier's cells, intersected
+with the agent's MDD, are added as ordinary `(cell, time)` vertex constraints.
+
+The feature is **opt-in** (`rectangle=False` by default, so the `cbsh_vs_cbs`
+gate is unaffected and `rectangle=False` is byte-identical to plain `cbsh`).
+Random instances almost never contain a phase-locked same-direction rectangle,
+so — as the paper evaluates on structured maps — the `rectangle_symmetry` gate
+uses four explicit crossing scenarios (agents whose starts share an anti-diagonal
+`x+y = const`, which phase-locks them, heading up-and-right into a shared open
+rectangle). With the WDG heuristic held fixed on both sides, turning barrier
+reasoning on cuts the aggregate high-level expansions **298 → 15** (~20×), and
+the cost still equals both plain-CBSH's and CBS's on every scenario. **Honest
+scope:** this is a *structure-dependent* win — barrier reasoning only fires on
+same-direction crossings and does nothing on instances without them (it is exactly
+byte-neutral there); cardinal classification is done by directly testing whether
+a barrier cuts the MDD rather than the paper's corner-arithmetic shortcut.
+
 ### High level: Enhanced CBS (`ecbs.py`)
 
 `ecbs(grid, agents, w=1.5)` is the **bounded-suboptimal** solver: it returns

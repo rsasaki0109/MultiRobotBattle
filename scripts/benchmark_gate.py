@@ -627,6 +627,64 @@ def _run_icts_vs_cbs() -> dict:
             "pruning_helps": js_pairwise < js_none}
 
 
+def _run_rectangle_symmetry() -> dict:
+    # Rectangle symmetry reasoning (cbsh's rectangle=True, rectangle.py) is a
+    # Python reproduction of Li, Harabor, Stuckey, Felner & Koenig's
+    # "Symmetry-Breaking Constraints for Grid-Based MAPF" (AAAI 2019). When two
+    # agents cross the same open rectangular region in the same direction, every
+    # pair of their optimal paths collides; plain CBS/CBSH must enumerate an
+    # exponential number of symmetric one-cell resolutions before escaping. A
+    # *barrier* constraint blocks a whole exit border at once and breaks the
+    # symmetry in a single split, provably preserving the optimum.
+    #
+    # Random instances almost never contain a (phase-locked, same-direction)
+    # rectangle symmetry, so -- as the paper does on structured maps -- this gate
+    # uses explicit crossing scenarios: agents whose starts share an
+    # anti-diagonal (x+y = const, which phase-locks them) heading up-and-right
+    # into a shared open rectangle. It compares cbsh with rectangle reasoning ON
+    # vs OFF (everything else, including the WDG heuristic, identical, so the
+    # delta is purely the barrier split), and pins: (1) optimality -- the
+    # rectangle cost equals both plain-cbsh's and CBS's on every scenario
+    # (opt_match); (2) the collapse -- barrier splits cut the aggregate
+    # high-level expansions 298 -> 15 (~20x). If a barrier ever dropped a
+    # solution, opt_match would fall; if rectangle detection regressed, the
+    # rectangle expansions would rise back toward the OFF baseline.
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.cbsh import cbsh
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    # (name, width, height, {agent: (start, goal)}). Each is a same-direction
+    # anti-diagonal crossing that forms a rectangle symmetry.
+    scenarios = [
+        ("cross6", 6, 6, {0: ((2, 0), (4, 5)), 1: ((1, 1), (4, 2))}),
+        ("cross7c", 7, 7, {0: ((1, 1), (5, 6)), 1: ((0, 2), (6, 3))}),
+        ("cross7b", 7, 7, {0: ((2, 0), (6, 6)), 1: ((0, 2), (6, 4))}),
+        ("cross7a", 7, 7, {0: ((2, 0), (4, 6)), 1: ((0, 2), (5, 6))}),
+    ]
+    scn = opt_match = rectangles = exp_off = exp_on = 0
+    all_valid = True
+    for _, w, h, agents in scenarios:
+        grid = GridWorld(w, h)
+        son: dict = {}
+        on = cbsh(grid, agents, heuristic="wdg", rectangle=True, stats=son,
+                  max_expansions=20000)
+        soff: dict = {}
+        off = cbsh(grid, agents, heuristic="wdg", rectangle=False, stats=soff,
+                   max_expansions=20000)
+        base = cbs(grid, agents, max_expansions=20000)
+        scn += 1
+        rectangles += son["rectangles"]
+        exp_on += son["expansions"]
+        exp_off += soff["expansions"]
+        opt_match += int(on.cost == off.cost == base.cost)
+        all_valid = all_valid and detect_first_conflict(on.paths) is None
+    return {"case": "rectangle_symmetry", "scenarios": scn,
+            "opt_match": opt_match, "rectangles": rectangles,
+            "exp_off": exp_off, "exp_on": exp_on,
+            "all_valid": all_valid, "reduces": exp_on < exp_off}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -736,6 +794,9 @@ SUITE = [
     # ICTS: cost-tree optimal search (same optimum as CBS); pairwise pruning
     # cuts the k-agent joint searches
     ("icts_vs_cbs", _run_icts_vs_cbs),
+    # Rectangle symmetry: barrier splits collapse the symmetric blowup CBS/CBSH
+    # suffer on open same-direction crossings (same optimum, ~20x fewer nodes)
+    ("rectangle_symmetry", _run_rectangle_symmetry),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

@@ -43,6 +43,7 @@ from .mdd import (
     min_vertex_cover,
     weighted_min_vertex_cover,
 )
+from .rectangle import find_rectangle_barriers
 from .solution import Solution, sum_of_costs
 from .space_time_astar import plan_path
 
@@ -52,6 +53,7 @@ def cbsh(
     agents: dict,
     *,
     heuristic: str | None = "wdg",
+    rectangle: bool = False,
     max_expansions: int = 100_000,
     stats: dict | None = None,
 ):
@@ -63,6 +65,13 @@ def cbsh(
     expansion budget is exhausted. ``stats["expansions"]`` is set to the number
     of high-level nodes expanded — directly comparable to
     :func:`mrn_coord.mapf.cbs.cbs`'s own ``expansions``.
+
+    With ``rectangle=True`` (off by default), the high level resolves a
+    **rectangle symmetry** — two agents crossing the same open region whose every
+    pair of optimal paths collides — with a single *barrier* split instead of the
+    standard one-cell vertex split, collapsing the symmetric permutations CBS
+    would otherwise enumerate (Li et al. 2019; :mod:`mrn_coord.mapf.rectangle`).
+    The optimum is unchanged; ``stats["rectangles"]`` counts the barrier splits.
     """
     agent_ids = list(agents)
     vertex: dict = {a: frozenset() for a in agents}
@@ -82,29 +91,38 @@ def cbsh(
     open_heap = [(root_g + root_h, root_g, next(counter), vertex, edge, paths)]
 
     expansions = 0
+    rectangles = 0
     while open_heap:
         _, g, _, vertex, edge, paths = heapq.heappop(open_heap)
         expansions += 1
         if expansions > max_expansions:
-            if stats is not None:
-                stats["expansions"] = expansions
-            return None
+            return _finish(stats, expansions, rectangles, None)
 
-        conflict = _choose_conflict(grid, agents, vertex, edge, paths)
-        if conflict is None:
-            if stats is not None:
-                stats["expansions"] = expansions
-            return Solution(paths=dict(paths), cost=g)
+        # A rectangle symmetry, when present and enabled, is split by barriers;
+        # otherwise fall back to the standard cardinal-first single-cell split.
+        rect = None
+        if rectangle:
+            rect = _choose_rectangle(grid, agents, agent_ids, vertex, edge, paths)
+        if rect is None:
+            conflict = _choose_conflict(grid, agents, vertex, edge, paths)
+            if conflict is None:
+                return _finish(stats, expansions, rectangles,
+                               Solution(paths=dict(paths), cost=g))
+            branches = [(agent, *_as_sets(constraint))
+                        for agent, constraint in _branches(conflict)]
+        else:
+            agent_a, barrier_a, agent_b, barrier_b = rect
+            rectangles += 1
+            branches = [(agent_a, barrier_a, frozenset()),
+                        (agent_b, barrier_b, frozenset())]
 
-        for agent, constraint in _branches(conflict):
+        for agent, add_vertex, add_edge in branches:
             child_vertex = dict(vertex)
             child_edge = dict(edge)
-            if constraint[0] == "v":
-                _, cell, time = constraint
-                child_vertex[agent] = child_vertex[agent] | {(cell, time)}
-            else:
-                _, frm, to, time = constraint
-                child_edge[agent] = child_edge[agent] | {(frm, to, time)}
+            if add_vertex:
+                child_vertex[agent] = child_vertex[agent] | add_vertex
+            if add_edge:
+                child_edge[agent] = child_edge[agent] | add_edge
 
             start, goal = agents[agent]
             new_path = plan_path(
@@ -123,9 +141,56 @@ def cbsh(
                  child_vertex, child_edge, child_paths),
             )
 
+    return _finish(stats, expansions, rectangles, None)
+
+
+def _finish(stats, expansions, rectangles, result):
     if stats is not None:
         stats["expansions"] = expansions
-    return None
+        stats["rectangles"] = rectangles
+    return result
+
+
+def _as_sets(constraint):
+    """A standard single constraint as ``(vertex_set, edge_set)`` to add."""
+    if constraint[0] == "v":
+        _, cell, time = constraint
+        return frozenset({(cell, time)}), frozenset()
+    _, frm, to, time = constraint
+    return frozenset(), frozenset({(frm, to, time)})
+
+
+def _choose_rectangle(grid, agents, agent_ids, vertex, edge, paths):
+    """The best rectangle symmetry among the node's vertex conflicts, as a
+    barrier split ``(agent_a, barrier_a, agent_b, barrier_b)``, or ``None``.
+
+    Only semi/cardinal rectangles (``klass >= 1``) are taken — a non-cardinal one
+    need not reduce the search. Ties break toward higher type, then more barrier
+    cells (a larger swept rectangle)."""
+    conflicts = _all_conflicts(paths, agent_ids)
+    if not conflicts:
+        return None
+    get_mdd = _mdd_provider(grid, agents, vertex, edge, paths)
+    best = None
+    best_key = None
+    for _, _, conflict in conflicts:
+        if not isinstance(conflict, VertexConflict):
+            continue
+        mdd_a = get_mdd(conflict.agent_a)
+        mdd_b = get_mdd(conflict.agent_b)
+        if mdd_a is None or mdd_b is None:
+            continue
+        found = find_rectangle_barriers(mdd_a, mdd_b, conflict.time)
+        if found is None:
+            continue
+        barrier_a, barrier_b, klass = found
+        if klass < 1:
+            continue
+        key = (klass, len(barrier_a) + len(barrier_b))
+        if best_key is None or key > best_key:
+            best_key = key
+            best = (conflict.agent_a, barrier_a, conflict.agent_b, barrier_b)
+    return best
 
 
 def _branches(conflict):

@@ -1,0 +1,10 @@
+{
+  "case": "rectangle_symmetry",
+  "scenarios": 4,
+  "opt_match": 4,
+  "rectangles": 4,
+  "exp_off": 298,
+  "exp_on": 15,
+  "all_valid": true,
+  "reduces": true
+}
