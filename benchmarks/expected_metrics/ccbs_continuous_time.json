@@ -1,0 +1,13 @@
+{
+  "case": "ccbs_continuous_time",
+  "instances": 20,
+  "solved": 20,
+  "collision_free": 20,
+  "baseline_collided": 12,
+  "cost_sum": 194.429,
+  "crossings": 4,
+  "crossings_clear": 4,
+  "crossings_base_collide": 4,
+  "crossings_cost_sum": 38.89,
+  "sound": true
+}

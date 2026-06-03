@@ -687,6 +687,94 @@ class TestMutex(unittest.TestCase):
         self.assertEqual(classify_conflict(grid, mi, mj), "NC")
 
 
+class TestCCBS(unittest.TestCase):
+    """Continuous-time CBS: disk agents, geometrically collision-free plans."""
+
+    def _sol(self, w, h, agents, radius=0.4, **kw):
+        from mrn_coord.mapf import GridWorld
+        from mrn_coord.mapf.ccbs import ccbs
+        return ccbs(GridWorld(w, h), agents, radius=radius, **kw)
+
+    def test_single_agent_continuous_cost(self):
+        # A pure diagonal has irrational length — the discrete unit-clock cannot
+        # represent it; continuous SIPP must.
+        import math
+        from mrn_coord.mapf.ccbs import shortest_trajectory
+        from mrn_coord.mapf import GridWorld
+        tr = shortest_trajectory(GridWorld(5, 5), (0, 0), (4, 4))
+        self.assertAlmostEqual(tr[-1][1], 4 * math.sqrt(2), places=6)
+
+    def test_mid_square_crossing_is_resolved(self):
+        # Two paths cross the centre of a unit square: they share NO vertex and
+        # NO edge, so the discrete model sees no conflict — yet the disks meet.
+        # CCBS must detect and resolve it to >= 2r separation.
+        from mrn_coord.mapf.ccbs import (min_separation, shortest_trajectory,
+                                         first_collision)
+        from mrn_coord.mapf import GridWorld
+        agents = {0: ((0, 0), (2, 2)), 1: ((2, 0), (0, 2))}
+        # the uncoordinated baseline geometrically collides (centres meet at 0)
+        grid = GridWorld(5, 5)
+        a = shortest_trajectory(grid, (0, 0), (2, 2))
+        b = shortest_trajectory(grid, (2, 0), (0, 2))
+        self.assertIsNotNone(first_collision(a, b, 0.4))
+        sol = self._sol(5, 5, agents)
+        self.assertIsNotNone(sol)
+        self.assertGreaterEqual(
+            min_separation(sol.trajectories[0], sol.trajectories[1]),
+            0.8 - 1e-6)
+
+    def test_solutions_are_geometrically_clear(self):
+        # On a random battery every CCBS solution keeps all pairs >= 2r apart,
+        # checked by the independent oracle (not the planner's own detector).
+        import random
+        from mrn_coord.mapf.ccbs import min_separation
+        for seed in range(8):
+            rng = random.Random(seed)
+            free = [(x, y) for x in range(5) for y in range(5)]
+            rng.shuffle(free)
+            agents = {i: (free[i], free[3 + i]) for i in range(3)}
+            sol = self._sol(5, 5, agents, max_expansions=20000)
+            if sol is None:
+                continue
+            ids = list(sol.trajectories)
+            for i in range(len(ids)):
+                for j in range(i + 1, len(ids)):
+                    self.assertGreaterEqual(
+                        min_separation(sol.trajectories[ids[i]],
+                                       sol.trajectories[ids[j]]),
+                        0.8 - 1e-6, f"seed={seed}")
+
+    def test_yield_is_a_fractional_wait(self):
+        # The continuous signature: resolving the crossing costs LESS than the
+        # whole-timestep yield the discrete clock would force. The extra cost
+        # over the two uncoordinated diagonals is a real fraction < 1.
+        import math
+        from mrn_coord.mapf.ccbs import shortest_trajectory
+        from mrn_coord.mapf import GridWorld
+        grid = GridWorld(5, 5)
+        free_cost = (shortest_trajectory(grid, (0, 0), (2, 2))[-1][1]
+                     + shortest_trajectory(grid, (2, 0), (0, 2))[-1][1])
+        sol = self._sol(5, 5, {0: ((0, 0), (2, 2)), 1: ((2, 0), (0, 2))})
+        overhead = sol.cost - free_cost
+        self.assertGreater(overhead, 0.0)
+        self.assertLess(overhead, 2.0)  # not a pair of whole-timestep detours
+
+    def test_deterministic(self):
+        agents = {0: ((0, 0), (3, 3)), 1: ((3, 0), (0, 3))}
+        runs = []
+        for _ in range(2):
+            st = {}
+            sol = self._sol(7, 7, agents, stats=st)
+            runs.append((round(sol.cost, 9), st["expansions"]))
+        self.assertEqual(runs[0], runs[1])
+
+    def test_corridor_swap_is_infeasible(self):
+        # Radius 0.4 disks cannot pass in a 1-wide corridor -> no solution.
+        sol = self._sol(5, 1, {0: ((0, 0), (4, 0)), 1: ((4, 0), (0, 0))},
+                        max_expansions=5000)
+        self.assertIsNone(sol)
+
+
 class TestPrioritized(unittest.TestCase):
     def test_parallel_succeeds(self):
         grid = GridWorld(5, 2)

@@ -31,6 +31,11 @@ The pieces compose bottom-up:
 - :mod:`mutex` — mutex propagation (Zhang et al. 2020): propagates mutexes over a
   pair of MDDs to detect cardinal conflicts and synthesize symmetry-breaking
   constraints automatically, generalizing rectangle reasoning.
+- :mod:`ccbs` — Continuous-time CBS (Andreychuk et al. 2019): drops the discrete
+  clock entirely — agents are disks on an 8-connected geometric roadmap, moves
+  take real (irrational) durations, conflicts are "centres within ``2r`` at any
+  real instant", and yields cost the minimal real wait. Catches mid-edge
+  geometric collisions the vertex/edge model is blind to.
 - :mod:`ecbs` — Enhanced CBS: bounded-suboptimal (``cost <= w * optimal``) via
   focal search at both levels; expands far fewer nodes than CBS for a little
   cost slack, so it scales to more agents.
@@ -54,6 +59,7 @@ The pieces compose bottom-up:
 
 from .cbs import cbs
 from .cbsh import cbsh
+from .ccbs import ccbs
 from .ecbs import ecbs
 from .eecbs import eecbs
 from .icts import icts
@@ -86,6 +92,7 @@ __all__ = [
     "detect_first_conflict",
     "cbs",
     "cbsh",
+    "ccbs",
     "ecbs",
     "eecbs",
     "icts",

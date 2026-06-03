@@ -838,6 +838,111 @@ def _run_disjoint_vs_standard() -> dict:
             "reduces": exp_disjoint < exp_standard}
 
 
+def _run_ccbs_continuous_time() -> dict:
+    # CCBS (ccbs.py) is a Python reproduction of Andreychuk, Yakovlev, Atzmon &
+    # Stern's "Multi-Agent Pathfinding with Continuous Time" (IJCAI 2019 / AIJ
+    # 2022). Classical CBS runs on a discrete clock: unit-timestep moves,
+    # same-cell / swap conflicts, whole-timestep yields. CCBS drops the clock --
+    # it plans over CONTINUOUS time on an 8-connected geometric roadmap (diagonal
+    # moves take sqrt(2), an irrational duration the discrete model cannot even
+    # represent), with each agent a DISK of radius r that collides whenever two
+    # centres come within 2r at any real instant -- including mid-edge, where two
+    # crossing paths share no vertex and no edge. Its low level is continuous-time
+    # SIPP (yield by the minimal REAL duration, not a whole tick); its high level
+    # branches on continuous unsafe intervals of starting the colliding action.
+    #
+    # This gate pins three things, against an independent geometric oracle
+    # (min_separation, which solves the quadratic distance on every linear
+    # segment -- not the planner's own conflict check):
+    # (1) SOUNDNESS / the whole point: every CCBS solution keeps all pairs >= 2r
+    #     apart (collision_free == solved). On a 3-agent battery (the regime where
+    #     CCBS's continuous search converges; it is known to be expensive), first
+    #     10 seeds of two configs, no cherry-picking (plain range(10)).
+    # (2) IT CATCHES WHAT DISCRETE MISSES: baseline_collided counts instances
+    #     whose uncoordinated 8-connected shortest paths geometrically collide
+    #     (centres < 2r) -- conflicts a vertex/edge model is blind to -- which
+    #     CCBS then resolves (all collision-free).
+    # (3) THE CONTINUOUS SIGNATURE: four explicit crossing scenarios (two agents'
+    #     paths cross mid-square, sharing no vertex/edge) are each resolved with a
+    #     fractional real wait to exactly the 2r clearance; pinned by their summed
+    #     cost. Every uncoordinated baseline there collides (centres meet at 0).
+    # If continuous collision detection or interval resolution regressed, a CCBS
+    # solution would dip below 2r and collision_free would fall (the gate trips).
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.ccbs import ccbs, min_separation, shortest_trajectory
+
+    radius = 0.4
+    thr = 2 * radius
+
+    def _instance(w, h, n, seed):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        rng.shuffle(free)
+        return GridWorld(w, h), {i: (free[i], free[n + i]) for i in range(n)}
+
+    def _all_clear(trajs):
+        ids = list(trajs)
+        return all(min_separation(trajs[ids[i]], trajs[ids[j]]) >= thr - 1e-6
+                   for i in range(len(ids)) for j in range(i + 1, len(ids)))
+
+    def _any_collide(trajs):
+        ids = list(trajs)
+        return any(min_separation(trajs[ids[i]], trajs[ids[j]]) < thr - 1e-6
+                   for i in range(len(ids)) for j in range(i + 1, len(ids)))
+
+    instances = solved = collision_free = baseline_collided = 0
+    cost_sum = 0.0
+    for w, h, n in ((5, 5, 3), (6, 6, 3)):
+        for seed in range(10):
+            grid, agents = _instance(w, h, n, seed)
+            sol = ccbs(grid, agents, radius=radius, max_expansions=20000)
+            instances += 1
+            if sol is None:
+                continue
+            solved += 1
+            cost_sum += sol.cost
+            if _all_clear(sol.trajectories):
+                collision_free += 1
+            base = {k: shortest_trajectory(grid, s, g)
+                    for k, (s, g) in agents.items()}
+            if _any_collide(base):
+                baseline_collided += 1
+
+    # Explicit mid-square crossings: no shared vertex/edge, yet the disks meet.
+    crossings = [
+        (5, 5, {0: ((0, 0), (2, 2)), 1: ((2, 0), (0, 2))}),
+        (7, 7, {0: ((0, 0), (3, 3)), 1: ((3, 0), (0, 3))}),
+        (5, 5, {0: ((0, 2), (4, 2)), 1: ((2, 0), (2, 4))}),
+        (6, 6, {0: ((0, 0), (3, 3)), 1: ((3, 0), (0, 3)), 2: ((0, 3), (3, 0))}),
+    ]
+    x_scn = x_clear = x_base_collide = 0
+    x_cost_sum = 0.0
+    for w, h, agents in crossings:
+        grid = GridWorld(w, h)
+        sol = ccbs(grid, agents, radius=radius, max_expansions=20000)
+        x_scn += 1
+        if sol is None:
+            continue
+        x_cost_sum += sol.cost
+        if _all_clear(sol.trajectories):
+            x_clear += 1
+        base = {k: shortest_trajectory(grid, s, g)
+                for k, (s, g) in agents.items()}
+        if _any_collide(base):
+            x_base_collide += 1
+
+    return {"case": "ccbs_continuous_time", "instances": instances,
+            "solved": solved, "collision_free": collision_free,
+            "baseline_collided": baseline_collided,
+            "cost_sum": round(cost_sum, 3),
+            "crossings": x_scn, "crossings_clear": x_clear,
+            "crossings_base_collide": x_base_collide,
+            "crossings_cost_sum": round(x_cost_sum, 3),
+            "sound": collision_free == solved}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -956,6 +1061,9 @@ SUITE = [
     # Disjoint splitting: positive/negative on one agent partitions the solution
     # space CBS's two-negative split overlaps (same optimum, fewer expansions)
     ("disjoint_vs_standard", _run_disjoint_vs_standard),
+    # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
+    # where the discrete vertex/edge model is blind (mid-edge crossings)
+    ("ccbs_continuous_time", _run_ccbs_continuous_time),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

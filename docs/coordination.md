@@ -375,6 +375,59 @@ cross-product search dominates and CBS wins; the gate's battery stays in the
 few-coupled-agents regime ICTS was designed for, and pins the pruning mechanism
 rather than claiming a blanket victory.
 
+### High level: CCBS — continuous-time CBS (`ccbs.py`)
+
+A Python reproduction of Andreychuk, Yakovlev, Atzmon & Stern's
+[*"Multi-Agent Pathfinding with Continuous Time"*](https://www.ijcai.org/proceedings/2019/0006.pdf)
+(IJCAI 2019; AIJ 2022). Every solver above shares one assumption: a **discrete
+clock**. Moves take exactly one timestep, conflicts are "same cell at the same
+integer tick" or a swap, and an agent that must yield waits a *whole* tick. CCBS
+throws the clock away.
+
+- The roadmap is the **8-connected grid**. A cardinal move takes time `1`, a
+  diagonal `√2` — an *irrational* duration the unit-clock model cannot even
+  represent. Speed is 1.
+- Each agent is a **disk of radius `r`**. Two agents collide whenever their
+  centres come within `2r` at *any real instant*. Two paths that cross the centre
+  of a unit square — agent A going `(0,0)→(1,1)`, agent B going `(1,0)→(0,1)` —
+  meet at `(0.5, 0.5)` while sharing **no vertex and no edge**. The discrete model
+  is blind to that collision; CCBS sees it.
+
+The three levels are CBS lifted to continuous time:
+
+- **Low level — continuous-time SIPP** (`_plan_continuous`). Each node carries
+  real-valued *safe intervals* (the complement of the times a constraint forbids
+  it); each move carries forbidden *start* intervals. An agent waits any real
+  duration for free, so a yield costs only the **minimal real time to clear**, not
+  a whole tick.
+- **Collision detection** (`first_collision`, `min_separation`) is exact: the
+  position pair is piecewise-linear, so the squared distance is a quadratic on
+  each shared segment — solved in closed form. `min_separation` is also the
+  independent oracle the gate verifies solutions against.
+- **High level — CCBS** (`ccbs`): best-first over the constraint tree by
+  continuous sum-of-costs. On the first collision it computes, for each agent, the
+  **unsafe interval of starting its colliding action** — an edge-start interval
+  for a move, a vertex interval for a wait — and branches one agent each way. The
+  first collision-free node popped is optimal in continuous time.
+
+The `ccbs_continuous_time` gate pins, against the independent geometric oracle,
+three things. **(1) Soundness — the whole point:** every CCBS solution keeps all
+pairs `≥ 2r` apart (`collision_free == solved == 20/20` on a 3-agent battery,
+plain `range(10)` of two configs). **(2) It catches what discrete misses:**
+12 of those 20 instances have uncoordinated 8-connected shortest paths that
+geometrically collide (centres `< 2r`) — conflicts a vertex/edge model cannot
+see — which CCBS resolves to clear. **(3) The continuous signature:** four
+explicit mid-square crossings are each resolved by a *fractional* real wait to
+exactly the `2r` clearance (every uncoordinated baseline there meets at distance
+0). **Honest scope:** the unsafe interval is derived from the two conflicting
+*actions* (the sound, local computation), located by **bisection on the exact
+collision predicate** rather than closed-form case-work — the same interval to a
+tight tolerance, rounded outward so the replan clears with real separation. Equal
+radii, 8-connected roadmap; the gate stays at 3 agents because CCBS's continuous
+search is **expensive** (the paper says so too — some 4-agent seeds exhaust the
+expansion budget), so this pins the *continuous-geometry mechanism*, not a
+scaling claim.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of
