@@ -1,0 +1,22 @@
+{
+  "all_certified": true,
+  "all_solved": true,
+  "all_valid": true,
+  "both_flow": 34,
+  "case": "satmdd_makespan",
+  "certified": 34,
+  "instances": 34,
+  "label_can_cost_more": true,
+  "labeled_ge_anonymous": true,
+  "makespan_optimal_le_cbs": true,
+  "ms_matches_stat": 34,
+  "pocket_anon_makespan": 0,
+  "pocket_certified": true,
+  "pocket_makespan": 5,
+  "pocket_unsat_below": 2,
+  "sat_ge_flow": 34,
+  "sat_gt_flow_strict": 19,
+  "sat_le_cbs_makespan": 34,
+  "solved": 34,
+  "valid": 34
+}

@@ -60,6 +60,11 @@ The pieces compose bottom-up:
   groups that actually collide. Both reach CBS's optimum; OD generates a small
   fraction of a joint A*'s successors, ID never searches independent agents
   together.
+- :mod:`satmdd` — MDD-SAT (Surynek et al. 2016): the declarative paradigm. Encode
+  "is there a collision-free plan of makespan ``mu``?" as CNF over per-agent MDD
+  cells and hand it to a SAT solver; sweep ``mu`` up from the trivial lower bound
+  so the first satisfiable makespan is optimal, self-certified by the UNSAT of
+  every smaller one. Optimizes *labeled* makespan (≥ :mod:`flow`'s anonymous).
 - :mod:`flow` — anonymous makespan-optimal MAPF (Yu & LaValle 2013): when targets
   are interchangeable, minimum-makespan routing reduces to integer MAX FLOW on a
   time-expanded network — polynomial, no search tree, with a self-certified
@@ -95,6 +100,7 @@ from .mutex import classify_conflict, generate_mutexes, pc_constraints
 from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
 from .mstar import joint_astar, mstar
+from .satmdd import satmdd
 from .standley import independence_detection, od_astar
 from .pbs import pbs, pbs_paths
 from .conflicts import (
@@ -137,6 +143,7 @@ __all__ = [
     "joint_astar",
     "od_astar",
     "independence_detection",
+    "satmdd",
     "mapf_lns",
     "pbs",
     "pbs_paths",

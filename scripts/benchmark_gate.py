@@ -1470,6 +1470,101 @@ def _run_standley_id_od() -> dict:
     }
 
 
+def _run_satmdd_makespan() -> dict:
+    # MDD-SAT (satmdd.py) reproduces Surynek et al.'s SAT encoding of MAPF (ECAI
+    # / IJCAI 2016) -- the DECLARATIVE paradigm: encode "is there a collision-free
+    # plan of makespan mu?" as CNF over per-agent MDD cells, solve with a SAT
+    # solver, sweep mu up from the trivial lower bound. The first satisfiable mu
+    # is the optimal LABELED makespan, SELF-CERTIFIED because every smaller mu was
+    # proved UNSAT (unsat_below counts them; certified holds for all). This gate
+    # pins: every plan is collision-free and on-goal (all_valid); the reported
+    # makespan equals the realised one (ms_matches_stat); it is <= the makespan of
+    # CBS's sum-of-costs-optimal plan (makespan_optimal_le_cbs -- a different
+    # objective); and it is always >= flow's ANONYMOUS makespan
+    # (labeled_ge_anonymous), strictly more when labels force a detour
+    # (label_can_cost_more). The constructed pocket-corridor swap makes that
+    # vivid: anonymous makespan 0, labeled makespan 5, certified by two UNSAT
+    # rounds below it.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.flow import anonymous_makespan
+    from mrn_coord.mapf.satmdd import satmdd
+    from mrn_coord.mapf.solution import makespan as mkspan
+
+    def _rand(w, h, n, seed, obs):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obs}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        return (GridWorld(w, h, frozenset(blocked)),
+                {i: (free[i], free[n + i]) for i in range(n)})
+
+    inst = solved = valid = certified = ms_match = le_cbs = 0
+    both_flow = ge_flow = gt_flow = 0
+    for (w, h, n, obs) in ((4, 4, 2, 0.0), (5, 5, 2, 0.1), (4, 4, 3, 0.0),
+                           (5, 5, 3, 0.08), (5, 5, 4, 0.0), (6, 6, 3, 0.05)):
+        for seed in range(6):
+            grid, ag = _rand(w, h, n, seed, obs)
+            base = cbs(grid, ag, max_expansions=20000)
+            if base is None:
+                continue
+            inst += 1
+            st: dict = {}
+            sol = satmdd(grid, ag, stats=st)
+            if sol is None:
+                continue
+            solved += 1
+            valid += int(detect_first_conflict(sol.paths) is None
+                         and all(sol.paths[a][0] == ag[a][0]
+                                 and sol.paths[a][-1] == ag[a][1] for a in ag))
+            certified += int(st["certified"])
+            ms_match += int(mkspan(sol.paths) == st["makespan"])
+            le_cbs += int(st["makespan"] <= mkspan(base.paths))
+            fr = anonymous_makespan(grid, [ag[a][0] for a in ag],
+                                    [ag[a][1] for a in ag])
+            if fr is not None:
+                both_flow += 1
+                ge_flow += int(st["makespan"] >= fr[1])
+                gt_flow += int(st["makespan"] > fr[1])
+
+    grid = GridWorld(4, 2, frozenset({(0, 1), (2, 1), (3, 1)}))
+    pag = {0: ((0, 0), (3, 0)), 1: ((3, 0), (0, 0))}
+    pst: dict = {}
+    psol = satmdd(grid, pag, stats=pst)
+    pfr = anonymous_makespan(grid, [(0, 0), (3, 0)], [(3, 0), (0, 0)])
+    pocket_valid = (psol is not None
+                    and detect_first_conflict(psol.paths) is None)
+
+    return {
+        "case": "satmdd_makespan",
+        "instances": inst,
+        "solved": solved,
+        "valid": valid,
+        "certified": certified,
+        "ms_matches_stat": ms_match,
+        "sat_le_cbs_makespan": le_cbs,
+        "both_flow": both_flow,
+        "sat_ge_flow": ge_flow,
+        "sat_gt_flow_strict": gt_flow,
+        "pocket_makespan": pst["makespan"],
+        "pocket_unsat_below": pst["unsat_below"],
+        "pocket_certified": pst["certified"],
+        "pocket_anon_makespan": pfr[1],
+        "all_solved": solved == inst,
+        "all_valid": valid == inst,
+        "all_certified": certified == inst,
+        "makespan_optimal_le_cbs": le_cbs == inst,
+        "labeled_ge_anonymous": ge_flow == both_flow,
+        "label_can_cost_more": (gt_flow > 0 and pocket_valid
+                                and pst["makespan"] > pfr[1]),
+    }
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -1603,6 +1698,9 @@ SUITE = [
     # Standley OD + ID: operator decomposition cuts joint branching b**n -> b;
     # independence detection solves only the colliding groups (same optimum as CBS)
     ("standley_id_od", _run_standley_id_od),
+    # MDD-SAT: declarative makespan-optimal MAPF -- encode to CNF, sweep makespan,
+    # self-certified by UNSAT below the optimum (labeled makespan >= flow's anon)
+    ("satmdd_makespan", _run_satmdd_makespan),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

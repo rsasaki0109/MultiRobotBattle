@@ -637,6 +637,44 @@ group count tracks the team (`num_groups == n − 1`,
 unconditional — it holds even when every agent couples — which is why it pairs
 naturally with ID's group decomposition as the classic optimal-MAPF workhorse.
 
+### High level: MDD-SAT — makespan-optimal by satisfiability (`satmdd.py`)
+
+`satmdd` reproduces Pavel Surynek's SAT encoding of MAPF (Surynek et al., ECAI /
+IJCAI 2016) — the **declarative** paradigm, the one solver here that does no
+search over configurations at all. It writes the question *"is there a
+collision-free plan of makespan `mu`?"* as a Boolean formula and reads a plan off
+any satisfying assignment.
+
+The formula is kept small by the **time-expanded MDD**: for a target `mu` a
+variable `x[a, v, t]` exists only when agent `a` can both reach cell `v` from its
+start in `t` steps *and* still reach its goal in the remaining `mu − t`. The
+clauses say each agent is on exactly one MDD cell per step, starts at its start
+and ends at its goal, moves to an adjacent cell or waits, and never shares a cell
+(vertex) or swaps across an edge with another. A small stock DPLL — unit
+propagation, most-constrained-variable branching, chronological backtracking, no
+external dependency — stands in for the off-the-shelf SAT solver; the
+reproduction is the *encoding*.
+
+Optimality is **self-certified** by sweeping `mu` upward from the trivial lower
+bound (the largest single-agent shortest path) and stopping at the first
+satisfiable value: every smaller `mu` was proved UNSAT, so the optimum comes with
+its own proof (`stats["unsat_below"]` counts the UNSAT rounds, `certified` holds
+when the optimum equals the lower bound or one below it was refuted).
+
+The `satmdd_makespan` gate pins the encoding's correctness and its place among
+the objectives. **Sound and certified:** every plan is collision-free and on-goal
+(`all_valid`), the reported makespan is the realised one (`ms_matches_stat`), and
+optimality is certified on every instance (`all_certified`). **A different
+optimum:** MDD-SAT minimizes *labeled makespan*, so its value is never worse than
+the makespan of CBS's sum-of-costs-optimal plan (`makespan_optimal_le_cbs`) and
+never below `flow`'s *anonymous* makespan (`labeled_ge_anonymous`, 34/34),
+strictly above it when labels force a detour (`sat_gt_flow_strict` 19/34). The
+constructed pocket-corridor swap makes the gap concrete: anonymous makespan `0`
+(the two starts already cover both goals) versus labeled makespan `5`, certified
+by two UNSAT rounds below it (`pocket_unsat_below`). This is the SAT paradigm
+sitting cleanly between `flow` (anonymous, polynomial) and the labeled optimal
+searches.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of

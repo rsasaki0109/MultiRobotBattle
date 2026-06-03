@@ -1244,5 +1244,69 @@ class TestStandley(unittest.TestCase):
         self.assertEqual(runs[0], runs[1])
 
 
+class TestSatMdd(unittest.TestCase):
+    """MDD-SAT: declarative makespan-optimal MAPF, self-certified by UNSAT below
+    the optimum."""
+
+    def test_makespan_optimal_and_certified(self):
+        from mrn_coord.mapf.satmdd import satmdd
+        for w, h, n, obs in ((4, 4, 2, 0.0), (4, 4, 3, 0.1), (5, 5, 3, 0.12)):
+            for seed in range(3):
+                grid, agents = _rand_instance(w, h, n, seed, obstacle=obs)
+                base = cbs(grid, agents, max_expansions=20000)
+                if base is None:
+                    continue
+                st = {}
+                sol = satmdd(grid, agents, stats=st)
+                self.assertIsNotNone(sol, f"{w}x{h} seed={seed}")
+                self.assertIsNone(detect_first_conflict(sol.paths))
+                for a, (start, goal) in agents.items():
+                    self.assertEqual(sol.paths[a][0], start)
+                    self.assertEqual(sol.paths[a][-1], goal)
+                self.assertTrue(st["certified"])
+                self.assertEqual(makespan(sol.paths), st["makespan"])
+                # Makespan-optimal: never worse than the makespan of CBS's
+                # (sum-of-costs-optimal) plan.
+                self.assertLessEqual(st["makespan"], makespan(base.paths))
+
+    def test_dpll_certifies_below_optimum(self):
+        # A 1-wide corridor with a single pocket: the two agents must swap via
+        # the pocket. MDD-SAT proves the shorter makespans UNSAT before it finds
+        # the optimum, so unsat_below > 0 and the optimum is certified.
+        from mrn_coord.mapf.satmdd import satmdd
+        grid = GridWorld(4, 2, frozenset({(0, 1), (2, 1), (3, 1)}))
+        agents = {0: ((0, 0), (3, 0)), 1: ((3, 0), (0, 0))}
+        st = {}
+        sol = satmdd(grid, agents, stats=st)
+        self.assertIsNotNone(sol)
+        self.assertIsNone(detect_first_conflict(sol.paths))
+        self.assertGreater(st["unsat_below"], 0)
+        self.assertTrue(st["certified"])
+        self.assertEqual(makespan(sol.paths), st["makespan"])
+
+    def test_labeled_at_least_anonymous_makespan(self):
+        # Labeled makespan can only cost more than the anonymous (flow) optimum.
+        from mrn_coord.mapf.flow import anonymous_makespan
+        from mrn_coord.mapf.satmdd import satmdd
+        for seed in range(5):
+            grid, agents = _rand_instance(4, 4, 3, seed, obstacle=0.1)
+            st = {}
+            sol = satmdd(grid, agents, stats=st)
+            if sol is None:
+                continue
+            fr = anonymous_makespan(grid, [agents[a][0] for a in agents],
+                                    [agents[a][1] for a in agents])
+            if fr is None:
+                continue
+            self.assertGreaterEqual(st["makespan"], fr[1], f"seed={seed}")
+
+    def test_unsolvable_corridor_returns_none(self):
+        # A 1-wide corridor with no pocket: the labeled swap is impossible.
+        from mrn_coord.mapf.satmdd import satmdd
+        grid = GridWorld(3, 1)
+        agents = {0: ((0, 0), (2, 0)), 1: ((2, 0), (0, 0))}
+        self.assertIsNone(satmdd(grid, agents))
+
+
 if __name__ == "__main__":
     unittest.main()
