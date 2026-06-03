@@ -21,6 +21,12 @@ The pieces compose bottom-up:
   paradigm orthogonal to CBS — branch on per-agent *costs*, not constraints, and
   test each cost vector by searching the cross-product of the agents' MDDs, with
   pairwise-dependency pruning to skip hopeless nodes.
+- :mod:`rectangle` — rectangle symmetry reasoning (Li et al. 2019): a barrier
+  constraint that breaks the symmetric blowup of two agents crossing an open
+  region, wired into ``cbsh(rectangle=True)``.
+- :mod:`mutex` — mutex propagation (Zhang et al. 2020): propagates mutexes over a
+  pair of MDDs to detect cardinal conflicts and synthesize symmetry-breaking
+  constraints automatically, generalizing rectangle reasoning.
 - :mod:`ecbs` — Enhanced CBS: bounded-suboptimal (``cost <= w * optimal``) via
   focal search at both levels; expands far fewer nodes than CBS for a little
   cost slack, so it scales to more agents.
@@ -47,6 +53,7 @@ from .cbsh import cbsh
 from .ecbs import ecbs
 from .eecbs import eecbs
 from .icts import icts
+from .mutex import classify_conflict, generate_mutexes, pc_constraints
 from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
 from .pbs import pbs, pbs_paths
@@ -78,6 +85,9 @@ __all__ = [
     "ecbs",
     "eecbs",
     "icts",
+    "classify_conflict",
+    "generate_mutexes",
+    "pc_constraints",
     "lacam",
     "lacam_ltm",
     "mapf_lns",

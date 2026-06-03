@@ -191,6 +191,40 @@ same-direction crossings and does nothing on instances without them (it is exact
 byte-neutral there); cardinal classification is done by directly testing whether
 a barrier cuts the MDD rather than the paper's corner-arithmetic shortcut.
 
+#### Mutex propagation (`mutex.py`)
+
+Rectangle reasoning recognises *one* geometric pattern. **Mutex propagation**
+(Zhang, Li, Surynek, Koenig & Kumar, ICAPS 2020) instead *derives* which pairs of
+MDD nodes can never be reached conflict-free, and from that classifies cardinal
+conflicts and synthesizes symmetry-breaking constraints automatically — a strict
+generalization. The unit is a **mutex** between two MDD nodes (or edges) at the
+same level: *initial* mutexes come from vertex and swap conflicts; *propagated*
+mutexes follow the AC-3-style rule that two nodes are mutex iff their every pair
+of incoming edges is mutex. The central guarantee (Theorem 1) is that two nodes
+are mutex **iff** no conflict-free sub-paths reach them; so a mutex between the
+two agents' *sinks* means every pair of optimal paths collides — a cardinal
+conflict — and the cells mutex with the whole opposite MDD become the disjunctive
+constraints (which, on a rectangle conflict, reduce to exactly the barrier above).
+
+`mutex.py` exposes `generate_mutexes`, `classify_conflict` (`"PC"`/`"AC"`/`"NC"` —
+pre-goal cardinal, after-goal cardinal, or not-cardinal) and `pc_constraints`.
+**Honest scope:** this reproduces the verified *detector*, not a brancher. The
+paper's full constraint-generation loop grows the MDD levels to the cardinal
+boundary and adds *cost* constraints for after-goal cardinals, regenerating every
+mutex at each grown level; in pure Python that is prohibitively slow on
+corridor-style conflicts (the paper itself calls mutex propagation
+"computationally expensive"), so a gated solver on top of it would not be
+practical — and a naïve pre-goal-only split is *incomplete* (it loses optima to
+higher-cost paths, which is exactly what the level-grow and cost constraints fix).
+What is fast, correct and verifiable — and what `mutex_cardinal_detection` pins —
+is the detector: on 2500 MDD pairs, `classify_conflict` returns `NC` **iff**
+`mdd.are_dependent` says independent (the paper's **Theorem 2** — `disagreements
+== 0`), and it flags **9 hidden cardinals**: pairs that are cardinally dependent
+but have *no* level where both agents are pinned to the same cell, so the
+width-based test of `cbsh.py` misses them while mutex catches them. That hidden
+count is the whole point — automated symmetry detection beyond the hand-coded
+patterns.
+
 ### High level: Enhanced CBS (`ecbs.py`)
 
 `ecbs(grid, agents, w=1.5)` is the **bounded-suboptimal** solver: it returns

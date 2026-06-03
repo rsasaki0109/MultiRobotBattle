@@ -523,6 +523,66 @@ class TestRectangle(unittest.TestCase):
         self.assertEqual(runs[0], runs[1])
 
 
+class TestMutex(unittest.TestCase):
+    """Mutex propagation: the detector agrees with the direct dependency test."""
+
+    def test_theorem2_matches_are_dependent(self):
+        # The paper's Theorem 2: classify_conflict returns NC iff a conflict-free
+        # pair of optimal paths exists — exactly what are_dependent computes. They
+        # must never disagree.
+        from mrn_coord.mapf.mdd import are_dependent, build_mdd
+        from mrn_coord.mapf.mutex import classify_conflict
+        import random
+        disagree = checked = 0
+        for seed in range(300):
+            rng = random.Random(seed)
+            w, h = rng.choice([(5, 5), (6, 5), (5, 6)])
+            free = [(x, y) for x in range(w) for y in range(h)]
+            rng.shuffle(free)
+            sa, ga, sb, gb = free[:4]
+            grid = GridWorld(w, h)
+            pa, pb = plan_path(grid, sa, ga), plan_path(grid, sb, gb)
+            if pa is None or pb is None:
+                continue
+            ca, cb = len(pa) - 1, len(pb) - 1
+            if ca > cb:
+                sa, ga, sb, gb, ca, cb = sb, gb, sa, ga, cb, ca
+            mi = build_mdd(grid, sa, ga, ca)
+            mj = build_mdd(grid, sb, gb, cb)
+            if mi is None or mj is None:
+                continue
+            checked += 1
+            cls = classify_conflict(grid, mi, mj)
+            dep = are_dependent(grid, mi, mj, sa, sb)
+            if (cls == "NC") != (not dep):
+                disagree += 1
+        self.assertGreater(checked, 0)
+        self.assertEqual(disagree, 0)
+
+    def test_detects_a_known_cardinal(self):
+        # Two agents whose shortest paths must cross at (3,3): a pre-goal cardinal
+        # conflict. classify must say PC, and the constraint sets must be
+        # non-empty for both agents.
+        from mrn_coord.mapf.mdd import build_mdd
+        from mrn_coord.mapf.mutex import classify_conflict, pc_constraints
+        grid = GridWorld(5, 5)
+        mi = build_mdd(grid, (2, 3), (4, 3), 2)
+        mj = build_mdd(grid, (3, 2), (3, 4), 2)
+        self.assertEqual(classify_conflict(grid, mi, mj), "PC")
+        ci, cj = pc_constraints(grid, mi, mj)
+        self.assertTrue(ci and cj)
+
+    def test_independent_agents_are_nc(self):
+        # Two agents in far corners moving apart never conflict — NC, no
+        # constraints needed.
+        from mrn_coord.mapf.mdd import build_mdd
+        from mrn_coord.mapf.mutex import classify_conflict
+        grid = GridWorld(6, 6)
+        mi = build_mdd(grid, (0, 0), (0, 2), 2)
+        mj = build_mdd(grid, (5, 5), (5, 3), 2)
+        self.assertEqual(classify_conflict(grid, mi, mj), "NC")
+
+
 class TestPrioritized(unittest.TestCase):
     def test_parallel_succeeds(self):
         grid = GridWorld(5, 2)

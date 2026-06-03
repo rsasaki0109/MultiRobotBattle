@@ -1,0 +1,11 @@
+{
+  "case": "mutex_cardinal_detection",
+  "pairs": 2500,
+  "disagreements": 0,
+  "theorem2_holds": true,
+  "pc": 19,
+  "ac": 8,
+  "nc": 2473,
+  "hidden_cardinals": 9,
+  "pc_constraints_empty": 0
+}

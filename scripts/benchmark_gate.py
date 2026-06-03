@@ -685,6 +685,89 @@ def _run_rectangle_symmetry() -> dict:
             "all_valid": all_valid, "reduces": exp_on < exp_off}
 
 
+def _run_mutex_cardinal_detection() -> dict:
+    # Mutex propagation (mutex.py) is a Python reproduction of Zhang, Li, Surynek,
+    # Koenig & Kumar's "Multi-Agent Path Finding with Mutex Propagation" (ICAPS
+    # 2020). It propagates mutexes over a pair of MDDs to decide, in polynomial
+    # time, whether two agents can be reached conflict-free -- and from that
+    # classifies cardinal conflicts (pre-goal PC / after-goal AC / not-cardinal
+    # NC) and synthesizes symmetry-breaking constraints automatically, generalizing
+    # the hand-designed rectangle reasoning of rectangle.py.
+    #
+    # This gate pins the verified DETECTOR (not a brancher -- the paper's full
+    # constraint-generation loop is impractically slow in pure Python; see
+    # mutex.py). On a fixed battery of 2-agent MDD pairs it locks:
+    # (1) THE CORRECTNESS GUARANTEE (the paper's Theorem 2): classify_conflict
+    #     returns NC iff a conflict-free pair of optimal paths exists -- exactly
+    #     what mdd.are_dependent computes directly -- so disagreements == 0;
+    # (2) the classification distribution (PC / AC / NC counts);
+    # (3) GENERALITY: hidden_cardinals counts cardinal pairs that the width-based
+    #     test (cbsh's: a level where both MDDs are pinned to the same cell)
+    #     MISSES but mutex catches -- the rectangle/corridor-type dependencies
+    #     mutex was built for;
+    # (4) every PC pair yields non-empty disjunctive constraint sets.
+    # If propagation regressed, disagreements would go non-zero (the gate trips).
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.mdd import are_dependent, build_mdd
+    from mrn_coord.mapf.mutex import classify_conflict, pc_constraints
+    from mrn_coord.mapf.space_time_astar import plan_path
+
+    def _width_cardinal(mi, mj) -> bool:
+        # cbsh-style cardinal: a level where both agents are pinned (width 1) to
+        # the same cell -- the only cardinals the width test alone can see.
+        for t in range(max(mi.cost, mj.cost) + 1):
+            if (mi.width(t) == 1 and mj.width(t) == 1
+                    and mi.cells(t) == mj.cells(t)):
+                return True
+        return False
+
+    pairs = disagreements = pc = ac = nc = hidden = pc_empty = 0
+    # First 2500 seeds; each draws a 2-agent instance on a small open grid (no
+    # cherry-picking -- plain `range(2500)`).
+    for seed in range(2500):
+        rng = random.Random(seed)
+        w, h = rng.choice([(5, 5), (6, 5), (5, 6), (6, 6)])
+        free = [(x, y) for x in range(w) for y in range(h)]
+        rng.shuffle(free)
+        sa, ga, sb, gb = free[:4]
+        grid = GridWorld(w, h)
+        pa = plan_path(grid, sa, ga)
+        pb = plan_path(grid, sb, gb)
+        if pa is None or pb is None:
+            continue
+        ca, cb = len(pa) - 1, len(pb) - 1
+        if ca > cb:  # classify_conflict requires cost_i <= cost_j
+            sa, ga, sb, gb, ca, cb = sb, gb, sa, ga, cb, ca
+        mi = build_mdd(grid, sa, ga, ca)
+        mj = build_mdd(grid, sb, gb, cb)
+        if mi is None or mj is None:
+            continue
+        cls = classify_conflict(grid, mi, mj)
+        dep = are_dependent(grid, mi, mj, sa, sb)
+        pairs += 1
+        if (cls == "NC") != (not dep):
+            disagreements += 1
+        if cls == "PC":
+            pc += 1
+        elif cls == "AC":
+            ac += 1
+        else:
+            nc += 1
+        if cls in ("PC", "AC"):
+            if not _width_cardinal(mi, mj):
+                hidden += 1
+            if cls == "PC":
+                ci, cj = pc_constraints(grid, mi, mj)
+                if not (ci and cj):
+                    pc_empty += 1
+    return {"case": "mutex_cardinal_detection", "pairs": pairs,
+            "disagreements": disagreements, "theorem2_holds": disagreements == 0,
+            "pc": pc, "ac": ac, "nc": nc, "hidden_cardinals": hidden,
+            "pc_constraints_empty": pc_empty}
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -797,6 +880,9 @@ SUITE = [
     # Rectangle symmetry: barrier splits collapse the symmetric blowup CBS/CBSH
     # suffer on open same-direction crossings (same optimum, ~20x fewer nodes)
     ("rectangle_symmetry", _run_rectangle_symmetry),
+    # Mutex propagation: a verified cardinal-conflict detector (Theorem 2 holds;
+    # catches cardinals the width test misses)
+    ("mutex_cardinal_detection", _run_mutex_cardinal_detection),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),
