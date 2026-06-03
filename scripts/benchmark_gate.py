@@ -1200,6 +1200,133 @@ def _run_push_and_rotate() -> dict:
             "single_blank_beats_search": unit_cbs_busts == unit_instances}
 
 
+def _run_mstar_subdimensional() -> dict:
+    # M* (mstar) is a Python reproduction of Wagner & Choset's "M*" /
+    # "Subdimensional expansion for multirobot path planning" (IROS 2011 / AIJ
+    # 2015). It is an OPTIMAL (sum-of-costs) paradigm distinct from CBS: it plans
+    # in the JOINT configuration space but keeps the search dimension low by
+    # pinning each agent to its individual optimal policy until a collision
+    # couples it, at which point only the colliding agents branch over their full
+    # moves (the collision set). It returns the SAME optimal sum-of-costs as plain
+    # cbs (opt_match), checked here both on small random maps (breadth) and on a
+    # constructed family (mechanism).
+    #
+    # The signature property this gate pins: the search couples ONLY the agents
+    # that actually interact. The constructed family is one isolated head-on swap
+    # (agents 0,1) plus `nby` bystanders, each alone in its own walled lane with a
+    # unique straight path -- no bystander can ever collide. So M*'s collision set
+    # must stay {0,1} (peak_collision_set == 2, well below the team size) and its
+    # expansion count must NOT grow with the bystanders (mstar_expansions is the
+    # same 33 for every instance). A fully coupled joint A* (joint_astar) -- the
+    # straw man with no decoupling -- expands strictly more, and MORE as the team
+    # grows (joint_search_grows_with_team), because it re-explores the interleaved
+    # forced moves M* collapses. If decoupling ever regresses, peak_collision_set
+    # rises toward the team size and mstar_expansions stops being constant.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.mstar import joint_astar, mstar
+    from mrn_coord.mapf.solution import sum_of_costs
+
+    def _valid(sol, agents):
+        return (detect_first_conflict(sol.paths) is None
+                and all(sol.paths[a][-1] == agents[a][1] for a in agents))
+
+    def _rand(w, h, n, seed, obs):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obs}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        return (GridWorld(w, h, frozenset(blocked)),
+                {i: (free[i], free[n + i]) for i in range(n)})
+
+    rand_inst = rand_opt = rand_valid = 0
+    for (w, h, n, obs) in ((5, 5, 3, 0.0), (5, 5, 3, 0.12), (6, 6, 3, 0.1)):
+        for seed in range(10):
+            grid, ag = _rand(w, h, n, seed, obs)
+            base = cbs(grid, ag, max_expansions=20000)
+            if base is None:
+                continue
+            sol = mstar(grid, ag, max_expansions=50000)
+            if sol is None:
+                continue
+            rand_inst += 1
+            rand_opt += int(sum_of_costs(sol.paths) == base.cost)
+            rand_valid += int(_valid(sol, ag))
+
+    def _isolated(nby, seed):
+        # corridor row y=0 (agents 0,1 swap through the single pocket at (2,1));
+        # `nby` bystander lanes at y=2,4,... each walled off from the rest.
+        L, pk = 5, 2
+        W, H = L + 1, 2 + 2 * nby
+        blocked = set()
+        for x in range(W):
+            if (x, 1) != (pk, 1):
+                blocked.add((x, 1))
+        for k in range(nby):
+            sep = 2 + 2 * k + 1
+            if sep < H:
+                for x in range(W):
+                    blocked.add((x, sep))
+        grid = GridWorld(W, H, frozenset(blocked))
+        ag = {0: ((0, 0), (L, 0)), 1: ((L, 0), (0, 0))}
+        rng = random.Random(seed)
+        for k in range(nby):
+            ly = 2 + 2 * k
+            ag[2 + k] = (((0, ly), (W - 1, ly)) if rng.random() < 0.5
+                         else ((W - 1, ly), (0, ly)))
+        return grid, ag
+
+    con_inst = con_opt = con_valid = 0
+    peak_cs = 0
+    mstar_sizes = set()
+    joint_by_nby = {}
+    for nby in (2, 3, 4, 5):
+        jt = 0
+        for seed in range(6):
+            grid, ag = _isolated(nby, seed)
+            base = cbs(grid, ag, max_expansions=20000)
+            sm: dict = {}
+            sol = mstar(grid, ag, stats=sm, max_expansions=50000)
+            sj: dict = {}
+            jol = joint_astar(grid, ag, stats=sj, max_expansions=200000)
+            if base is None or sol is None or jol is None:
+                continue
+            con_inst += 1
+            con_opt += int(sum_of_costs(sol.paths) == base.cost)
+            con_valid += int(_valid(sol, ag))
+            peak_cs = max(peak_cs, sm["max_collision_set"])
+            mstar_sizes.add(sm["expansions"])
+            jt += sj["expansions"]
+        joint_by_nby[nby] = jt
+
+    joints = [joint_by_nby[k] for k in (2, 3, 4, 5)]
+    grows = all(joints[i] < joints[i + 1] for i in range(len(joints) - 1))
+
+    return {
+        "case": "mstar_subdimensional",
+        "rand_instances": rand_inst,
+        "rand_opt_match": rand_opt,
+        "rand_valid": rand_valid,
+        "con_instances": con_inst,
+        "con_opt_match": con_opt,
+        "con_valid": con_valid,
+        "peak_collision_set": peak_cs,
+        "mstar_expansions": sorted(mstar_sizes)[-1],
+        "joint_expansions_smallest_team": joint_by_nby[2],
+        "joint_expansions_largest_team": joint_by_nby[5],
+        "optimal_matches_cbs": (rand_opt == rand_inst and con_opt == con_inst),
+        "all_collision_free": (rand_valid == rand_inst and con_valid == con_inst),
+        "couples_only_the_pair": peak_cs == 2,
+        "mstar_search_size_constant": len(mstar_sizes) == 1,
+        "joint_search_grows_with_team": grows,
+    }
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -1327,6 +1454,9 @@ SUITE = [
     # Push and Swap/Rotate: constructive primitive-based solver -- complete with
     # slack, valid by construction, solves crowded maps where CBS blows up
     ("push_and_rotate", _run_push_and_rotate),
+    # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
+    # that interact (collision set stays small; expansions flat as the team grows)
+    ("mstar_subdimensional", _run_mstar_subdimensional),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),

@@ -1032,5 +1032,116 @@ class TestSolutionHelpers(unittest.TestCase):
         self.assertEqual(sol.makespan, 1)
 
 
+class TestMStar(unittest.TestCase):
+    """M*: subdimensional expansion — same optimum as CBS, couples only the
+    agents that actually interact."""
+
+    @staticmethod
+    def _isolated(nby, seed):
+        # One isolated head-on swap (agents 0,1) through a single pocket, plus
+        # `nby` bystanders each alone in a walled lane on a unique straight path.
+        import random
+        L, pk = 5, 2
+        W, H = L + 1, 2 + 2 * nby
+        blocked = set()
+        for x in range(W):
+            if (x, 1) != (pk, 1):
+                blocked.add((x, 1))
+        for k in range(nby):
+            sep = 2 + 2 * k + 1
+            if sep < H:
+                for x in range(W):
+                    blocked.add((x, sep))
+        grid = GridWorld(W, H, frozenset(blocked))
+        agents = {0: ((0, 0), (L, 0)), 1: ((L, 0), (0, 0))}
+        rng = random.Random(seed)
+        for k in range(nby):
+            ly = 2 + 2 * k
+            agents[2 + k] = (((0, ly), (W - 1, ly)) if rng.random() < 0.5
+                             else ((W - 1, ly), (0, ly)))
+        return grid, agents
+
+    def test_matches_cbs_optimum(self):
+        # M* must return the SAME optimal sum-of-costs as plain CBS on random
+        # maps — including dense ones where the optimum needs an agent to vacate
+        # its goal and return (the case the cost model must charge correctly).
+        from mrn_coord.mapf.mstar import mstar
+        for w, h, n, obs in ((5, 5, 3, 0.0), (5, 5, 4, 0.1), (6, 6, 3, 0.12)):
+            for seed in range(6):
+                grid, agents = _rand_instance(w, h, n, seed, obstacle=obs)
+                base = cbs(grid, agents, max_expansions=20000)
+                if base is None:
+                    continue
+                sol = mstar(grid, agents, max_expansions=50000)
+                self.assertIsNotNone(sol, f"{w}x{h} n={n} seed={seed}")
+                self.assertEqual(sol.cost, base.cost,
+                                 f"{w}x{h} n={n} seed={seed}")
+                self.assertEqual(sum_of_costs(sol.paths), base.cost)
+                self.assertIsNone(detect_first_conflict(sol.paths))
+                for a, (start, goal) in agents.items():
+                    self.assertEqual(sol.paths[a][0], start)
+                    self.assertEqual(sol.paths[a][-1], goal)
+
+    def test_couples_only_the_conflict(self):
+        # The defining subdimensional property: on the isolated-swap family the
+        # collision set stays {0,1} (size 2) and the expansion count does NOT
+        # grow with the bystanders, while a fully coupled joint A* expands more,
+        # and more as the team grows.
+        from mrn_coord.mapf.mstar import joint_astar, mstar
+        mstar_sizes = set()
+        joint_by_nby = {}
+        for nby in (2, 3, 4, 5):
+            jt = 0
+            for seed in range(3):
+                grid, agents = self._isolated(nby, seed)
+                base = cbs(grid, agents, max_expansions=20000)
+                sm = {}
+                sol = mstar(grid, agents, stats=sm, max_expansions=50000)
+                sj = {}
+                jol = joint_astar(grid, agents, stats=sj, max_expansions=200000)
+                self.assertIsNotNone(sol)
+                self.assertEqual(sol.cost, base.cost, f"nby={nby} seed={seed}")
+                self.assertIsNone(detect_first_conflict(sol.paths))
+                self.assertEqual(sm["max_collision_set"], 2,
+                                 f"nby={nby} seed={seed}")
+                self.assertLess(sm["expansions"], sj["expansions"],
+                                f"nby={nby} seed={seed}")
+                mstar_sizes.add(sm["expansions"])
+                jt += sj["expansions"]
+            joint_by_nby[nby] = jt
+        # M*'s search size is invariant to the number of bystanders ...
+        self.assertEqual(len(mstar_sizes), 1)
+        # ... while the fully coupled joint search grows with the team.
+        joints = [joint_by_nby[k] for k in (2, 3, 4, 5)]
+        self.assertTrue(all(joints[i] < joints[i + 1]
+                            for i in range(len(joints) - 1)))
+
+    def test_vacating_goal_is_costed(self):
+        # An agent whose goal blocks another's only route must vacate and return;
+        # M* must price that at the true sum-of-costs (no free mid-rest), i.e.
+        # match CBS exactly.
+        from mrn_coord.mapf.mstar import mstar
+        # 5x1 corridor with a single pocket at (1,1): A parks at (1,0) on B's path.
+        grid = GridWorld(4, 2, frozenset({(0, 1), (2, 1), (3, 1)}))
+        agents = {0: ((1, 0), (1, 0)), 1: ((3, 0), (0, 0))}
+        base = cbs(grid, agents, max_expansions=20000)
+        sol = mstar(grid, agents, max_expansions=50000)
+        self.assertIsNotNone(base)
+        self.assertIsNotNone(sol)
+        self.assertEqual(sol.cost, base.cost)
+        self.assertEqual(sum_of_costs(sol.paths), sol.cost)
+        self.assertIsNone(detect_first_conflict(sol.paths))
+
+    def test_deterministic(self):
+        from mrn_coord.mapf.mstar import mstar
+        grid, agents = self._isolated(4, 1)
+        runs = []
+        for _ in range(2):
+            sm = {}
+            sol = mstar(grid, agents, stats=sm, max_expansions=50000)
+            runs.append((sol.cost, sm["expansions"], sm["max_collision_set"]))
+        self.assertEqual(runs[0], runs[1])
+
+
 if __name__ == "__main__":
     unittest.main()

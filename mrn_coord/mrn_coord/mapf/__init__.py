@@ -46,6 +46,13 @@ The pieces compose bottom-up:
 - :mod:`lacam` — LaCAM: complete satisficing search over whole configurations
   using PIBT as a successor generator with lazy constraints; scales to large
   teams (not cost-optimal).
+- :mod:`mstar` — M*: subdimensional expansion (Wagner & Choset 2011/2015). An
+  optimal (sum-of-costs) joint-space search that keeps the search dimension low
+  almost everywhere — each agent follows its individual optimal policy until a
+  collision couples it, at which point only the colliding agents branch over
+  their full moves. Same optimum as CBS; on instances with few, isolated
+  interactions the collision set — and the search — stays low-dimensional and
+  invariant to the rest of the team.
 - :mod:`flow` — anonymous makespan-optimal MAPF (Yu & LaValle 2013): when targets
   are interchangeable, minimum-makespan routing reduces to integer MAX FLOW on a
   time-expanded network — polynomial, no search tree, with a self-certified
@@ -80,6 +87,7 @@ from .icts import icts
 from .mutex import classify_conflict, generate_mutexes, pc_constraints
 from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
+from .mstar import joint_astar, mstar
 from .pbs import pbs, pbs_paths
 from .conflicts import (
     EdgeConflict,
@@ -117,6 +125,8 @@ __all__ = [
     "pc_constraints",
     "lacam",
     "lacam_ltm",
+    "mstar",
+    "joint_astar",
     "mapf_lns",
     "pbs",
     "pbs_paths",

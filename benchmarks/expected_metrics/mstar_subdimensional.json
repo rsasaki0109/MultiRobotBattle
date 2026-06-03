@@ -1,0 +1,18 @@
+{
+  "all_collision_free": true,
+  "case": "mstar_subdimensional",
+  "con_instances": 24,
+  "con_opt_match": 24,
+  "con_valid": 24,
+  "couples_only_the_pair": true,
+  "joint_expansions_largest_team": 444,
+  "joint_expansions_smallest_team": 210,
+  "joint_search_grows_with_team": true,
+  "mstar_expansions": 33,
+  "mstar_search_size_constant": true,
+  "optimal_matches_cbs": true,
+  "peak_collision_set": 2,
+  "rand_instances": 28,
+  "rand_opt_match": 28,
+  "rand_valid": 28
+}

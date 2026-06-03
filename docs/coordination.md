@@ -542,6 +542,62 @@ endgame solves **every** instance (`complete_single_blank`,
 regime is closed for **1–3** empty cells, leaving no frontier in de Wilde's
 machinery unreproduced here.
 
+### High level: M* — subdimensional expansion (`mstar.py`)
+
+`mstar` reproduces Wagner & Choset's **M\*** (*Subdimensional expansion for
+multirobot path planning*, IROS 2011 / AIJ 2015) — a third **optimal**
+(sum-of-costs) paradigm alongside the CBS family and the orthogonal `icts`. CBS
+plans each agent alone and branches *constraints* on conflict; M\* plans in the
+**joint** configuration space but keeps the dimension low almost everywhere.
+
+The three moving parts:
+
+- An **individual optimal policy** per agent: a backward BFS from each goal gives
+  the true cost-to-go, and from a cell the policy is the *set* of neighbors that
+  strictly decrease it (every step on some shortest path). The sum of cost-to-go
+  is an admissible, consistent joint heuristic.
+- A **collision set** on each joint configuration. Expanding it, an agent **in**
+  the set branches over **all** its grid moves; an agent **not** in it is pinned
+  to its policy (one dimension collapsed). All collision sets empty ⇒ the search
+  is `n` independent shortest paths threaded together.
+- **Backpropagation**: when generating a successor reveals two agents sharing a
+  cell or swapping, both are added to the *predecessor's* collision set and the
+  growth is propagated backward along the recorded predecessors, reopening each
+  to re-expand at the now-higher dimension. The joint search inflates to full
+  dimension only on configurations leading into a real interaction.
+
+**Sum-of-costs, costed exactly.** Waiting on a goal is free *only* once an agent
+has settled there for good. A search node is `(config, settled)`: a settled
+agent is frozen at its goal at zero cost, an unsettled one pays one per step even
+while waiting on its goal — so an agent forced to **vacate its goal and return**
+(when its goal lies on another's only route) is charged the true sum-of-costs,
+and the optimum matches `cbs` exactly rather than the looser "free wait at goal"
+variant. (Getting this wrong was the one real bug found in development: a free
+mid-goal-rest let M\* return a solution costing one more than CBS while reporting
+the lower number.)
+
+The `mstar_subdimensional` gate pins two things. **Same optimum as CBS:** on
+small random maps M\* returns CBS's sum-of-costs on every instance
+(`rand_opt_match == rand_instances == 28`), every plan collision-free and on-goal
+(`rand_valid == 28`). **Couples only what interacts:** the constructed family is
+one isolated head-on swap (agents 0,1, through a single pocket) plus `nby`
+bystanders, each alone in a walled lane on a unique straight path — no bystander
+*can* collide. So the collision set never exceeds `{0,1}`
+(`peak_collision_set == 2`, well below the team size), and M\*'s expansion count
+is the **same 33 for every instance regardless of team size**
+(`mstar_search_size_constant`) — the defining subdimensional behavior. The fully
+coupled straw man `joint_astar` (every agent always branches over every move)
+expands strictly more, and **more as the team grows**
+(`joint_search_grows_with_team`: 210 → 444 from the smallest to the largest
+team), because it re-explores the interleaving of the bystanders' forced moves
+that M\* collapses. **Honest scope:** this is *basic* M\*, not the recursive rM\*
+that splits an independent collision set into sub-problems — so when several
+*distinct* conflicts arise basic M\* merges them into one collision set and, on
+dense random instances where conflicts chain, it couples the whole team and loses
+its edge (rM\* is the fix, left for later). The gate therefore demonstrates the
+mechanism on the regime it was designed for — few, isolated interactions — and
+pins the exact-optimum agreement with CBS everywhere.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of
