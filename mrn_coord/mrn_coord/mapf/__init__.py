@@ -70,6 +70,12 @@ The pieces compose bottom-up:
 - :mod:`lacam` — LaCAM: complete satisficing search over whole configurations
   using PIBT as a successor generator with lazy constraints; scales to large
   teams (not cost-optimal).
+- :mod:`pibt_swap` — the **swap** operation that improves PIBT successor
+  generation in LaCAM2 (Okumura 2023). Two agents that must exchange ends of a
+  narrow corridor livelock plain PIBT; the swap detects a required-and-possible
+  exchange and pulls the partner through a degree-≥2 pocket, vacating the corridor.
+  The canonical fix for the livelocks :mod:`lacam`'s spine instead escapes with a
+  deterministic salt. ``swap=False`` recovers plain PIBT.
 - :mod:`mstar` — M*: subdimensional expansion (Wagner & Choset 2011/2015). An
   optimal (sum-of-costs) joint-space search that keeps the search dimension low
   almost everywhere — each agent follows its individual optimal policy until a
@@ -164,6 +170,7 @@ from .bypass import cbs_bypass
 from .cbm import cbm
 from .cbs import cbs
 from .cbs_ta import cbs_ta
+from .pibt_swap import pibt_swap
 from .cbsh import cbsh
 from .ddm import ddm
 from .epea import epea_star
@@ -231,6 +238,7 @@ __all__ = [
     "pc_constraints",
     "lacam",
     "lacam_ltm",
+    "pibt_swap",
     "mstar",
     "joint_astar",
     "od_astar",

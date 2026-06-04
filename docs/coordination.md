@@ -1150,6 +1150,43 @@ prioritized-replanning route to cost at scale; LTM is the *search-side* answer,
 keeping LaCAM's single-shot configuration search but spending extra budget on
 re-guided restarts instead of wasting it on a stalled optimize.
 
+#### The swap operation — LaCAM2's improved PIBT (`pibt_swap.py`)
+
+LaCAM (and the repo's `pibt_solve`) lean on PIBT to generate successors, and PIBT
+has one notorious failure mode: two agents that must **exchange** ends of a narrow
+corridor *livelock*. Priority inheritance pushes the blocker, but in a 1-wide
+corridor the blocker has nowhere to go but back, so the pair oscillates forever.
+The repo's `lacam` spine papers over this with a deterministic **escape salt**
+(perturb equal-distance ties until the symmetry breaks). **LaCAM2**
+([Okumura, *"Improving LaCAM for Scalable Eventually Optimal MAPF"*, IJCAI 2023](https://www.ijcai.org/proceedings/2023/0039.pdf))
+fixes it at the source with the canonical **swap** operation, reproduced in
+`pibt_swap.py` as a faithful port of Okumura's reference C++ (`Kei18/lacam2`:
+`funcPIBT` / `swap_possible_and_required` / `is_swap_required` / `is_swap_possible`).
+
+Before agent `i` commits to its best neighbour `v`, it asks whether a swap with the
+agent `j` on `v` is both **required** — `j` cannot get out of the way; an emulation
+walks `j` away from `i` down the corridor and finds it only ever reaches dead ends
+(vertex degree ≤ 1) — and **possible** — a reverse emulation finds a *pocket*
+(a vertex of degree ≥ 2) where one of them can step aside. When both hold, `i`
+**reverses** its candidate order, moving *away* from its goal to vacate the
+corridor, and **pulls** `j` into the cell it just left; the exchange happens over
+the pocket instead of deadlocking. The paper notes the detector is
+implementation-defined ("we do not aim at designing complete detectors"), so this
+follows the reference logic, with the random tie-break replaced by a deterministic
+coordinate one for reproducibility. Collision-free by construction, incomplete in
+general (PIBT always is); `swap=False` is plain PIBT.
+
+The `mapf_pibt_swap` gate pins what the swap buys. A 1-wide 5-cell corridor with a
+single pocket and two agents that must exchange: base PIBT (`swap=False`) livelocks
+to the budget, while swap PIBT solves it collision-free in makespan 6, stepping one
+agent into the pocket `(2,1)` to let the other pass. On a 200-instance 5×5 / 2–5
+agent battery swap PIBT is collision-free on every instance it solves (198/200; the
+2 are PIBT's incompleteness, not collisions). And the mechanism does real work:
+base PIBT livelocks on 10 of the 200, and the swap **rescues 8** of those 10 —
+solving where base fails. This is the principled alternative to the escape salt
+`lacam` uses; both resolve the same livelocks, the swap by construction rather than
+by perturbation.
+
 ### High level: MAPF-LNS (`lns.py`)
 
 `mapf_lns(grid, agents, iterations=...)` is *anytime*: rather than searching for

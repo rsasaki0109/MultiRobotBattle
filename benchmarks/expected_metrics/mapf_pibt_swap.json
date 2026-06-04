@@ -1,0 +1,16 @@
+{
+  "battery_base_livelock": 10,
+  "battery_instances": 200,
+  "battery_swap_collision_free": 198,
+  "battery_swap_rescues_base": 8,
+  "battery_swap_solved": 198,
+  "case": "mapf_pibt_swap",
+  "corridor_base_solved": false,
+  "corridor_makespan": 6,
+  "corridor_swap_collision_free": true,
+  "corridor_swap_solved": true,
+  "corridor_uses_pocket": true,
+  "swap_always_collision_free": true,
+  "swap_rescues_base_livelocks": true,
+  "swap_resolves_corridor": true
+}

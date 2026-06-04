@@ -2278,6 +2278,90 @@ def _run_cbs_ta() -> dict:
     }
 
 
+def _run_pibt_swap() -> dict:
+    # pibt_swap.py is a Python reproduction of the SWAP operation that improves
+    # PIBT successor generation in LaCAM2 (Okumura, "Improving LaCAM for Scalable
+    # Eventually Optimal Multi-Agent Pathfinding", IJCAI 2023). Plain PIBT builds
+    # one collision-free step by priority inheritance (a high-priority agent
+    # pushes whoever blocks it), but two agents that must EXCHANGE ends of a narrow
+    # corridor livelock -- the pushed agent has nowhere to go but back. The swap
+    # operation detects when a swap with the blocking agent is both REQUIRED (it
+    # cannot get out of the way) and POSSIBLE (a degree>=2 pocket exists to step
+    # aside), and resolves it: the agent reverses its candidate order (moves AWAY
+    # from its goal, vacating the corridor) and PULLS the partner into the cell it
+    # left. Faithful port of Okumura's reference C++ (Kei18/lacam2 planner.cpp:
+    # funcPIBT / swap_possible_and_required / is_swap_required / is_swap_possible),
+    # with the random tie-break replaced by a deterministic coordinate one.
+    #
+    # The repo already solves these livelocks differently -- pibt_solve uses a
+    # deterministic ESCAPE SALT that perturbs ties until symmetry breaks; the swap
+    # is the canonical alternative, and this gate pins what it buys:
+    # (1) CORRIDOR SHOWCASE: a 1-wide 5-cell corridor with a single pocket and two
+    #     agents that must exchange. Base PIBT (swap=False) livelocks to the budget;
+    #     swap PIBT solves it collision-free in makespan 6, stepping one agent into
+    #     the pocket (2,1) to let the other pass.
+    # (2) BATTERY: 200 random 5x5 / 2-5 agent instances. swap PIBT is collision-free
+    #     on every instance it solves (198/200; PIBT is incomplete, so 2 time out).
+    # (3) SWAP DOES REAL WORK: base PIBT livelocks on 10 of the 200; the swap
+    #     rescues 8 of those 10 (solves where base fails), isolating the mechanism.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.pibt_swap import pibt_swap
+
+    # (1) corridor with a single pocket at (2,1)
+    free = {(x, 0) for x in range(5)} | {(2, 1)}
+    blocked = {(x, y) for x in range(5) for y in range(2) if (x, y) not in free}
+    cgrid = GridWorld(5, 2, frozenset(blocked))
+    cagents = {0: ((0, 0), (4, 0)), 1: ((4, 0), (0, 0))}
+    base = pibt_swap(cgrid, cagents, swap=False, max_timestep=200)
+    sw = pibt_swap(cgrid, cagents, swap=True, max_timestep=200)
+    c_base_solved = base is not None
+    c_swap_solved = sw is not None
+    c_cf = c_swap_solved and detect_first_conflict(sw) is None
+    c_makespan = (len(sw[0]) - 1) if c_swap_solved else -1
+    c_pocket = c_swap_solved and (2, 1) in sw[0]
+
+    # (2)+(3) battery
+    total = swap_solved = swap_cf = base_livelock = rescues = 0
+    for seed in range(200):
+        rng = random.Random(seed)
+        n = rng.randint(2, 5)
+        cells = rng.sample([(x, y) for x in range(5) for y in range(5)], 2 * n)
+        g = GridWorld(5, 5)
+        ag = {i: (cells[i], cells[n + i]) for i in range(n)}
+        total += 1
+        sw = pibt_swap(g, ag, swap=True, max_timestep=500)
+        if sw is not None:
+            swap_solved += 1
+            if detect_first_conflict(sw) is None:
+                swap_cf += 1
+        bs = pibt_swap(g, ag, swap=False, max_timestep=500)
+        if bs is None:
+            base_livelock += 1
+            if sw is not None:
+                rescues += 1
+
+    return {
+        "case": "mapf_pibt_swap",
+        "corridor_base_solved": c_base_solved,
+        "corridor_swap_solved": c_swap_solved,
+        "corridor_swap_collision_free": c_cf,
+        "corridor_makespan": c_makespan,
+        "corridor_uses_pocket": c_pocket,
+        "battery_instances": total,
+        "battery_swap_solved": swap_solved,
+        "battery_swap_collision_free": swap_cf,
+        "battery_base_livelock": base_livelock,
+        "battery_swap_rescues_base": rescues,
+        "swap_resolves_corridor": (not c_base_solved) and c_swap_solved and c_cf
+        and c_pocket,
+        "swap_always_collision_free": swap_cf == swap_solved and swap_solved > 0,
+        "swap_rescues_base_livelocks": rescues > 0,
+    }
+
+
 def _run_disjoint_vs_standard() -> dict:
     # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
     # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
@@ -3945,6 +4029,10 @@ SUITE = [
     # assignment, unfolded lazily by Murty's K-best) over CBS's constraint tree,
     # jointly optimal over assignment + paths; degenerates to cbs (one goal each)
     ("mapf_cbs_ta", _run_cbs_ta),
+    # LaCAM2 swap: the swap operation that improves PIBT successor generation --
+    # detect a required+possible exchange and pull the partner through a pocket,
+    # resolving narrow-corridor swaps that base PIBT livelocks on (swap=False==PIBT)
+    ("mapf_pibt_swap", _run_pibt_swap),
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),
