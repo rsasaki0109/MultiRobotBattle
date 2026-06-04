@@ -58,13 +58,19 @@ def _count_conflicts(paths: dict) -> int:
 
 
 def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
-                     reserved, w, highways=frozenset()):
+                     reserved, w, highways=frozenset(), flex=0.0):
     """Bounded-suboptimal single-agent plan minimizing conflicts with ``reserved``.
 
     ``reserved`` is the list of the other agents' current paths. Returns
     ``(path, lb)`` where ``path`` costs at most ``w`` times the constrained
     optimum and ``lb`` is a lower bound on that optimum (the minimum ``f`` left
     in OPEN), or ``(None, None)`` if infeasible.
+
+    ``flex`` (default ``0.0``, used by :func:`mrn_coord.mapf.fecbs.fecbs`) widens
+    the focal threshold from ``w * f_min`` to ``w * f_min + flex`` — the unused
+    suboptimality budget the *other* agents have left, so this agent may spend it
+    to dodge conflicts. With ``flex = 0`` the threshold and every byte of this
+    search are exactly plain ECBS.
 
     ``highways`` is an optional set of *directed* edges ``(from_cell, to_cell)``
     (Cohen et al. 2015): when non-empty, the FOCAL list is ranked by conflicts
@@ -114,7 +120,7 @@ def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
         if not open_heap:
             break
         f_min = open_heap[0][0]
-        threshold = w * f_min
+        threshold = w * f_min + flex
         while focal_cand and focal_cand[0][0] <= threshold:
             f, c, cell, t = heapq.heappop(focal_cand)
             if (cell, t) not in closed:
@@ -122,6 +128,15 @@ def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
                                        hp_to[(cell, t)], f, c, cell, t))
         while focal and (focal[0][4], focal[0][5]) in closed:
             heapq.heappop(focal)
+
+        # An empty focal means the threshold fell below f_min — only reachable
+        # with a negative ``flex`` (FECBS), and only when even this agent's
+        # cheapest path would push the joint cost past ``w * LB``. Such a node
+        # cannot lead to a w-bounded solution, so report it infeasible (pruned).
+        # With ``flex = 0`` the threshold is ``w * f_min >= f_min``, so the f_min
+        # node is always in focal and this guard never fires — plain ECBS.
+        if not focal:
+            return None, None
 
         _, _, _, _, cell, t = heapq.heappop(focal)
         if (cell, t) in closed:

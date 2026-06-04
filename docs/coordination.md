@@ -644,6 +644,43 @@ lane discipline *raises* cost (`honest_off_cost 28 → honest_on_cost 30`) while
 staying within the bound (`honest_within_bound`) — the price of advice that does
 not perfectly match the instance, exactly the paper's "feasibility study" caveat.
 
+### High level: FECBS — ECBS with flex distribution (`fecbs.py`)
+
+`fecbs(grid, agents, w=1.5)` reproduces Chan, Li, Harabor & Koenig, *"Flex
+Distribution for Bounded-Suboptimal Multi-Agent Path Finding"* (SoCS 2021). ECBS
+bounds **each** agent's path by `w ·` *its own* optimum — the low-level focal
+search keeps cost `≤ w · f_min`. But the user only asked that the **total**
+sum-of-costs be within `w` of optimal; bounding each path individually is
+stricter, and it wastes leeway: an agent already at its optimum has spare budget a
+*different*, conflict-prone agent could spend to route around a collision.
+
+**Flex distribution** transfers that budget. When ECBS replans agent `i`, FECBS
+widens its focal threshold from `w · f_min,i` to
+`w · f_min,i + flex_i`, where `flex_i = Σ_{j≠i} (w · lb_j − c_j)` is exactly the
+suboptimality budget the *other* agents have left unspent. The agent may now
+overshoot `w · lb_i` to dodge conflicts — yet the **global** bound is preserved by
+construction: `c_i ≤ w·lb_i + Σ_{j≠i}(w·lb_j − c_j)` rearranges to
+`Σ_k c_k ≤ w · Σ_k lb_k = w · LB`. So FECBS keeps ECBS's exact `w` guarantee while
+the looser low level hands fewer conflicts up to the high level. This is the
+greedy variant (the full flex goes to the one replanned agent). The change is a
+one-keyword extension of ECBS's focal low level (`flex`, default `0`), so
+`ecbs.py` is otherwise byte-for-byte unchanged; a *negative* flex (other agents
+overspent past `w·lb`) can shrink the threshold below `f_min`, which simply means
+this node cannot fit the budget — the low level reports it infeasible and it is
+pruned, never expanded.
+
+The `fecbs_flex` gate pins both halves. **Same guarantee:** on a 102-instance
+cbs-checkable battery FECBS is always within the bound (`cost ≤ w · optimal`) and
+collision-free, and at `w = 1` it collapses to **exactly** the CBS optimum
+(`w1_equals_optimal == w1_instances == 34` — the flex is non-positive when no path
+can beat its lower bound). **The flex win:** on a dense family (8×8, 8 agents, 10 %
+blocked) at a tight `w = 1.05`, FECBS expands **343** high-level nodes against
+ECBS's **3062** (≈ 9× fewer), every plan valid — the per-agent bound is the
+bottleneck there and flex routes around the conflicts ECBS would otherwise split
+on. **Honest scope** (the paper's own framing): at *loose* `w` the per-agent slack
+is already ample, so FECBS coincides with or marginally trails ECBS — the win is
+the tight-`w`, contended regime, which the gate exercises.
+
 ### High level: ICTS (`icts.py`)
 
 `icts(grid, agents)` is an optimal solver from a paradigm **orthogonal** to the

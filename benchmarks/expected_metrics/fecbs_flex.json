@@ -1,0 +1,16 @@
+{
+  "always_within_w": true,
+  "bound_instances": 102,
+  "bound_within_w": 102,
+  "case": "fecbs_flex",
+  "flex_expands_fewer": true,
+  "valid_paths": 102,
+  "w1_collapses_to_optimal": true,
+  "w1_equals_optimal": 34,
+  "w1_instances": 34,
+  "win_ecbs_expansions": 3062,
+  "win_fecbs_expansions": 343,
+  "win_fecbs_valid": 18,
+  "win_fewer_count": 9,
+  "win_instances": 18
+}

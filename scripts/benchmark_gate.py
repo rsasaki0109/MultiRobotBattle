@@ -642,6 +642,108 @@ def _run_eecbs_vs_ecbs() -> dict:
             "monotone": exp_wdg <= exp_dg <= exp_cg <= exp_none}
 
 
+def _run_fecbs() -> dict:
+    # FECBS (fecbs.py) reproduces Chan, Li, Harabor & Koenig, "Flex Distribution
+    # for Bounded-Suboptimal Multi-Agent Path Finding" (SoCS 2021). ECBS bounds
+    # EACH agent's path by w * its own optimum (low-level focal cost <= w*f_min);
+    # that per-agent bound is stricter than the user's only ask -- total cost
+    # <= w*optimal. FECBS lends each replanned agent the suboptimality budget the
+    # OTHER agents left unspent: its focal threshold becomes w*f_min + flex with
+    # flex = sum_{j!=i}(w*lb_j - c_j), so a conflict-prone agent may overshoot
+    # w*lb_i to dodge a collision while the GLOBAL bound sum c_k <= w*LB still
+    # holds by construction. Reuses ECBS's focal low level unchanged (it gained a
+    # flex=0 keyword that defaults to plain ECBS).
+    #
+    # The gate pins: (1) the SAME w guarantee -- FECBS cost <= w*optimal on a cbs-
+    # checkable battery, and FECBS(w=1) == cbs optimum exactly (flex is non-
+    # positive at w=1, so it collapses to ECBS/CBS); every plan collision-free.
+    # (2) The flex WIN -- on a dense family (8x8, 8 agents, 10% blocked) at a tight
+    # w=1.05, FECBS expands far fewer high-level nodes than ECBS (the per-agent
+    # bound is the bottleneck there; flex routes around conflicts the low level
+    # otherwise hands up). Honest scope (like the paper): at loose w the per-agent
+    # slack is already ample and FECBS coincides with or marginally trails ECBS --
+    # the win is the tight-w, contended regime, which this gate exercises.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.ecbs import ecbs
+    from mrn_coord.mapf.fecbs import fecbs
+
+    def _valid(sol, agents):
+        return (detect_first_conflict(sol.paths) is None
+                and all(sol.paths[a][-1] == agents[a][1] for a in agents))
+
+    def _rand(w, h, n, seed, obs):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obs}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        if len(free) < 2 * n:
+            return None, None
+        return (GridWorld(w, h, frozenset(blocked)),
+                {i: (free[i], free[n + i]) for i in range(n)})
+
+    # (1) w-bound + validity battery (small enough for cbs), incl. w=1 equivalence
+    bound_inst = bound_ok = valid_ok = eq_opt = eq_inst = 0
+    for (gw, gh, n, obs) in ((6, 6, 4, 0.0), (6, 6, 5, 0.1), (5, 5, 4, 0.12)):
+        for W in (1.0, 1.05, 1.5):
+            for seed in range(12):
+                grid, ag = _rand(gw, gh, n, seed, obs)
+                if grid is None:
+                    continue
+                base = cbs(grid, ag, max_expansions=20000)
+                if base is None:
+                    continue
+                sol = fecbs(grid, ag, w=W, max_expansions=40000)
+                if sol is None:
+                    continue
+                bound_inst += 1
+                valid_ok += int(_valid(sol, ag))
+                bound_ok += int(sol.cost <= W * base.cost + 1e-9)
+                if W == 1.0:
+                    eq_inst += 1
+                    eq_opt += int(sol.cost == base.cost)
+
+    # (2) flex win: dense, tight w -- FECBS expands far fewer high-level nodes
+    fe_exp = ec_exp = win_inst = fe_valid = fewer = 0
+    for seed in range(20):
+        grid, ag = _rand(8, 8, 8, seed, 0.1)
+        if grid is None:
+            continue
+        sf: dict = {}
+        se: dict = {}
+        fsol = fecbs(grid, ag, w=1.05, max_expansions=30000, stats=sf)
+        esol = ecbs(grid, ag, w=1.05, max_expansions=30000, stats=se)
+        if fsol is None or esol is None:
+            continue
+        win_inst += 1
+        fe_valid += int(_valid(fsol, ag))
+        fe_exp += sf["expansions"]
+        ec_exp += se["expansions"]
+        fewer += int(sf["expansions"] < se["expansions"])
+
+    return {
+        "case": "fecbs_flex",
+        "bound_instances": bound_inst,
+        "bound_within_w": bound_ok,
+        "valid_paths": valid_ok,
+        "w1_instances": eq_inst,
+        "w1_equals_optimal": eq_opt,
+        "win_instances": win_inst,
+        "win_fecbs_valid": fe_valid,
+        "win_fecbs_expansions": fe_exp,
+        "win_ecbs_expansions": ec_exp,
+        "win_fewer_count": fewer,
+        "always_within_w": bound_ok == bound_inst and valid_ok == bound_inst,
+        "w1_collapses_to_optimal": eq_opt == eq_inst,
+        "flex_expands_fewer": fe_exp < ec_exp,
+    }
+
+
 def _run_bcbs() -> dict:
     # BCBS (bcbs.py) is a Python reproduction of the OTHER suboptimal CBS variant
     # in Barer, Sharon, Stern & Felner's "Suboptimal Variants of the Conflict-
@@ -4968,6 +5070,10 @@ SUITE = [
     ("cbsh_vs_cbs", _run_cbsh_vs_cbs),
     # EECBS: admissible WDG bound + EES cut bounded-suboptimal expansions vs ECBS
     ("eecbs_vs_ecbs", _run_eecbs_vs_ecbs),
+    # FECBS: ECBS with flex distribution -- bound only the TOTAL by w, lending
+    # each replanned agent the others' unused budget; same w guarantee, far fewer
+    # high-level nodes when the per-agent bound binds (tight w, contended)
+    ("fecbs_flex", _run_fecbs),
     # BCBS: ECBS's sibling from the same paper -- focal at both levels but the
     # high-level bound is on the best COST, so factors multiply (w_high*w_low);
     # kept as a gated contrast (fewer expansions, higher cost than tighter ECBS)

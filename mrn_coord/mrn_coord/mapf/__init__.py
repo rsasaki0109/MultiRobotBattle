@@ -77,6 +77,11 @@ The pieces compose bottom-up:
   reuses CBSH's admissible WDG heuristic for a tight lower bound and runs
   Explicit Estimation Search at the high level, certifying the ``w`` bound with
   fewer expansions than ECBS at the same factor.
+- :mod:`fecbs` — FECBS (Chan et al. 2021): ECBS with *flex distribution*. Instead
+  of bounding every agent by ``w *`` its own optimum, it bounds only the *total*,
+  lending each replanned agent the suboptimality budget the others left unspent so
+  it can route around conflicts. Same ``w`` guarantee as ECBS; far fewer
+  high-level nodes when the per-agent bound is the bottleneck (tight ``w``).
 - :mod:`highway` — Highway heuristics (Cohen et al. 2015): a set of *directed
   edges* marking a preferred flow, layered on ECBS. The low-level focal search
   ranks its ``w``-bounded candidates by fewest conflicts *then* fewest
@@ -218,6 +223,7 @@ from .macbs import macbs
 from .ccbs import ccbs
 from .ecbs import ecbs
 from .eecbs import eecbs
+from .fecbs import fecbs
 from .highway import ecbs_highway, keep_side_highway, ring_highway
 from .flow import anonymous_makespan
 from .tswap import tswap
@@ -275,6 +281,7 @@ __all__ = [
     "macbs",
     "ccbs",
     "ecbs",
+    "fecbs",
     "eecbs",
     "ecbs_highway",
     "keep_side_highway",
