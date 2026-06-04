@@ -3553,6 +3553,148 @@ def _run_bibox() -> dict:
                 and ssol.cost >= sopt.cost)}
 
 
+def _run_mla_star() -> dict:
+    # Multi-Label A* (multi_label_astar.py) reproduces Grenouilleau, van Hoeve &
+    # Hooker, "A Multi-Label A* Algorithm for Multi-Agent Pathfinding" (ICAPS
+    # 2019): the single-agent low level for pickup-and-delivery (MAPD). An agent
+    # must visit an ORDERED pair of goals -- pickup then delivery. The baseline
+    # plans this with TWO sequential plan_path searches (start->pickup, then
+    # pickup->delivery); because plan_path settles the agent at its goal, the
+    # first leg assumes the agent RESTS at the pickup, an over-constraint. MLA*
+    # plans the whole route in ONE A* over (cell, time, label) states, passing
+    # THROUGH the pickup (label 1->2 at the same cell/time, no rest).
+    #
+    # The gate pins: (1) MLA* is OPTIMAL -- its single search returns the true
+    # shortest start->pickup->delivery visit (== a brute multi-label BFS oracle)
+    # and a valid path (pickup before delivery, collision-free vs the reservation
+    # table); (2) the over-constraint wins -- Case 1 (pickup reserved
+    # indefinitely) MLA* finds a path where two_step reports None, Case 2 (pickup
+    # reserved at a future time) MLA* is strictly shorter; (3) over the
+    # pickup-contended family MLA* is feasible at least as often as two_step and
+    # expands FEWER states. Honest scope: in open, uncontended grids the
+    # two-search decomposition is naturally efficient -- MLA*'s edge is the
+    # contended MAPD regime it is designed for.
+    import random
+    from collections import deque
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.multi_label_astar import mla_star, two_step_plan
+
+    def _valid(grid, path, start, pickup, delivery, vertex, edge):
+        if path is None or path[0] != start or path[-1] != delivery:
+            return False
+        if pickup not in path or path.index(pickup) > len(path) - 1:
+            return False
+        for t, c in enumerate(path):
+            if (c, t) in vertex:
+                return False
+            if t > 0 and (path[t - 1], c, t) in edge:
+                return False
+        return True
+
+    def _brute(grid, start, pickup, delivery, vertex, horizon=80):
+        # shortest visit to delivery via pickup (label flips free at pickup)
+        q = deque([(start, 0, 1)])
+        seen = {(start, 0, 1)}
+        while q:
+            cell, t, lab = q.popleft()
+            if lab == 2 and cell == delivery:
+                return t
+            if t >= horizon:
+                continue
+            nbrs = []
+            if lab == 1 and cell == pickup:
+                nbrs.append((pickup, t, 2))
+            nt = t + 1
+            for nc in grid.neighbors(cell):
+                if (nc, nt) not in vertex:
+                    nbrs.append((nc, nt, lab))
+            for st in nbrs:
+                if st not in seen:
+                    seen.add(st)
+                    q.append(st)
+        return None
+
+    # (1) optimality + validity on random reservation tables
+    opt_ok = opt_tot = valid_ok = 0
+    for seed in range(300):
+        rng = random.Random(seed)
+        w, hh = 7, 7
+        grid = GridWorld(w, hh)
+        cells = [(x, y) for x in range(w) for y in range(hh)]
+        s, pk, dl = rng.sample(cells, 3)
+        others = rng.sample([c for c in cells if c != s], 4)
+        resv = frozenset((c, t) for c in others
+                         for t in range(1, rng.randint(4, 14)))
+        sm: dict = {}
+        path = mla_star(grid, s, pk, dl, resv, max_time=80, stats=sm)
+        opt = _brute(grid, s, pk, dl, resv)
+        if opt is None:
+            continue
+        opt_tot += 1
+        valid_ok += int(_valid(grid, path, s, pk, dl, resv, frozenset()))
+        opt_ok += int(path is not None and len(path) - 1 == opt)
+
+    # (2) Case 1 (pickup reserved indefinitely) and Case 2 (single future time)
+    L = 8
+    corr = GridWorld(L + 1, 1)
+    s, pk, dl = (0, 0), (4, 0), (L, 0)
+    c1_resv = frozenset(((pk, t) for t in range(6, 60)))
+    c1_mla = mla_star(corr, s, pk, dl, c1_resv, max_time=60)
+    c1_two = two_step_plan(corr, s, pk, dl, c1_resv, max_time=60)
+    case1_mla_feasible = (c1_mla is not None
+                          and _valid(corr, c1_mla, s, pk, dl, c1_resv,
+                                     frozenset()))
+    case1_two_none = c1_two is None
+
+    c2_resv = frozenset({(pk, 10)})
+    c2_mla = mla_star(corr, s, pk, dl, c2_resv, max_time=60)
+    c2_two = two_step_plan(corr, s, pk, dl, c2_resv, max_time=60)
+    case2_mla_shorter = (c2_mla is not None and c2_two is not None
+                         and len(c2_mla) < len(c2_two))
+
+    # (3) pickup-contended family: MLA* feasible >= two_step, expands fewer states
+    mla_exp = two_exp = 0
+    mla_feas = two_feas = fam = 0
+    for Ln in range(6, 14):
+        for T in range(3, Ln):
+            for W in (1, 3, 1000):
+                g = GridWorld(Ln + 1, 1)
+                ss, pp, dd = (0, 0), (Ln // 2, 0), (Ln, 0)
+                resv = frozenset(((pp, t) for t in range(T, T + W)))
+                a: dict = {}
+                b: dict = {}
+                mp = mla_star(g, ss, pp, dd, resv, max_time=200, stats=a)
+                tp = two_step_plan(g, ss, pp, dd, resv, max_time=200, stats=b)
+                fam += 1
+                if mp is not None:
+                    mla_feas += 1
+                    mla_exp += a["expanded"]
+                if tp is not None:
+                    two_feas += 1
+                    two_exp += b["expanded"]
+
+    return {
+        "case": "mla_star",
+        "opt_instances": opt_tot,
+        "opt_match_brute": opt_ok,
+        "valid_paths": valid_ok,
+        "case1_mla_feasible": case1_mla_feasible,
+        "case1_two_step_none": case1_two_none,
+        "case2_mla_shorter": case2_mla_shorter,
+        "family_instances": fam,
+        "family_mla_feasible": mla_feas,
+        "family_two_feasible": two_feas,
+        "family_mla_expanded": mla_exp,
+        "family_two_expanded": two_exp,
+        "is_optimal": opt_ok == opt_tot and valid_ok == opt_tot,
+        "over_constraint_win": (case1_mla_feasible and case1_two_none
+                                and case2_mla_shorter),
+        "mla_feasible_at_least_two": mla_feas >= two_feas,
+        "mla_expands_fewer": mla_exp < two_exp,
+    }
+
+
 def _run_mstar_subdimensional() -> dict:
     # M* (mstar) is a Python reproduction of Wagner & Choset's "M*" /
     # "Subdimensional expansion for multirobot path planning" (IROS 2011 / AIJ
@@ -4803,6 +4945,11 @@ SUITE = [
     # stalls on cramped maps where the well-formed property fails
     ("mapf_token_passing", _run_token_passing),
     ("mapf_tpts", _run_tpts),
+    # Multi-Label A*: the pickup->delivery low level in ONE search over
+    # (cell, time, label); passes through the pickup where the two-search
+    # baseline rests, so it is optimal, feasible where two_step fails, and
+    # expands fewer states in the contended MAPD regime
+    ("mla_star", _run_mla_star),
     ("mapf_online_lns", _run_online_lns),
     ("mapf_switchable_adg", _run_switchable_adg),
     # RHC re-ordering (T-RO 2024): the receding-horizon MILP over the Switchable

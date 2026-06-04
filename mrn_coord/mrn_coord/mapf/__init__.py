@@ -10,6 +10,11 @@ The pieces compose bottom-up:
 - :mod:`sipp` — Safe Interval Path Planning: a drop-in low-level planner that
   searches ``(cell, safe interval)`` states instead, collapsing long waits into
   a single state for the same minimal-time path.
+- :mod:`multi_label_astar` — Multi-Label A* (Grenouilleau et al. 2019): the
+  low level for *ordered* goals (pickup then delivery), planning the whole route
+  in one search over ``(cell, time, label)`` states. It passes *through* the
+  pickup instead of resting there, so it finds paths the two sequential
+  start->pickup, pickup->delivery searches miss or lengthen.
 - :mod:`sipps` — SIPP with Soft constraints (Li et al. 2022), the low level
   behind MAPF-LNS2. Hard constraints define the safe intervals; the other agents'
   paths are *soft* — passable at one collision each (counted even while waiting) —
@@ -242,6 +247,7 @@ from .push_and_swap import push_and_swap
 from .sipp import plan_sipp
 from .sipps import plan_sipps
 from .solution import Solution, makespan, pad_paths, render_ascii, sum_of_costs
+from .multi_label_astar import mla_star, two_step_plan
 from .space_time_astar import plan_path
 
 __all__ = [
@@ -249,6 +255,8 @@ __all__ = [
     "GridWorld",
     "manhattan",
     "plan_path",
+    "mla_star",
+    "two_step_plan",
     "plan_sipp",
     "plan_sipps",
     "VertexConflict",

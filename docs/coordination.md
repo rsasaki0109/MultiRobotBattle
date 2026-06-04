@@ -114,6 +114,44 @@ where the time-expanded collision-minimizer expands 253. Being *exact*, it also
 strictly beats LNS2's shipped `_plan_min_collision` heuristic (which mixes the
 distance heuristic into its collision key) on 20 of those 300 instances.
 
+### Low level for ordered goals: Multi-Label A* (`multi_label_astar.py`)
+
+`mla_star(grid, start, pickup, delivery)` reproduces Grenouilleau, van Hoeve &
+Hooker, *"A Multi-Label A\* Algorithm for Multi-Agent Pathfinding"* (ICAPS 2019)
+— the single-agent low level for **pickup-and-delivery** (MAPD), where an agent
+visits an *ordered* pair of goals. The obvious baseline (`two_step_plan`) runs
+**two** sequential `plan_path` searches, `start -> pickup` then
+`pickup -> delivery`. But `plan_path` settles the agent at its goal, so the first
+leg assumes the agent **rests at the pickup until the end of the horizon** — an
+over-constraint with two failure modes (the paper's Case 1 / Case 2): if the
+pickup is another agent's parked endpoint (reserved indefinitely) the two-step
+search reports *no path*, and if another agent is merely scheduled through the
+pickup later it **waits** there instead of passing through.
+
+MLA\* plans the whole route in **one** A\* over `(cell, time, label)` states. The
+label is the current leg — `1` heading to the pickup, `2` heading to the delivery;
+reaching the pickup at label 1 spawns a label-2 node at the *same cell and time*
+(collect, no rest), and the search ends when a label-2 node reaches the delivery.
+The heuristic stays admissible across the switch:
+`h(·,1) = dist(·, pickup) + dist(pickup, delivery)`, `h(·,2) = dist(·, delivery)`.
+All search honours the same `(vertex, edge)` reservation table the lifelong
+engines commit into their token, so the path is collision-free by construction.
+
+The `mla_star` gate pins three things. **Optimal & valid:** on a 300-instance
+battery with random reservations, MLA\* returns the exact shortest
+start->pickup->delivery visit (`opt_match_brute == 300` against a brute
+multi-label BFS) and a valid path every time (`valid_paths == 300`). **The
+over-constraint win:** Case 1 (pickup reserved `[6, 60)`) — MLA\* passes through
+and finds a path while `two_step_plan` returns `None`; Case 2 (pickup reserved at
+a single future time) — MLA\* is strictly shorter (`over_constraint_win`).
+**Fewer states in the contended regime:** over a 156-instance pickup-contended
+family MLA\* is feasible at least as often as the two-step search (136 vs 104 —
+it solves the 32 Case-1 instances two_step cannot) and expands roughly half as
+many states (1896 vs 3550). **Honest scope:** in open, *uncontended* grids the
+two-search decomposition is naturally efficient and MLA\*'s label states cost
+more — its edge is the contended MAPD regime it was designed for, which is what
+the gate exercises.
+
 ### Conflicts (`conflicts.py`)
 
 `detect_first_conflict(paths)` returns the earliest **vertex** conflict (same

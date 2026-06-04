@@ -1,0 +1,18 @@
+{
+  "case": "mla_star",
+  "case1_mla_feasible": true,
+  "case1_two_step_none": true,
+  "case2_mla_shorter": true,
+  "family_instances": 156,
+  "family_mla_expanded": 1896,
+  "family_mla_feasible": 136,
+  "family_two_expanded": 3550,
+  "family_two_feasible": 104,
+  "is_optimal": true,
+  "mla_expands_fewer": true,
+  "mla_feasible_at_least_two": true,
+  "opt_instances": 300,
+  "opt_match_brute": 300,
+  "over_constraint_win": true,
+  "valid_paths": 300
+}
