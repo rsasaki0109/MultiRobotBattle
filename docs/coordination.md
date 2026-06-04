@@ -895,6 +895,51 @@ endgame solves **every** instance (`complete_single_blank`,
 regime is closed for **1–3** empty cells, leaving no frontier in de Wilde's
 machinery unreproduced here.
 
+### High level: Push and Swap — the swap-only ancestor (`push_and_swap.py`)
+
+`push_and_swap` reproduces
+[*Push and Swap*](https://www.ijcai.org/Proceedings/11/Papers/052.pdf)
+(Luna & Bekris, IJCAI 2011) **on its own** — the swap-only algorithm
+`push_and_rotate` descends from, kept as a separate solver so the exact
+completeness gap that motivated Push-and-Rotate is visible and gated. It uses
+**two primitives only** — *push* and *swap* — with **no rotate** and no
+packed-grid reduction. Internally it reuses `push_and_rotate`'s `_Solver` (the
+*same* push/swap machinery, byte for byte) but runs the order-sweep with
+`allow_rotate=False, allow_residual=False` and never dispatches the reduction, so
+the contrast is clean: the rotate completion is the only thing removed.
+
+Luna & Bekris claimed completeness for instances with `≥ 2` empty vertices, but
+de Wilde, ter Mors & Witteveen (JAIR 2014) showed the bare push/swap core stalls
+on **cyclic, slack-free** regions — a fully occupied ring, a packed rectangle —
+where the only way past a blocking agent is to rotate a whole cycle by one. The
+`mapf_push_and_swap` gate pins exactly that boundary, in three regimes.
+
+**Slack — identical to Push-and-Rotate.** On the sparse battery `push_and_rotate`
+uses (`4×4`/`5×5`/`6×6`, `range(10)`), Push-and-Swap solves **every** instance
+Push-and-Rotate does (`slack_agree == slack_instances == 30`,
+`slack_ps_solved == slack_pr_solved == 30`) and every plan it returns is
+collision-free and on-goal (`slack_all_valid`) — where there is room, the
+swap-only core is already complete.
+
+**The gap.** On the packed formations the reduction solves, Push-and-Swap (no
+rotate) solves a strictly smaller fraction, and the gap is a monotone curve in
+the slack: at **one** blank — the tightest 15-puzzle regime — it solves **none**
+of the 16 (`packed_b1_ps == 0`, `packed_b1_gap == packed_b1_pr == 16`,
+`single_blank_total_gap`); at two blanks 1/16; at three blanks 12/16
+(`packed_b{1,2,3}_gap == 16, 15, 4`, `gap_monotone_in_slack`). The showcase is
+the single-blank `_packed(4×4, 1, seed 0)`: Push-and-Swap fails
+(`showcase_ps_fails`) where Push-and-Rotate finishes in 82 moves
+(`showcase_pr_moves == 82`). Crucially, wherever Push-and-Swap *does* solve a
+packed instance it is still valid by construction
+(`packed_ps_valid_when_solved`) — the guarantee holds even in the regime it
+cannot complete.
+
+**Swap fires.** On a T-junction (a degree-3 hub at `(1,1)`) two agents that must
+exchange ends cannot be separated by *push* alone; the *swap* primitive rotates
+them around the hub and Push-and-Swap solves it collision-free in eight moves
+(`swap_solves`, `swap_valid`, `swap_moves == 8`) — a positive isolation of the
+one primitive that distinguishes this core from plain prioritized pushing.
+
 ### High level: M* — subdimensional expansion (`mstar.py`)
 
 `mstar` reproduces Wagner & Choset's **M\*** (*Subdimensional expansion for

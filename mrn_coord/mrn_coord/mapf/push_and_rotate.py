@@ -704,7 +704,12 @@ class _Solver:
         return self.moves
 
     # -- top level --------------------------------------------------------- #
-    def solve(self, order):
+    def solve(self, order, *, allow_rotate=True, allow_residual=True):
+        # The two fallbacks past push/swap — ``rotate`` and the residual-pocket
+        # BFS — are Push-and-Rotate's completions, *not* part of the bare
+        # Push-and-Swap core. ``allow_rotate``/``allow_residual`` default True so
+        # ``push_and_rotate`` is byte-identical; ``push_and_swap`` turns them off
+        # to expose the Luna-&-Bekris algorithm's exact completeness gap.
         for a in order:
             guard = 0
             while self.pos[a] != self.goal[a]:
@@ -717,12 +722,12 @@ class _Solver:
                     continue
                 path = self._path(self.pos[a], self.goal[a], self.finished)
                 if path is None or len(path) < 2:
-                    if self._solve_residual():
+                    if allow_residual and self._solve_residual():
                         break
                     return None
                 b = self.occ.get(path[1])
                 if b is None or b in (a,):
-                    if self._solve_residual():
+                    if allow_residual and self._solve_residual():
                         break
                     return None
                 # Push and Swap's primitive; when it cannot find/clear a hub (the
@@ -732,9 +737,9 @@ class _Solver:
                 if self._swap(a, b):
                     continue
                 self._restore(snap)
-                if self._rotate_advance(a):
+                if allow_rotate and self._rotate_advance(a):
                     continue
-                if self._solve_residual():
+                if allow_residual and self._solve_residual():
                     break
                 return None
             self.finished.add(self.goal[a])

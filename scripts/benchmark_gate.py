@@ -3015,6 +3015,163 @@ def _run_push_and_rotate() -> dict:
             "single_blank_beats_search": unit_cbs_busts == unit_instances}
 
 
+def _run_push_and_swap() -> dict:
+    # push_and_swap.py reproduces Luna & Bekris's "Push and Swap" (IJCAI 2011) --
+    # the swap-only ANCESTOR of push_and_rotate, kept as its own solver so the
+    # exact completeness gap that motivated Push-and-Rotate is visible and gated.
+    # It uses two primitives only -- push (advance toward goal, shoving blockers)
+    # and swap (exchange two agents around a degree->=3 hub, restoring everyone
+    # else) -- with NO rotate primitive and no packed-grid reduction. Internally
+    # it reuses push_and_rotate's _Solver (the SAME push/swap machinery, byte for
+    # byte) but runs the order-sweep with allow_rotate=False, allow_residual=False
+    # and never dispatches the reduction; the contrast is therefore clean -- the
+    # rotate completion is the only thing removed.
+    #
+    # Luna & Bekris claimed completeness for instances with >= 2 empty vertices,
+    # but de Wilde et al. (JAIR 2014) showed the bare push/swap core stalls on
+    # CYCLIC, slack-free regions (a packed rectangle / a full ring), where the
+    # only way past a blocking agent is to rotate a whole cycle by one. This gate
+    # pins exactly that:
+    # (1) SLACK == push_and_rotate. On the sparse battery push_and_rotate's gate
+    #     uses, push_and_swap solves every instance push_and_rotate does (agree ==
+    #     instances) and every plan it returns is collision-free and on-goal --
+    #     the swap-only core is already complete where there is room.
+    # (2) THE GAP. On the packed formations push_and_rotate's reduction solves,
+    #     push_and_swap (no rotate) solves a strictly smaller fraction; the gap is
+    #     largest at one blank (the tightest 15-puzzle regime, gap == every
+    #     instance) and shrinks as blanks add slack (16 -> 15 -> 4) -- a monotone
+    #     curve that pins the rotate primitive's exact contribution. Crucially,
+    #     wherever push_and_swap DOES solve a packed instance it is still valid by
+    #     construction (packed_ps_valid == packed_ps_solved).
+    # (3) SWAP FIRES (positive isolation). On a T-junction (a degree-3 hub) two
+    #     agents that must exchange ends cannot be separated by push alone; the
+    #     swap primitive rotates them around the hub and push_and_swap solves it
+    #     collision-free.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.push_and_rotate import push_and_rotate
+    from mrn_coord.mapf.push_and_swap import push_and_swap
+
+    def _instance(w, h, n, seed):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        rng.shuffle(free)
+        return GridWorld(w, h), {i: (free[i], free[n + i]) for i in range(n)}
+
+    def _packed(w, h, blanks, seed):
+        rng = random.Random(seed * 131 + w * 7 + h * 3 + blanks)
+        grid = GridWorld(w, h)
+        cells = [(x, y) for y in range(h) for x in range(w)]
+        goal = cells[:len(cells) - blanks]
+        n = len(goal)
+        pos = {i: goal[i] for i in range(n)}
+        occ = {goal[i]: i for i in range(n)}
+        empt = set(cells) - set(goal)
+        nb = lambda c: [d for d in ((c[0] + 1, c[1]), (c[0] - 1, c[1]),
+                                    (c[0], c[1] + 1), (c[0], c[1] - 1))
+                        if grid.is_free(d)]
+        for _ in range(30 * n):
+            e = rng.choice(sorted(empt))
+            cand = [c for c in nb(e) if c in occ]
+            if not cand:
+                continue
+            c = rng.choice(cand)
+            a = occ.pop(c)
+            occ[e] = a
+            pos[a] = e
+            empt.discard(e)
+            empt.add(c)
+        return grid, {i: (pos[i], goal[i]) for i in range(n)}
+
+    def _valid(sol, agents):
+        return (detect_first_conflict(sol.paths) is None
+                and all(sol.paths[k][-1] == g for k, (s, g) in agents.items()))
+
+    # (1) SLACK -- equivalence with push_and_rotate on its own sparse battery.
+    slack_instances = slack_ps = slack_pr = slack_agree = slack_ps_valid = 0
+    for w, h, n in ((4, 4, 4), (5, 5, 5), (6, 6, 6)):
+        for seed in range(10):
+            grid, agents = _instance(w, h, n, seed)
+            sps = push_and_swap(grid, agents)
+            spr = push_and_rotate(grid, agents)
+            slack_instances += 1
+            if sps is not None:
+                slack_ps += 1
+                slack_ps_valid += int(_valid(sps, agents))
+            if spr is not None:
+                slack_pr += 1
+            if (sps is not None) == (spr is not None):
+                slack_agree += 1
+
+    # (2) THE GAP -- packed formations, per blank count.
+    gap = {}
+    packed_ps_total = packed_pr_total = packed_ps_valid = 0
+    for blanks in (1, 2, 3):
+        pi = ps = pr = g = 0
+        for w, h in ((4, 4), (5, 5)):
+            for seed in range(8):
+                grid, agents = _packed(w, h, blanks, seed)
+                sps = push_and_swap(grid, agents)
+                spr = push_and_rotate(grid, agents)
+                pi += 1
+                if sps is not None:
+                    ps += 1
+                    packed_ps_valid += int(_valid(sps, agents))
+                if spr is not None:
+                    pr += 1
+                if spr is not None and sps is None:
+                    g += 1
+        gap[blanks] = (pi, ps, pr, g)
+        packed_ps_total += ps
+        packed_pr_total += pr
+
+    g1, g2, g3 = gap[1], gap[2], gap[3]
+    # monotone: the gap shrinks as blanks (slack) grow.
+    gap_monotone = g1[3] >= g2[3] >= g3[3]
+    # single blank: push_and_swap solves NONE that push_and_rotate solves.
+    single_blank_total_gap = g1[3] == g1[2] and g1[1] == 0
+
+    # (3) SWAP FIRES -- a T-junction exchange the push primitive alone cannot do.
+    tgrid = GridWorld(3, 2, frozenset({(0, 0), (2, 0)}))
+    tag = {0: ((0, 1), (2, 1)), 1: ((2, 1), (0, 1))}
+    tstats: dict = {}
+    tsol = push_and_swap(tgrid, tag, stats=tstats)
+    swap_solves = tsol is not None
+    swap_valid = bool(tsol is not None and _valid(tsol, tag))
+    swap_moves = tstats.get("moves", -1) if tsol is not None else -1
+
+    # showcase single-blank packed: push_and_swap fails, push_and_rotate solves.
+    sgrid, sag = _packed(4, 4, 1, 0)
+    show_ps = push_and_swap(sgrid, sag)
+    sstats: dict = {}
+    show_pr = push_and_rotate(sgrid, sag, stats=sstats)
+
+    return {"case": "mapf_push_and_swap",
+            "slack_instances": slack_instances, "slack_ps_solved": slack_ps,
+            "slack_pr_solved": slack_pr, "slack_agree": slack_agree,
+            "slack_ps_valid": slack_ps_valid,
+            "slack_matches_rotate": slack_agree == slack_instances
+                                    and slack_ps == slack_pr,
+            "slack_all_valid": slack_ps_valid == slack_ps,
+            "packed_b1_ps": g1[1], "packed_b1_pr": g1[2], "packed_b1_gap": g1[3],
+            "packed_b2_ps": g2[1], "packed_b2_pr": g2[2], "packed_b2_gap": g2[3],
+            "packed_b3_ps": g3[1], "packed_b3_pr": g3[2], "packed_b3_gap": g3[3],
+            "packed_ps_solved": packed_ps_total,
+            "packed_pr_solved": packed_pr_total,
+            "packed_ps_valid": packed_ps_valid,
+            "packed_ps_valid_when_solved": packed_ps_valid == packed_ps_total,
+            "gap_exists": packed_pr_total > packed_ps_total,
+            "gap_monotone_in_slack": gap_monotone,
+            "single_blank_total_gap": single_blank_total_gap,
+            "swap_solves": swap_solves, "swap_valid": swap_valid,
+            "swap_moves": swap_moves,
+            "showcase_ps_fails": show_ps is None,
+            "showcase_pr_solves": show_pr is not None,
+            "showcase_pr_moves": sstats.get("moves", -1)}
+
+
 def _run_mstar_subdimensional() -> dict:
     # M* (mstar) is a Python reproduction of Wagner & Choset's "M*" /
     # "Subdimensional expansion for multirobot path planning" (IROS 2011 / AIJ
@@ -4223,6 +4380,7 @@ SUITE = [
     # Push and Swap/Rotate: constructive primitive-based solver -- complete with
     # slack, valid by construction, solves crowded maps where CBS blows up
     ("push_and_rotate", _run_push_and_rotate),
+    ("mapf_push_and_swap", _run_push_and_swap),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

@@ -150,6 +150,14 @@ The pieces compose bottom-up:
   grids (the 15-puzzle regime, 1–3 empty cells) where the greedy primitives
   stall — solving crowded maps where optimal search blows up, at the cost of
   optimality.
+- :mod:`push_and_swap` — Push and Swap (Luna & Bekris 2011): the swap-only
+  *ancestor* of :mod:`push_and_rotate`, kept as its own solver. Two primitives
+  only (push / swap), no rotate and no packed-grid reduction — it reuses the
+  *same* push/swap machinery but with rotate off. Complete and valid by
+  construction wherever there is slack (it matches :mod:`push_and_rotate` on
+  sparse maps), but it stalls on the cyclic, slack-free regions (a packed
+  rectangle, a full ring) that de Wilde et al. (2014) showed the bare core
+  cannot solve — the exact completeness gap the rotate primitive closes.
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
 - :mod:`ddm` — database-driven multi-robot planning (Han & Yu 2020): a decoupled
@@ -207,6 +215,7 @@ from .path_follower import pure_pursuit
 from .prioritized import prioritized_planning
 from .whca import whca_star
 from .push_and_rotate import push_and_rotate
+from .push_and_swap import push_and_swap
 from .sipp import plan_sipp
 from .sipps import plan_sipps
 from .solution import Solution, makespan, pad_paths, render_ascii, sum_of_costs
@@ -258,6 +267,7 @@ __all__ = [
     "prioritized_planning",
     "whca_star",
     "push_and_rotate",
+    "push_and_swap",
     "pure_pursuit",
     "Solution",
     "sum_of_costs",
