@@ -58,13 +58,20 @@ def _count_conflicts(paths: dict) -> int:
 
 
 def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
-                     reserved, w):
+                     reserved, w, highways=frozenset()):
     """Bounded-suboptimal single-agent plan minimizing conflicts with ``reserved``.
 
     ``reserved`` is the list of the other agents' current paths. Returns
     ``(path, lb)`` where ``path`` costs at most ``w`` times the constrained
     optimum and ``lb`` is a lower bound on that optimum (the minimum ``f`` left
     in OPEN), or ``(None, None)`` if infeasible.
+
+    ``highways`` is an optional set of *directed* edges ``(from_cell, to_cell)``
+    (Cohen et al. 2015): when non-empty, the FOCAL list is ranked by conflicts
+    *then* by the number of moves that leave the highway, so among the cost-
+    bounded paths the agent prefers one that flows along the highway. OPEN — and
+    thus the lower bound and the ``w`` guarantee — is untouched; with no highways
+    the secondary key is constant zero and ordering is byte-for-byte unchanged.
     """
     if not grid.is_free(start) or not grid.is_free(goal):
         return None, None
@@ -77,16 +84,18 @@ def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
     counter = itertools.count()
     came_from: dict = {}
     conflicts_to: dict = {}            # (cell, t) -> conflict count along its path
+    hp_to: dict = {}                   # (cell, t) -> off-highway move count
     open_heap: list = []               # (f, cnt, cell, t)        — orders by f
     focal_cand: list = []              # (f, cnt, cell, t)        — to migrate
-    focal: list = []                   # (d, f, cnt, cell, t)     — orders by conflicts
+    focal: list = []                   # (d, hp, f, cnt, cell, t) — by conflicts, hwy
     closed: set = set()
 
-    def add(cell, t, d, parent):
+    def add(cell, t, d, hp, parent):
         key = (cell, t)
         if key in conflicts_to:
             return
         conflicts_to[key] = d
+        hp_to[key] = hp
         came_from[key] = parent
         f = t + manhattan(cell, goal)
         c = next(counter)
@@ -94,6 +103,7 @@ def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
         heapq.heappush(focal_cand, (f, c, cell, t))
 
     conflicts_to[(start, 0)] = 0
+    hp_to[(start, 0)] = 0
     c0 = next(counter)
     heapq.heappush(open_heap, (manhattan(start, goal), c0, start, 0))
     heapq.heappush(focal_cand, (manhattan(start, goal), c0, start, 0))
@@ -108,11 +118,12 @@ def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
         while focal_cand and focal_cand[0][0] <= threshold:
             f, c, cell, t = heapq.heappop(focal_cand)
             if (cell, t) not in closed:
-                heapq.heappush(focal, (conflicts_to[(cell, t)], f, c, cell, t))
-        while focal and (focal[0][3], focal[0][4]) in closed:
+                heapq.heappush(focal, (conflicts_to[(cell, t)],
+                                       hp_to[(cell, t)], f, c, cell, t))
+        while focal and (focal[0][4], focal[0][5]) in closed:
             heapq.heappop(focal)
 
-        _, _, _, cell, t = heapq.heappop(focal)
+        _, _, _, _, cell, t = heapq.heappop(focal)
         if (cell, t) in closed:
             continue
         closed.add((cell, t))
@@ -124,6 +135,7 @@ def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
 
         nt = t + 1
         base = conflicts_to[(cell, t)]
+        base_hp = hp_to[(cell, t)]
         for ncell in grid.neighbors(cell):
             if (ncell, nt) in vertex_constraints:
                 continue
@@ -137,12 +149,15 @@ def _focal_low_level(grid, start, goal, vertex_constraints, edge_constraints,
                     added += 1
                 elif cell_at(op, nt) == cell and cell_at(op, t) == ncell:
                     added += 1                                     # swap
-            add(ncell, nt, base + added, (cell, t))
+            move_hp = 0
+            if highways and ncell != cell and (cell, ncell) not in highways:
+                move_hp = 1                                        # left the highway
+            add(ncell, nt, base + added, base_hp + move_hp, (cell, t))
 
     return None, None
 
 
-def _root(grid, agents, w):
+def _root(grid, agents, w, highways=frozenset()):
     """Plan every agent independently; return the root node dict or ``None``."""
     paths: dict = {}
     costs: dict = {}
@@ -151,7 +166,7 @@ def _root(grid, agents, w):
         start, goal = agents[agent]
         reserved = list(paths.values())
         path, lb = _focal_low_level(
-            grid, start, goal, frozenset(), frozenset(), reserved, w)
+            grid, start, goal, frozenset(), frozenset(), reserved, w, highways)
         if path is None:
             return None
         paths[agent] = path
@@ -170,7 +185,8 @@ def _root(grid, agents, w):
 
 
 def ecbs(grid: GridWorld, agents: dict, *, w: float = 1.5,
-         max_expansions: int = 100_000, stats: dict | None = None):
+         max_expansions: int = 100_000, stats: dict | None = None,
+         highways=frozenset()):
     """Solve a MAPF instance bounded-suboptimally (cost ``<= w * optimal``).
 
     ``agents`` maps an agent id to ``(start, goal)``; ``w >= 1`` is the
@@ -178,8 +194,14 @@ def ecbs(grid: GridWorld, agents: dict, *, w: float = 1.5,
     search). Returns a :class:`Solution`, or ``None`` if infeasible or the
     expansion budget is exhausted. If ``stats`` is given,
     ``stats["expansions"]`` is set to the number of high-level nodes expanded.
+
+    ``highways`` is an optional set of directed edges (Cohen et al. 2015) used to
+    bias the low-level focal search toward a consistent flow (see
+    :func:`_focal_low_level`); it changes only the secondary, conflict-breaking
+    ordering, so the ``w`` bound is preserved and the empty default is
+    byte-for-byte plain ECBS.
     """
-    root = _root(grid, agents, w)
+    root = _root(grid, agents, w, highways)
     if root is None:
         if stats is not None:
             stats["expansions"] = 0
@@ -236,7 +258,7 @@ def ecbs(grid: GridWorld, agents: dict, *, w: float = 1.5,
             reserved = [node["paths"][o] for o in agents if o != agent]
             path, lb = _focal_low_level(
                 grid, start, goal,
-                child_vertex[agent], child_edge[agent], reserved, w)
+                child_vertex[agent], child_edge[agent], reserved, w, highways)
             if path is None:
                 continue
 

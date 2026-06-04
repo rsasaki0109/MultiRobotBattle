@@ -745,6 +745,141 @@ def _run_bcbs() -> dict:
     }
 
 
+def _run_highway() -> dict:
+    # highway.py reproduces Cohen, Uras & Koenig's "Feasibility Study: Using
+    # Highways for Bounded-Suboptimal Multi-Agent Path Finding" (SoCS 2015): a
+    # highway is a set of DIRECTED edges marking a preferred flow direction, layered
+    # on top of ECBS. ECBS already searches within a suboptimality factor w; a
+    # highway steers it -- among the many w-bounded paths an agent could take --
+    # toward the ones that flow WITH the highway, so when everyone follows a
+    # consistent circulation the head-on/crossing conflicts largely vanish before
+    # the high level branches on them, and ECBS expands far fewer nodes for the SAME
+    # cost guarantee.
+    #
+    # The mechanism is a tiny, bound-PRESERVING change to ECBS's low level. ECBS's
+    # FOCAL sublist (the w-bounded nodes) is ranked by a secondary heuristic; plain
+    # ECBS ranks it by "fewest conflicts". The highway heuristic appends one key:
+    # among equal-conflict paths, prefer fewest OFF-highway moves. Only the FOCAL
+    # ORDERING changes; OPEN -- the admissible lower bound that certifies w -- is
+    # untouched, so cost <= w * optimal still holds, and with no highway the
+    # secondary key is constant and the search is byte-for-byte plain ECBS.
+    #
+    # The canonical map is a TWO-LANE corridor (2 rows) with traffic both ways: a
+    # "keep to one side" highway (even rows ->, odd rows <-) gives each direction
+    # its own lane, so the right- and left-goers never meet head-on. The gate pins:
+    # (1) OFF == plain ECBS. With an empty highway, ecbs_highway matches ecbs in
+    #     both expansions and cost on every instance (off_byte_identical) -- the
+    #     feature is genuinely opt-in.
+    # (2) FEWER EXPANSIONS, BOUND + CF PRESERVED. Across the two-lane family the
+    #     highway cuts total high-level expansions about 2x (89 -> 42), is NEVER
+    #     worse on any instance (lose == 0), and every highway solution stays within
+    #     w * optimal and collision-free.
+    # (3) SHOWCASE. On the 2x5 corridor at w=1.5 the highway cuts expansions 12 -> 3
+    #     (4x) at the SAME cost (20 == 20 == optimum) -- a free win.
+    # (4) HONEST: A HIGHWAY IS ADVICE, NOT FREE. On the 2x6 corridor at w=2.0 the
+    #     highway's lane discipline RAISES cost (28 -> 30) -- still within the bound
+    #     -- the price of advice that does not perfectly match the instance, exactly
+    #     the "feasibility study" caveat.
+    from mrn_coord.mapf import GridWorld, cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.ecbs import ecbs
+    from mrn_coord.mapf.highway import ecbs_highway, keep_side_highway
+
+    def _two_lane(width):
+        g = GridWorld(width, 2)
+        agents = {0: ((0, 0), (width - 1, 0)), 1: ((0, 1), (width - 1, 1)),
+                  2: ((width - 1, 0), (0, 0)), 3: ((width - 1, 1), (0, 1))}
+        return g, agents
+
+    widths = (4, 5, 6, 7)
+    ws = (1.5, 2.0, 3.0)
+
+    # (1) OFF == plain ECBS (empty highway).
+    equiv_instances = equiv_match = 0
+    for width in widths:
+        g, ag = _two_lane(width)
+        for w in ws:
+            s1: dict = {}
+            s2: dict = {}
+            a = ecbs(g, ag, w=w, stats=s1)
+            b = ecbs_highway(g, ag, w=w, highways=frozenset(), stats=s2)
+            equiv_instances += 1
+            if (a is not None and b is not None
+                    and s1["expansions"] == s2["expansions"]
+                    and a.cost == b.cost):
+                equiv_match += 1
+
+    # (2) FEWER EXPANSIONS, BOUND + CF preserved.
+    inst = off_exp = on_exp = win = tie = lose = 0
+    bound_ok = cf = cost_off = cost_on = 0
+    for width in widths:
+        g, ag = _two_lane(width)
+        hwy = keep_side_highway(g, axis="x")
+        opt = cbs(g, ag, max_expansions=20000)
+        for w in ws:
+            so: dict = {}
+            sh: dict = {}
+            off = ecbs(g, ag, w=w, stats=so)
+            on = ecbs_highway(g, ag, w=w, highways=hwy, stats=sh)
+            inst += 1
+            off_exp += so["expansions"]
+            on_exp += sh["expansions"]
+            cost_off += off.cost
+            cost_on += on.cost
+            if on.cost <= w * opt.cost + 1e-9:
+                bound_ok += 1
+            if detect_first_conflict(on.paths) is None:
+                cf += 1
+            if sh["expansions"] < so["expansions"]:
+                win += 1
+            elif sh["expansions"] == so["expansions"]:
+                tie += 1
+            else:
+                lose += 1
+
+    # (3) SHOWCASE -- 2x5 corridor at w=1.5.
+    g5, ag5 = _two_lane(5)
+    h5 = keep_side_highway(g5, axis="x")
+    so5: dict = {}
+    sh5: dict = {}
+    off5 = ecbs(g5, ag5, w=1.5, stats=so5)
+    on5 = ecbs_highway(g5, ag5, w=1.5, highways=h5, stats=sh5)
+    opt5 = cbs(g5, ag5, max_expansions=20000)
+
+    # (4) HONEST -- 2x6 corridor at w=2.0, highway raises cost (within bound).
+    g6, ag6 = _two_lane(6)
+    h6 = keep_side_highway(g6, axis="x")
+    so6: dict = {}
+    sh6: dict = {}
+    off6 = ecbs(g6, ag6, w=2.0, stats=so6)
+    on6 = ecbs_highway(g6, ag6, w=2.0, highways=h6, stats=sh6)
+    opt6 = cbs(g6, ag6, max_expansions=20000)
+
+    return {
+        "case": "mapf_highway",
+        "equiv_instances": equiv_instances, "equiv_match": equiv_match,
+        "off_byte_identical": equiv_match == equiv_instances,
+        "battery_instances": inst,
+        "battery_off_exp": off_exp, "battery_on_exp": on_exp,
+        "battery_win": win, "battery_tie": tie, "battery_lose": lose,
+        "battery_bound_ok": bound_ok, "battery_cf": cf,
+        "battery_cost_off": cost_off, "battery_cost_on": cost_on,
+        "highway_cuts_expansions": on_exp < off_exp,
+        "highway_never_worse_exp": lose == 0,
+        "bound_preserved": bound_ok == inst,
+        "all_collision_free": cf == inst,
+        "showcase_off_exp": so5["expansions"], "showcase_on_exp": sh5["expansions"],
+        "showcase_off_cost": off5.cost, "showcase_on_cost": on5.cost,
+        "showcase_opt": opt5.cost, "showcase_edges": len(h5),
+        "showcase_fewer_exp": sh5["expansions"] < so5["expansions"],
+        "showcase_equal_cost": on5.cost == off5.cost == opt5.cost,
+        "honest_off_cost": off6.cost, "honest_on_cost": on6.cost,
+        "honest_opt": opt6.cost,
+        "honest_highway_costs_more": on6.cost > off6.cost,
+        "honest_within_bound": on6.cost <= 2.0 * opt6.cost + 1e-9,
+    }
+
+
 def _run_icts_vs_cbs() -> dict:
     # ICTS (icts) is a Python reproduction of Sharon, Stern, Goldenberg & Felner's
     # "The increasing cost tree search for optimal multi-agent pathfinding" (AIJ
@@ -4307,6 +4442,7 @@ SUITE = [
     # high-level bound is on the best COST, so factors multiply (w_high*w_low);
     # kept as a gated contrast (fewer expansions, higher cost than tighter ECBS)
     ("mapf_bcbs", _run_bcbs),
+    ("mapf_highway", _run_highway),
     # ICTS: cost-tree optimal search (same optimum as CBS); pairwise pruning
     # cuts the k-agent joint searches
     ("icts_vs_cbs", _run_icts_vs_cbs),

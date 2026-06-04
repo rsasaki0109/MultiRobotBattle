@@ -72,6 +72,13 @@ The pieces compose bottom-up:
   reuses CBSH's admissible WDG heuristic for a tight lower bound and runs
   Explicit Estimation Search at the high level, certifying the ``w`` bound with
   fewer expansions than ECBS at the same factor.
+- :mod:`highway` — Highway heuristics (Cohen et al. 2015): a set of *directed
+  edges* marking a preferred flow, layered on ECBS. The low-level focal search
+  ranks its ``w``-bounded candidates by fewest conflicts *then* fewest
+  off-highway moves, so agents flow with the highway and head-on conflicts vanish
+  before the high level branches — far fewer expansions for the *same* ``w``
+  guarantee (the OPEN bound is untouched). ``ecbs(grid, agents, highways=H)``;
+  with no highway it is byte-for-byte plain ECBS.
 - :mod:`lacam` — LaCAM: complete satisficing search over whole configurations
   using PIBT as a successor generator with lazy constraints; scales to large
   teams (not cost-optimal).
@@ -193,6 +200,7 @@ from .macbs import macbs
 from .ccbs import ccbs
 from .ecbs import ecbs
 from .eecbs import eecbs
+from .highway import ecbs_highway, keep_side_highway, ring_highway
 from .flow import anonymous_makespan
 from .tswap import tswap
 from .icts import icts
@@ -245,6 +253,9 @@ __all__ = [
     "ccbs",
     "ecbs",
     "eecbs",
+    "ecbs_highway",
+    "keep_side_highway",
+    "ring_highway",
     "bcbs",
     "anonymous_makespan",
     "tswap",

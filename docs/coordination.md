@@ -565,6 +565,47 @@ prioritization is already reproduced and measured in `cbsh.py`. The cost bound
 itself (`≤ w·optimal`) is checked in the unit tests, where the CBS optimum is on
 hand; the gate stays on the cheap expansion-count contract.
 
+#### Highway heuristics — flow advice for ECBS (`highway.py`)
+
+`highway.py` reproduces Cohen, Uras & Koenig's
+[*Feasibility Study: Using Highways for Bounded-Suboptimal MAPF*](https://ojs.aaai.org/index.php/SOCS/article/view/18382)
+(SoCS 2015). A **highway** is a set of *directed* edges marking a preferred flow
+direction across the map — human (or auto-generated) advice layered on top of
+ECBS. ECBS already searches within a suboptimality factor `w`; a highway steers
+it, *among* the many `w`-bounded paths an agent could take, toward the ones that
+flow **with** the highway. When every agent follows a consistent circulation the
+head-on and crossing conflicts largely vanish before the high level ever branches
+on them, so ECBS expands far fewer nodes for the **same** cost guarantee.
+
+The mechanism is a tiny, bound-preserving change to ECBS's low level. ECBS's
+FOCAL sublist (the `w`-bounded nodes) is ranked by a secondary heuristic; plain
+ECBS ranks it by *fewest conflicts*. The highway heuristic appends one key: among
+equal-conflict paths, prefer the one with the fewest **off-highway** moves.
+Because only the FOCAL *ordering* changes and OPEN — the admissible lower bound
+that certifies `w` — is untouched, `cost ≤ w · optimal` holds exactly; with no
+highway the secondary key is constant and the search is byte-for-byte plain ECBS.
+The entry point is `ecbs(grid, agents, w=w, highways=H)` (aliased
+`ecbs_highway`), with two standard highway builders — a `keep_side_highway`
+(alternating-lane "keep to one side") and a `ring_highway` (directed
+circulation).
+
+The `mapf_highway` gate pins the boundary, on the canonical **two-lane corridor**
+(2 rows, traffic both ways; the keep-side highway gives each direction its own
+lane). **Off == plain ECBS:** with an empty highway, `ecbs_highway` matches `ecbs`
+in both expansions and cost on every instance (`off_byte_identical`, 12/12) — the
+feature is genuinely opt-in. **Fewer expansions, bound + CF preserved:** across
+the family the highway cuts total high-level expansions ~2× (`battery_off_exp 89
+→ battery_on_exp 42`), is **never worse** on any instance
+(`highway_never_worse_exp`, `battery_lose == 0`), and every highway solution stays
+within `w · optimal` (`bound_preserved`, 12/12) and collision-free
+(`all_collision_free`, 12/12). **Showcase:** on the `2×5` corridor at `w = 1.5`
+the highway cuts expansions **12 → 3** (4×) at the *same* cost
+(`showcase_on_cost == showcase_off_cost == showcase_opt == 20`) — a free win.
+**Honest — a highway is advice, not free:** on the `2×6` corridor at `w = 2.0` the
+lane discipline *raises* cost (`honest_off_cost 28 → honest_on_cost 30`) while
+staying within the bound (`honest_within_bound`) — the price of advice that does
+not perfectly match the instance, exactly the paper's "feasibility study" caveat.
+
 ### High level: ICTS (`icts.py`)
 
 `icts(grid, agents)` is an optimal solver from a paradigm **orthogonal** to the
