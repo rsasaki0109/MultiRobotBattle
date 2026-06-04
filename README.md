@@ -101,6 +101,33 @@ cooperative-localization consumer (the companion repo) ingests.
 All animations are driven by the real algorithms (no hand-drawn paths) and are
 deterministic; regenerate with the matching `scripts/make_*_gif.py`.
 
+**The MAPF algorithm zoo** — `mrn_coord` carries **45+ multi-agent path-finding
+algorithms faithfully reproduced from their papers in pure Python**, each
+*benchmark-gated* (WIN / LOSS / honest-equivalence checked in CI against pinned
+metrics). The clearest way to feel the collection is to watch several of them
+solve the **same** instance at once — optimal solvers (CBS) find the cheapest
+joint plan while fast greedy ones (prioritized planning, PIBT, LaCAM) flow at a
+higher sum-of-costs:
+
+<p align="center">
+  <img src="docs/media/mapf_gallery.gif" alt="The same 12x12 multi-agent path-finding instance with 14 agents solved side by side by four algorithms — CBS finds the optimal sum-of-costs 123, prioritized planning 129, PIBT and LaCAM flow greedily at 280 — each agent a coloured disc sliding to its goal ring, collision-free" width="720">
+</p>
+
+Render your own with any solver or a side-by-side panel:
+
+```bash
+python3 scripts/animate_mapf.py --solver lacam --agents 12 --out out/lacam.gif
+python3 scripts/animate_mapf.py --gallery cbs,prioritized,pibt_swap,lacam \
+    --width 12 --height 12 --agents 14 --seed 7 --out out/gallery.gif
+```
+
+The full catalogue — CBS and its whole family (CBSH, ECBS, EECBS, FECBS, ICBS,
+MA-CBS, disjoint, BCP), optimal joint-space search (M\*, rM\*, EPEA\*, ICTS,
+Standley), constructive solvers (Push-and-Rotate/Swap, TSWAP, Bibox, flow, DDM),
+the LaCAM/PIBT line, lifelong engines (RHCR, Token Passing, TPTS), and execution
+layers (k-robust, switchable-ADG) — is documented algorithm-by-algorithm, with the
+honest gated result of each, in [`docs/coordination.md`](docs/coordination.md).
+
 **Coordination** — MAPF (Conflict-Based Search / prioritized), formation
 control, frontier coverage. Each has a CLI demo (`mrn_mapf_demo`,
 `mrn_formation_demo`, `mrn_coverage_demo`) and a thin ROS node; the top GIF
