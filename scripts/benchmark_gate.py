@@ -1578,6 +1578,552 @@ def _run_epea() -> dict:
     }
 
 
+def _run_sipps() -> dict:
+    # SIPPS (sipps.py) is a Python reproduction of the safe-interval low-level
+    # planner behind MAPF-LNS2 (Li, Chen, Harabor, Stuckey & Koenig, "MAPF-LNS2",
+    # AAAI 2022). It is to lns2's time-expanded _plan_min_collision what plan_sipp
+    # is to plan_path: the SAME answer over a far smaller state space. It splits a
+    # cell's timeline into safe intervals by HARD constraints (never violable) and
+    # MINIMIZES the number of SOFT collisions (other agents' paths -- passable at
+    # one collision each, counted even while waiting), shortest among ties.
+    #
+    # The gate pins:
+    # (1) NO-SOFT EXACTNESS: with no soft constraints SIPPS == plan_sipp (same
+    #     length, zero collisions) -- it really is SIPP plus soft accounting.
+    # (2) OPTIMALITY: on a 300-instance battery (replan agent 0 against the other
+    #     agents' shortest paths as soft), SIPPS's (collisions, length) equals the
+    #     true time-expanded Dijkstra optimum on EVERY instance (optimal == 300,
+    #     length_optimal == 300). Its corrected, wait-aware safe-interval
+    #     dominance is what makes this exact.
+    # (3) SAFE-INTERVAL WIN: on a 12-cell corridor with a long blocked stretch
+    #     (hard, then soft) SIPPS expands 11 states where the time-expanded
+    #     collision-minimizer expands 253, finding the zero-collision wait path.
+    # (4) HONEST EXTRAS: aggregate battery expansions (it pops more than the
+    #     showcase suggests on dense tiny grids -- worse_expansions == 2), and that
+    #     being EXACT it strictly beats lns2's shipped _plan_min_collision
+    #     heuristic on 20 of the 300 instances (fewer collisions).
+    import heapq
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.lns import _bfs_dist_from
+    from mrn_coord.mapf.lns2 import _plan_min_collision, _soft_reservations
+    from mrn_coord.mapf.sipp import plan_sipp
+    from mrn_coord.mapf.sipps import plan_sipps
+    from mrn_coord.mapf.space_time_astar import plan_path
+    import mrn_coord.mapf.lns2 as _L
+
+    def _sh(sv, se):
+        h = 0
+        for k in sv:
+            h = max(h, k[1])
+        for k in se:
+            h = max(h, k[2])
+        return h
+
+    def _count(path, sv, se):
+        H = max(_sh(sv, se), len(path) - 1)
+        col = 0
+        for t in range(H + 1):
+            cell = path[t] if t < len(path) else path[-1]
+            col += sv.get((cell, t), 0)
+        for t in range(1, len(path)):
+            if path[t] != path[t - 1]:
+                col += se.get((path[t - 1], path[t], t), 0)
+        return col
+
+    def _eff(path):
+        g = path[-1]
+        i = len(path) - 1
+        while i > 0 and path[i - 1] == g:
+            i -= 1
+        return i
+
+    def _brute(grid, s, go, sv, se):
+        """True lexicographic (collisions, length) optimum, time-expanded."""
+        H = _sh(sv, se)
+        maxt = H + 2 * grid.width * grid.height + 5
+        sc = sv.get((s, 0), 0)
+        pq = [(sc, 0, s)]
+        best = {(s, 0): (sc, 0)}
+        bcol = blen = None
+        while pq:
+            col, t, cell = heapq.heappop(pq)
+            cur = best.get((cell, t))
+            if cur is not None and (cur[0] < col or (cur[0] == col and cur[1] < t)):
+                continue
+            if cell == go:
+                tot = col + sum(sv.get((go, tt), 0) for tt in range(t + 1, H + 1))
+                if bcol is None or tot < bcol or (tot == bcol and t < blen):
+                    bcol, blen = tot, t
+            if t >= maxt:
+                continue
+            for nc in grid.neighbors(cell):
+                nt = t + 1
+                add = sv.get((nc, nt), 0)
+                if nc != cell:
+                    add += se.get((cell, nc, nt), 0)
+                ncol = col + add
+                key = (nc, nt)
+                cur = best.get(key)
+                if cur is None or (ncol, nt) < cur:
+                    best[key] = (ncol, nt)
+                    heapq.heappush(pq, (ncol, nt, nc))
+        return bcol, blen
+
+    def _te(grid, s, go, hard_v, sv, se, stats):
+        """Time-expanded collision-minimizer; counts (cell,time) expansions."""
+        H = _sh(sv, se)
+        for (_c, t) in hard_v:
+            H = max(H, t)
+        maxt = H + 2 * grid.width * grid.height + 5
+        gh = max([tt for (c, tt) in hard_v if c == go] + [0])
+        sc = sv.get((s, 0), 0)
+        pq = [(sc, 0, s)]
+        best = {(s, 0): sc}
+        exp = 0
+        while pq:
+            col, t, cell = heapq.heappop(pq)
+            if best.get((cell, t), 1e9) < col:
+                continue
+            exp += 1
+            if cell == go and t >= gh:
+                stats["expansions"] = exp
+                return col + sum(sv.get((go, tt), 0) for tt in range(t + 1, H + 1))
+            if t >= maxt:
+                continue
+            for nc in grid.neighbors(cell):
+                nt = t + 1
+                if (nc, nt) in hard_v:
+                    continue
+                add = sv.get((nc, nt), 0)
+                if nc != cell:
+                    add += se.get((cell, nc, nt), 0)
+                ncol = col + add
+                if best.get((nc, nt), 1e9) > ncol:
+                    best[(nc, nt)] = ncol
+                    heapq.heappush(pq, (ncol, nt, nc))
+        stats["expansions"] = exp
+        return None
+
+    # (1) no-soft exactness vs plain SIPP
+    g8 = GridWorld(8, 8)
+    nosoft_mismatch = 0
+    for seed in range(200):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(8) for y in range(8)]
+        s, go = rng.sample(free, 2)
+        p1 = plan_sipp(g8, s, go)
+        st: dict = {}
+        p2 = plan_sipps(g8, s, go, stats=st)
+        if (p1 is None) != (p2 is None):
+            nosoft_mismatch += 1
+            continue
+        if p1 is not None and (len(p1) != len(p2) or st["collisions"] != 0):
+            nosoft_mismatch += 1
+
+    # (2)+(4) optimality battery vs true brute, expansion aggregate, beats-heuristic
+    n = optimal = length_optimal = beats = worse_exp = 0
+    sipps_exp = te_exp = 0
+    for seed in range(300):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(7) for y in range(7)]
+        cells = rng.sample(free, 10)
+        grid = GridWorld(7, 7)
+        ag = {i: (cells[i], cells[5 + i]) for i in range(5)}
+        paths: dict = {}
+        ok = True
+        for i in range(1, 5):
+            p = plan_path(grid, ag[i][0], ag[i][1])
+            if p is None:
+                ok = False
+                break
+            paths[i] = p
+        if not ok:
+            continue
+        horizon = max(len(p) for p in paths.values()) + 10
+        sv, se = _soft_reservations({**paths}, set(), horizon)
+        s, go = ag[0]
+        bcol, blen = _brute(grid, s, go, sv, se)
+        st = {}
+        pst = plan_sipps(grid, s, go, soft_vertex=sv, soft_edge=se, stats=st)
+        if pst is None or bcol is None:
+            continue
+        n += 1
+        cst = _count(pst, sv, se)
+        if cst == bcol:
+            optimal += 1
+        if cst == bcol and _eff(pst) == blen:
+            length_optimal += 1
+        tst: dict = {}
+        _te(grid, s, go, frozenset(), sv, se, tst)
+        sipps_exp += st["expansions"]
+        te_exp += tst["expansions"]
+        if st["expansions"] > tst["expansions"]:
+            worse_exp += 1
+        _L.came_from = {}
+        ph = _plan_min_collision(grid, s, go, sv, se, horizon + 5,
+                                 _bfs_dist_from(grid, go))
+        if ph is not None and _count(ph, sv, se) > cst:
+            beats += 1
+
+    # (3) corridor showcase: a long blocked stretch, hard then soft
+    corr = GridWorld(12, 1)
+    cs, cg = (0, 0), (11, 0)
+    hard = frozenset({((5, 0), t) for t in range(3, 40)})
+    sh: dict = {}
+    sp_hard = plan_sipps(corr, cs, cg, hard_vertex=hard, stats=sh)
+    th: dict = {}
+    _te(corr, cs, cg, hard, {}, {}, th)
+    soft = {((5, 0), t): 1 for t in range(3, 40)}
+    ss: dict = {}
+    sp_soft = plan_sipps(corr, cs, cg, soft_vertex=soft, stats=ss)
+    ts: dict = {}
+    te_soft = _te(corr, cs, cg, frozenset(), soft, {}, ts)
+
+    return {
+        "case": "mapf_sipps",
+        "nosoft_mismatches": nosoft_mismatch,
+        "battery_instances": n,
+        "battery_optimal": optimal,
+        "battery_length_optimal": length_optimal,
+        "battery_sipps_expansions": sipps_exp,
+        "battery_te_expansions": te_exp,
+        "battery_worse_expansions": worse_exp,
+        "beats_existing_heuristic": beats,
+        "showcase_hard_sipps_exp": sh["expansions"],
+        "showcase_hard_te_exp": th["expansions"],
+        "showcase_hard_collisions": sh["collisions"],
+        "showcase_soft_sipps_exp": ss["expansions"],
+        "showcase_soft_te_exp": ts["expansions"],
+        "showcase_soft_collisions": ss["collisions"],
+        "matches_sipp_without_soft": nosoft_mismatch == 0,
+        "minimizes_collisions_optimally": (optimal == n and length_optimal == n
+                                           and n == 300),
+        "safe_interval_cuts_expansions": (sh["expansions"] < th["expansions"]
+                                          and ss["expansions"] < ts["expansions"]
+                                          and ss["collisions"] == 0
+                                          and te_soft == 0),
+    }
+
+
+def _run_k_robust_cbs() -> dict:
+    # k-robust CBS (k_robust.py) is a Python reproduction of Atzmon, Stern,
+    # Felner, Wagner, Bartak & Zhou's "Robust Multi-Agent Path Finding" (SoCS
+    # 2018 / JAIR 2020). A k-robust plan stays collision-free as long as no agent
+    # is delayed by more than k timesteps -- it leaves a k-step buffer at every
+    # shared cell (no two agents use the same cell within k steps). It is the
+    # smallest change to cbs: detect a k-DELAY vertex conflict (same cell within k
+    # steps, which also catches a swap that a delay would turn into a vertex
+    # collision) and split it with single negative vertex constraints; swaps split
+    # on edges as usual. Same low level and cost model, so it returns the optimal
+    # (min sum-of-costs) k-robust plan.
+    #
+    # The gate pins:
+    # (1) k=0 IS PLAIN CBS: detection and split degenerate to the standard ones,
+    #     so k_robust_cbs(k=0) matches cbs's optimum on every instance.
+    # (2) ROBUSTNESS: for k in {1,2} the returned plan has NO k-delay conflict
+    #     (krobust_holds) AND empirically survives delaying any single agent by up
+    #     to k steps (delay_survives), while the plain CBS plan VIOLATES
+    #     k-robustness on many instances (cbs_violates_k -- the buffer is doing
+    #     real work).
+    # (3) COST OF ROBUSTNESS: cost is monotone non-decreasing in k (k0<=k1<=k2 on
+    #     every instance) and strictly higher on some (cost_strict_k1).
+    # (4) SHOWCASE seed 1 (3 agents, 5x5): the plain plan COLLIDES when one agent
+    #     is delayed a single step; the 1-robust plan costs one more (11 -> 12)
+    #     and survives that delay.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.k_robust import detect_first_k_conflict, k_robust_cbs
+
+    def inst(seed, n, w, h):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(w) for y in range(h)]
+        cells = rng.sample(free, 2 * n)
+        return GridWorld(w, h), {i: (cells[i], cells[n + i]) for i in range(n)}
+
+    def collides_under_delay(paths, k):
+        for a in paths:
+            for d in range(1, k + 1):
+                dp = dict(paths)
+                dp[a] = [paths[a][0]] * d + list(paths[a])
+                if detect_first_conflict(dp) is not None:
+                    return True
+        return False
+
+    # (1) k=0 == cbs
+    k0_inst = k0_match = 0
+    for seed in range(60):
+        for na, w, h in ((2, 5, 5), (3, 5, 5), (3, 4, 4)):
+            grid, ag = inst(seed, na, w, h)
+            base = cbs(grid, ag, max_expansions=40000)
+            if base is None:
+                continue
+            sol = k_robust_cbs(grid, ag, k=0, max_expansions=40000)
+            k0_inst += 1
+            if sol is not None and sol.cost == base.cost:
+                k0_match += 1
+
+    # (2)+(3) robustness battery: solve k in {0,1,2}, check property/delay/monotone
+    n = 0
+    krob = {1: 0, 2: 0}
+    delay_ok = {1: 0, 2: 0}
+    cbs_violates = {1: 0, 2: 0}
+    cost_ge = {1: 0, 2: 0}
+    monotone = cost_strict_k1 = 0
+    for seed in range(60):
+        for na, w, h in ((3, 5, 5), (3, 6, 6)):
+            grid, ag = inst(seed, na, w, h)
+            s0 = k_robust_cbs(grid, ag, k=0, max_expansions=40000)
+            s1 = k_robust_cbs(grid, ag, k=1, max_expansions=80000)
+            s2 = k_robust_cbs(grid, ag, k=2, max_expansions=120000)
+            if None in (s0, s1, s2):
+                continue
+            n += 1
+            if s0.cost <= s1.cost <= s2.cost:
+                monotone += 1
+            if s0.cost < s1.cost:
+                cost_strict_k1 += 1
+            for k, sk in ((1, s1), (2, s2)):
+                if detect_first_k_conflict(sk.paths, k) is None:
+                    krob[k] += 1
+                if not collides_under_delay(sk.paths, k):
+                    delay_ok[k] += 1
+                if sk.cost >= s0.cost:
+                    cost_ge[k] += 1
+                if detect_first_k_conflict(s0.paths, k) is not None:
+                    cbs_violates[k] += 1
+
+    # (4) showcase
+    sgrid, sag = inst(1, 3, 5, 5)
+    sc0 = cbs(sgrid, sag)
+    st0: dict = {}
+    st1: dict = {}
+    sk0 = k_robust_cbs(sgrid, sag, k=0, stats=st0)
+    sk1 = k_robust_cbs(sgrid, sag, k=1, stats=st1)
+
+    return {
+        "case": "mapf_k_robust",
+        "k0_instances": k0_inst,
+        "k0_match_cbs": k0_match,
+        "robust_instances": n,
+        "krobust_holds_k1": krob[1],
+        "krobust_holds_k2": krob[2],
+        "delay_survives_k1": delay_ok[1],
+        "delay_survives_k2": delay_ok[2],
+        "cost_ge_cbs_k1": cost_ge[1],
+        "cost_ge_cbs_k2": cost_ge[2],
+        "cbs_violates_k1": cbs_violates[1],
+        "cbs_violates_k2": cbs_violates[2],
+        "cost_monotone": monotone,
+        "cost_strict_k1": cost_strict_k1,
+        "showcase_cbs_cost": sc0.cost,
+        "showcase_k0_cost": sk0.cost,
+        "showcase_k1_cost": sk1.cost,
+        "showcase_k0_exp": st0["expansions"],
+        "showcase_k1_exp": st1["expansions"],
+        "showcase_cbs_collides_under_delay": collides_under_delay(sc0.paths, 1),
+        "showcase_k1_survives_delay": not collides_under_delay(sk1.paths, 1),
+        "k0_is_plain_cbs": k0_match == k0_inst,
+        "guarantees_k_robustness": (krob[1] == n and krob[2] == n
+                                    and delay_ok[1] == n and delay_ok[2] == n),
+        "robustness_costs_monotone": (monotone == n and cost_ge[1] == n
+                                      and cost_ge[2] == n),
+    }
+
+
+def _run_cbm_tapf() -> dict:
+    # CBM (cbm.py) is a Python reproduction of Hang Ma & Sven Koenig's "Optimal
+    # Target Assignment and Path Finding for Teams of Agents" (AAMAS 2016). TAPF
+    # partitions agents into TEAMS; targets within a team are interchangeable
+    # (anonymous), across teams distinct (labeled). CBM marries the two paradigms:
+    # the low level solves each team independently as an anonymous makespan
+    # max-flow on the time-expanded grid (reusing the Yu & LaValle reduction, with
+    # high-level constraints baked in as removed vertices/gadget entries), and the
+    # high level is CBS over INTER-TEAM conflicts -- resolve a shared cell / swap
+    # by forbidding it to one team or the other and re-flowing that team. Best
+    # first on makespan, the first conflict-free node is makespan-optimal.
+    #
+    # The gate pins the interpolation between the two extremes we already have:
+    # (1) ONE TEAM == ANONYMOUS FLOW: a single team containing everyone makes CBM
+    #     degenerate to pure network flow -- its makespan equals
+    #     anonymous_makespan on every instance, collision-free.
+    # (2) SINGLETON TEAMS == LABELED OPTIMUM: one agent/one target per team is
+    #     fully labeled MAPF; CBM's makespan equals a brute-force makespan-optimal
+    #     joint BFS on every tiny instance, collision-free, every agent on ITS
+    #     target, and never below the anonymous lower bound.
+    # (3) INTERPOLATION: the anonymous (one-team) makespan lower-bounds the labeled
+    #     (singleton) one on every instance.
+    # (4) TEAMS SCALE + RESOLVE: a 5x5 / 3-agent singleton battery stays
+    #     collision-free and valid, exercising cross-team conflict resolution.
+    # (5) SHOWCASE seed 0 (two 2-agent teams on 5x5): makespan 5 via 3 high-level
+    #     nodes, above the anonymous lower bound 4, with a within-team target
+    #     interchange (an agent fills its team's *other* target).
+    import itertools as _it
+    import random
+    from collections import deque
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbm import cbm
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.flow import anonymous_makespan
+
+    def brute_labeled(grid, starts, goals):
+        na = len(starts)
+        cells = [(x, y) for x in range(grid.width) for y in range(grid.height)
+                 if grid.is_free((x, y))]
+        nbr = {c: grid.neighbors(c) for c in cells}
+        start, goal = tuple(starts), tuple(goals)
+        if start == goal:
+            return 0
+        seen = {start}
+        q = deque([(start, 0)])
+        while q:
+            cfg, t = q.popleft()
+            if t > 30:
+                continue
+            for nxt in _it.product(*[nbr[c] for c in cfg]):
+                if len(set(nxt)) != na:
+                    continue
+                bad = False
+                for i in range(na):
+                    for j in range(i + 1, na):
+                        if nxt[i] == cfg[j] and nxt[j] == cfg[i]:
+                            bad = True
+                            break
+                    if bad:
+                        break
+                if bad:
+                    continue
+                if nxt == goal:
+                    return t + 1
+                if nxt not in seen:
+                    seen.add(nxt)
+                    q.append((nxt, t + 1))
+        return None
+
+    # (1) one team == anonymous flow
+    one_inst = one_match = one_cf = 0
+    for seed in range(60):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(5) for y in range(5)]
+        cells = rng.sample(free, 8)
+        grid = GridWorld(5, 5)
+        starts, goals = cells[:4], cells[4:]
+        fmk = anonymous_makespan(grid, starts, goals)
+        res = cbm(grid, [(starts, goals)])
+        one_inst += 1
+        if fmk is not None and res is not None and res[1] == fmk[1]:
+            one_match += 1
+        if res is not None and detect_first_conflict(res[0]) is None:
+            one_cf += 1
+
+    # (2)+(3) singleton == brute labeled optimum, anon lower bound, interpolation
+    lab_inst = lab_opt = lab_cf = lab_valid = lab_geq = interp = 0
+    for seed in range(120):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(4) for y in range(4)]
+        cells = rng.sample(free, 4)
+        grid = GridWorld(4, 4)
+        starts, goals = cells[:2], cells[2:]
+        bms = brute_labeled(grid, starts, goals)
+        res = cbm(grid, [([starts[i]], [goals[i]]) for i in range(2)])
+        if res is None or bms is None:
+            continue
+        lab_inst += 1
+        paths, ms = res
+        if ms == bms:
+            lab_opt += 1
+        if detect_first_conflict(paths) is None:
+            lab_cf += 1
+        if all(paths[(i, 0)][-1] == goals[i] for i in range(2)):
+            lab_valid += 1
+        fmk = anonymous_makespan(grid, starts, goals)
+        if fmk is not None and ms >= fmk[1]:
+            lab_geq += 1
+        one = cbm(grid, [(starts, goals)])
+        if one is not None and one[1] <= ms:
+            interp += 1
+
+    # (4) teams scale + resolve (5x5, 3 singleton teams)
+    sc_inst = sc_cf = sc_valid = sc_resolve = 0
+    for seed in range(80):
+        rng = random.Random(seed)
+        free = [(x, y) for x in range(5) for y in range(5)]
+        cells = rng.sample(free, 6)
+        grid = GridWorld(5, 5)
+        starts, goals = cells[:3], cells[3:]
+        st: dict = {}
+        res = cbm(grid, [([starts[i]], [goals[i]]) for i in range(3)], stats=st)
+        if res is None:
+            continue
+        sc_inst += 1
+        paths, ms = res
+        if detect_first_conflict(paths) is None:
+            sc_cf += 1
+        if all(paths[(i, 0)][-1] == goals[i] for i in range(3)):
+            sc_valid += 1
+        if st["expansions"] > 1:
+            sc_resolve += 1
+
+    # (5) two-team showcase
+    rng = random.Random(0)
+    cells = rng.sample([(x, y) for x in range(5) for y in range(5)], 8)
+    sgrid = GridWorld(5, 5)
+    tA = (cells[0:2], cells[2:4])
+    tB = (cells[4:6], cells[6:8])
+    sst: dict = {}
+    sres = cbm(sgrid, [tA, tB], stats=sst)
+    spaths, sms = sres
+    s_cf = detect_first_conflict(spaths) is None
+    s_anon = anonymous_makespan(
+        sgrid, cells[0:2] + cells[4:6], cells[2:4] + cells[6:8])
+    interchange = False
+    valid = True
+    for ti, (s, g) in enumerate((tA, tB)):
+        ends = {spaths[(ti, ai)][-1] for ai in range(len(s))}
+        if ends != set(g):
+            valid = False
+        for ai in range(len(s)):
+            if spaths[(ti, ai)][-1] != g[ai]:
+                interchange = True
+
+    return {
+        "case": "mapf_cbm",
+        "one_team_instances": one_inst,
+        "one_team_matches_flow": one_match,
+        "one_team_collision_free": one_cf,
+        "labeled_instances": lab_inst,
+        "labeled_optimal": lab_opt,
+        "labeled_collision_free": lab_cf,
+        "labeled_valid": lab_valid,
+        "labeled_ge_anon_lb": lab_geq,
+        "interpolation_anon_le_labeled": interp,
+        "scale_instances": sc_inst,
+        "scale_collision_free": sc_cf,
+        "scale_valid": sc_valid,
+        "scale_resolves": sc_resolve,
+        "showcase_makespan": sms,
+        "showcase_expansions": sst["expansions"],
+        "showcase_anon_lb": s_anon[1],
+        "showcase_collision_free": s_cf,
+        "showcase_valid": valid,
+        "showcase_within_team_interchange": interchange,
+        "one_team_is_anonymous_flow": (one_match == one_inst
+                                       and one_cf == one_inst),
+        "singleton_is_labeled_optimum": (lab_opt == lab_inst
+                                         and lab_cf == lab_inst
+                                         and lab_valid == lab_inst
+                                         and lab_geq == lab_inst),
+        "teams_resolve_collision_free": (sc_cf == sc_inst
+                                         and sc_valid == sc_inst
+                                         and sc_resolve > 0),
+    }
+
+
 def _run_disjoint_vs_standard() -> dict:
     # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
     # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
@@ -3230,6 +3776,17 @@ SUITE = [
     # generate only the children matching the node's f, same optimum as CBS, far
     # fewer generated nodes than the fully-expanding joint A*
     ("mapf_epea", _run_epea),
+    # SIPPS: the safe-interval, collision-minimizing low level of MAPF-LNS2 --
+    # same (collisions, length) optimum as the time-expanded planner, far fewer
+    # states (one per safe interval, not per timestep)
+    ("mapf_sipps", _run_sipps),
+    # k-robust CBS: plans that survive delays -- a k-step buffer at every shared
+    # cell so no single agent's delay (up to k) can cause a collision; k=0 == cbs
+    ("mapf_k_robust", _run_k_robust_cbs),
+    # CBM/TAPF: target assignment + path finding for TEAMS -- per-team anonymous
+    # max-flow low level under CBS-over-teams; interpolates flow (one team) and
+    # labeled MAPF (singleton teams), makespan-optimal
+    ("mapf_cbm", _run_cbm_tapf),
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),

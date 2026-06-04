@@ -70,6 +70,50 @@ grow with the wait, SIPP's stay flat). Pass it as the `low_level` of
 finds equal-cost solutions. Edge (swap) constraints are handled by skipping the
 single forbidden arrival time into a successor interval.
 
+### Low level alternative: SIPPS — safe intervals with soft constraints (`sipps.py`)
+
+`plan_sipps(grid, start, goal, hard_vertex, hard_edge, soft_vertex, soft_edge)`
+reproduces the low-level planner behind **MAPF-LNS2** (Li, Chen, Harabor,
+Stuckey & Koenig 2022). It is to LNS2's time-expanded collision-minimizer
+(`lns2._plan_min_collision`) exactly what `plan_sipp` is to `plan_path`: the
+*same* answer over the far smaller safe-interval state space.
+
+The repair low level of LNS2 replans one agent through a grid still full of the
+other agents' paths, and it distinguishes two kinds of occupancy:
+
+- **hard** constraints (static obstacles, reservations the agent must never
+  violate) partition each cell's timeline into safe intervals, just as in SIPP;
+- **soft** constraints (the other agents' current paths) are *passable* — the
+  agent may move through or wait inside a soft-occupied cell, but each overlap
+  costs one **collision**.
+
+SIPPS returns the path with the **fewest collisions**, and the shortest among
+those — the lexicographic `(collisions, length)` objective that lets LNS2 repair
+make progress on a tangle that has no collision-free completion *yet*. Collisions
+are priced exactly: a wait through a soft-occupied instant costs one, and
+settling on a goal a soft agent later crosses costs one per crossing — so the
+optimum SIPPS returns equals the time-expanded one.
+
+Two subtleties the gate (`mapf_sipps`) pins, both with worked counterexamples
+that fail without them:
+
+- **wait-aware dominance.** Plain SIPP prunes a later arrival at a cell-interval
+  whenever an equal-or-earlier one exists, because waiting inside a safe interval
+  is free. Here waiting through a soft instant is *not* free, so the dominance is
+  corrected: `(c₂, g₂)` dominates `(c, g)` only if `c₂ + waits(g₂→g) ≤ c`.
+- **vacate-and-return goals.** The cheapest path sometimes leaves the goal while
+  a soft agent crosses it and returns afterwards rather than parking early and
+  eating the crossing; each goal arrival is therefore offered as its own
+  terminal (its collisions already including the park cost), exempt from the
+  interval dominance, so a later collision-free settle is never lost.
+
+The gate confirms it equals plain SIPP with no soft constraints, equals the true
+time-expanded `(collisions, length)` optimum on every one of a 300-instance
+battery, and on a 12-cell corridor with a long blocked stretch expands 11 states
+where the time-expanded collision-minimizer expands 253. Being *exact*, it also
+strictly beats LNS2's shipped `_plan_min_collision` heuristic (which mixes the
+distance heuristic into its collision key) on 20 of those 300 instances.
+
 ### Conflicts (`conflicts.py`)
 
 `detect_first_conflict(paths)` returns the earliest **vertex** conflict (same
@@ -213,6 +257,38 @@ level must **not let an agent settle for free on arrival** at its goal — only 
 early and block another into a detour, overshooting the optimum by one. Both are
 covered by the `B ∈ {∞,2,1,0}` × random-battery optimality check (3750 solves, 0
 mismatches).
+
+#### k-robust CBS — planning for delays (`k_robust.py`)
+
+`k_robust_cbs(grid, agents, k=1)` reproduces Atzmon, Stern, Felner, Wagner,
+Barták & Zhou, *"Robust Multi-Agent Path Finding"* (SoCS 2018; JAIR 2020). A plan
+that is optimal on paper still collides on a real robot the moment one agent
+stalls a tick. A **k-robust** plan tolerates that: it stays collision-free as
+long as no agent is delayed by more than `k` timesteps, by leaving a `k`-step
+buffer at every shared cell — formally, no two agents occupy the same cell within
+`k` steps of each other.
+
+It is the smallest change to `cbs`:
+
+- **Detection.** Alongside the ordinary swap conflict, the high level looks for a
+  *k-delay vertex conflict* — two agents at the same cell within `k` steps. That
+  one test also catches a head-on swap *that a delay would turn into a vertex
+  collision*: the agents sit on each other's cell one step apart, which is within
+  `k` for `k ≥ 1`.
+- **Resolution.** A k-delay conflict `(i@v@tᵢ, j@v@tⱼ)` splits into "`i` not at
+  `v` at `tᵢ`" versus "`j` not at `v` at `tⱼ`" — single negative vertex
+  constraints that partition every k-robust solution. Swaps split on edges as
+  usual.
+
+The low level and cost model are untouched, so the result is the **optimal**
+(minimum sum-of-costs) k-robust plan. The `mapf_k_robust` gate pins the spectrum:
+`k=0` matches plain `cbs` on every instance (the detection and split degenerate
+exactly); for `k ∈ {1,2}` the returned plan has no k-delay conflict and survives
+delaying any single agent up to `k` steps (240/240), while the plain CBS plan
+*violates* k-robustness on many of them (46 at k=1, 75 at k=2 — the buffer is
+real); and cost is monotone non-decreasing in `k`. The frozen showcase (seed 1,
+3 agents on 5×5): the plain plan collides when one agent is delayed a single
+step, while the 1-robust plan costs one more (11 → 12) and rides the delay out.
 
 ### High level: CBS with improved heuristics (`cbsh.py`)
 
@@ -587,6 +663,47 @@ anonymous routing is trivial. **Honest scope:** this is the *anonymous* problem
 Yu & LaValle solve in polynomial time — a relaxation of labeled MAPF, so its
 makespan lower-bounds any labeled solution's. The *labeled* makespan-optimal
 problem is NP-hard and is **not** reproduced here.
+
+#### CBM — target assignment + path finding for teams (`cbm.py`)
+
+`cbm(grid, teams)` reproduces Hang Ma & Sven Koenig, *"Optimal Target Assignment
+and Path Finding for Teams of Agents"* (AAMAS 2016). **TAPF** sits between the
+anonymous flow above and labeled MAPF: agents are partitioned into **teams**, each
+owning a set of interchangeable targets. Targets *within* a team are anonymous,
+*across* teams labeled. The two extremes recover what we already have — one team
+holding everyone is pure `flow`; singleton teams (one agent, one target) are
+fully labeled makespan-optimal MAPF.
+
+CBM marries the two paradigms in a two-level search:
+
+- **Low level — per-team min-cost flow.** Each team is solved on its own as an
+  anonymous makespan problem by the *same* Yu & LaValle max-flow reduction
+  (`flow`'s machinery is reused directly), but with the high-level constraints
+  baked into the network: a forbidden `(cell, t)` drops that time-expanded vertex,
+  a forbidden directed move drops that gadget entry (which is exactly expressible
+  because the swap gadget's two entry edges are separable, even though its
+  capacity is shared). The flow *assigns the team's targets and routes its agents
+  at once*, collision-free within the team by construction.
+- **High level — CBS over teams.** The teams are planned together; the first
+  conflict between agents of *different* teams (a shared cell or a head-on swap)
+  branches into "team A avoids it" vs "team B avoids it", re-flowing only that
+  team. Best-first on makespan (a sound lower bound — adding a constraint can only
+  raise a team's makespan), the first conflict-free node is makespan-optimal.
+
+So within-team interaction is dissolved for free by the polynomial flow, and only
+the *inter-team* interaction pays for tree search — the structure that makes TAPF
+tractable when teams are few and large.
+
+The `mapf_cbm` gate pins the interpolation end to end: one team matches
+`anonymous_makespan` exactly (60/60); singleton teams match a brute-force
+makespan-optimal joint BFS exactly (120/120), collision-free, every agent on its
+own target, never below the anonymous lower bound; the anonymous (one-team)
+makespan lower-bounds the labeled (singleton) makespan on every instance; a 5×5
+three-team battery stays collision-free and valid while exercising cross-team
+resolution (32/80 need more than the root). The frozen showcase (two 2-agent
+teams on 5×5, seed 0): makespan 5 via 3 high-level nodes, above the anonymous
+lower bound 4, with a within-team target *interchange* — an agent fills its team's
+other target, the anonymous freedom CBM still has inside each team.
 
 #### Offline TSWAP — constructive anonymous MAPF by target swapping (`tswap.py`)
 

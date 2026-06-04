@@ -1,0 +1,20 @@
+{
+  "battery_instances": 300,
+  "battery_length_optimal": 300,
+  "battery_optimal": 300,
+  "battery_sipps_expansions": 2544,
+  "battery_te_expansions": 19966,
+  "battery_worse_expansions": 2,
+  "beats_existing_heuristic": 20,
+  "case": "mapf_sipps",
+  "matches_sipp_without_soft": true,
+  "minimizes_collisions_optimally": true,
+  "nosoft_mismatches": 0,
+  "safe_interval_cuts_expansions": true,
+  "showcase_hard_collisions": 0,
+  "showcase_hard_sipps_exp": 11,
+  "showcase_hard_te_exp": 253,
+  "showcase_soft_collisions": 0,
+  "showcase_soft_sipps_exp": 11,
+  "showcase_soft_te_exp": 253
+}

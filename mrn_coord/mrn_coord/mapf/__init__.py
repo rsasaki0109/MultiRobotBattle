@@ -10,6 +10,12 @@ The pieces compose bottom-up:
 - :mod:`sipp` — Safe Interval Path Planning: a drop-in low-level planner that
   searches ``(cell, safe interval)`` states instead, collapsing long waits into
   a single state for the same minimal-time path.
+- :mod:`sipps` — SIPP with Soft constraints (Li et al. 2022), the low level
+  behind MAPF-LNS2. Hard constraints define the safe intervals; the other agents'
+  paths are *soft* — passable at one collision each (counted even while waiting) —
+  and SIPPS finds the fewest-collision, then shortest, path. Same
+  ``(collisions, length)`` optimum as lns2's time-expanded planner, over the far
+  smaller safe-interval state space.
 - :mod:`conflicts` — vertex and edge (swap) conflict detection between planned
   paths, with stay-at-goal semantics.
 - :mod:`cbs` — Conflict-Based Search: an optimal (sum-of-costs) two-level
@@ -26,6 +32,13 @@ The pieces compose bottom-up:
   strictly fewer conflicts — and if so adopt its path into the node instead of
   growing the tree. Same optimum as CBS; collapses the tree on the non-cardinal
   conflicts plain CBS wastefully splits (a cardinal conflict can never bypass).
+- :mod:`k_robust` — k-robust CBS (Atzmon et al. 2018): the same optimal CBS, but
+  it plans for *delays*. A k-robust plan stays collision-free as long as no agent
+  is delayed by more than ``k`` steps — it leaves a ``k``-step buffer at every
+  shared cell (no two agents use a cell within ``k`` steps of each other). The
+  high level detects a *k-delay* vertex conflict and splits it with ordinary
+  negative constraints; ``k=0`` is byte-for-byte plain CBS, larger ``k`` buys
+  robustness at a monotone cost.
 - :mod:`macbs` — Meta-Agent CBS (Sharon et al. 2012/2015): the same optimal CBS,
   but with a conflict bound ``B`` — two "agents" that conflict more than ``B``
   times are *merged* into a meta-agent solved by a coupled (joint) low level.
@@ -87,6 +100,13 @@ The pieces compose bottom-up:
   paths) with *lazy* vertex/edge conflict *cuts*, and branch-and-price closes
   the integrality gap. Same optimum as CBS, certified by the LP lower bound
   (gap zero) — the first solver here that optimizes rather than searches.
+- :mod:`cbm` — Conflict-Based Min-cost-flow for TAPF (Ma & Koenig 2016): target
+  assignment *and* path finding for **teams** of agents. Targets within a team are
+  interchangeable, across teams distinct. The low level solves each team as an
+  anonymous makespan max-flow (reusing :mod:`flow`) under the high-level
+  constraints; the high level is CBS over *inter-team* conflicts. It interpolates
+  the two extremes — one team is pure :mod:`flow`, singleton teams are labeled
+  makespan-optimal MAPF — and is makespan-optimal throughout.
 - :mod:`flow` — anonymous makespan-optimal MAPF (Yu & LaValle 2013): when targets
   are interchangeable, minimum-makespan routing reduces to integer MAX FLOW on a
   time-expanded network — polynomial, no search tree, with a self-certified
@@ -134,10 +154,12 @@ The pieces compose bottom-up:
 
 from .bcp import bcp
 from .bypass import cbs_bypass
+from .cbm import cbm
 from .cbs import cbs
 from .cbsh import cbsh
 from .ddm import ddm
 from .epea import epea_star
+from .k_robust import k_robust_cbs
 from .macbs import macbs
 from .ccbs import ccbs
 from .ecbs import ecbs
@@ -165,6 +187,7 @@ from .prioritized import prioritized_planning
 from .whca import whca_star
 from .push_and_rotate import push_and_rotate
 from .sipp import plan_sipp
+from .sipps import plan_sipps
 from .solution import Solution, makespan, pad_paths, render_ascii, sum_of_costs
 from .space_time_astar import plan_path
 
@@ -174,16 +197,19 @@ __all__ = [
     "manhattan",
     "plan_path",
     "plan_sipp",
+    "plan_sipps",
     "VertexConflict",
     "EdgeConflict",
     "cell_at",
     "detect_first_conflict",
     "bcp",
     "cbs_bypass",
+    "cbm",
     "cbs",
     "cbsh",
     "ddm",
     "epea_star",
+    "k_robust_cbs",
     "macbs",
     "ccbs",
     "ecbs",
