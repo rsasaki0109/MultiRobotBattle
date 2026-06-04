@@ -56,6 +56,7 @@ from .mstar import _dist_to_goal
 from .solution import Solution
 
 _EPS = 1e-6
+_RECT_CAP = 4   # rectangle cuts separated per agent per node before branching
 
 
 def _canon_edge(u: Cell, v: Cell, t: int):
@@ -76,7 +77,8 @@ def _horizon(grid: GridWorld, agents: dict, dist: dict) -> int:
     return min(maxd + 2 * len(agents) + 4, maxd + free + 2)
 
 
-def _price(grid, start, goal, horizon, dist, *, vpen, epen, force, block):
+def _price(grid, start, goal, horizon, dist, *, vpen, epen, force, block,
+           rect=()):
     """Min reduced-cost path for one agent (the pricing subproblem).
 
     Returns ``(positions, soc_cost, reduced_value)`` or ``None`` if no path to
@@ -85,16 +87,24 @@ def _price(grid, start, goal, horizon, dist, *, vpen, epen, force, block):
     sum-of-costs contribution (steps before the agent settles at its goal);
     ``reduced_value`` adds the dual penalties used for the improvement test.
 
-    State is ``(cell, settled)``: an unsettled agent pays 1 per step (even a
-    wait), a settled agent is frozen at goal at cost 0 and may settle only while
-    on its goal. This is the done-bit cost model shared with
+    State is ``(cell, settled, crossed)``: an unsettled agent pays 1 per step
+    (even a wait), a settled agent is frozen at goal at cost 0 and may settle
+    only while on its goal. This is the done-bit cost model shared with
     :mod:`mstar` / :mod:`standley`; it prices vacate-and-return exactly.
 
     ``vpen[(v, t)] >= 0`` is the penalty for occupying ``(v, t)``;
     ``epen[(u, v, t)] >= 0`` the penalty for the swap edge at ``t``. ``force[t]``
     pins the cell at time ``t``; ``block`` is a set of forbidden ``(cell, t)``.
+
+    ``rect`` is a tuple of ``(barrier_frozenset, penalty)`` for *rectangle* cuts
+    this agent is in: the penalty is charged **once**, the first time the path
+    enters any ``(cell, time)`` of the barrier (its cut coefficient is binary, so
+    a second touch is free). ``crossed`` is the per-rect tuple of "already paid"
+    bits that makes this exact — without it the additive penalty would over-count
+    a path that grazes a barrier twice and the LP lower bound would be wrong. With
+    ``rect == ()`` the bit tuple is empty and the DP is identical to plain BCP.
     """
-    # Forward DP over a DAG (time strictly increases). value[(cell, settled)].
+    # Forward DP over a DAG (time strictly increases).
     def allowed(cell, t):
         if t in force and cell != force[t]:
             return False
@@ -102,25 +112,43 @@ def _price(grid, start, goal, horizon, dist, *, vpen, epen, force, block):
             return False
         return True
 
-    start_settled = False
-    INF = math.inf
-    # cost(cell, t) = accumulated SOC; rc(cell, t) = accumulated reduced value.
-    # carry both; minimize rc, break ties by cost then path for determinism.
+    nrect = len(rect)
+    base = (False,) * nrect
+
+    def cross(crossed, cell, t):
+        """Charge each not-yet-paid rectangle barrier this arrival enters once."""
+        if nrect == 0:
+            return crossed, 0.0
+        nc = None
+        extra = 0.0
+        for i in range(nrect):
+            barrier, pen = rect[i]
+            if not crossed[i] and (cell, t) in barrier:
+                if nc is None:
+                    nc = list(crossed)
+                nc[i] = True
+                extra += pen
+        return (tuple(nc) if nc is not None else crossed), extra
+
+    # cost = accumulated SOC; rc = accumulated reduced value. Minimize rc, break
+    # ties by cost then path for determinism.
     cur = {}
     if allowed(start, 0):
-        v0 = vpen.get((start, 0), 0.0)
-        cur[(start, False)] = (v0, 0.0, (start,))
+        c0, e0 = cross(base, start, 0)
+        v0 = vpen.get((start, 0), 0.0) + e0
+        cur[(start, False, c0)] = (v0, 0.0, (start,))
         if start == goal:
-            cur[(start, True)] = (v0, 0.0, (start,))
+            cur[(start, True, c0)] = (v0, 0.0, (start,))
     for t in range(horizon):
         nxt = {}
-        for (cell, settled), (rc, cost, path) in cur.items():
+        for (cell, settled, crossed), (rc, cost, path) in cur.items():
             if settled:
                 # frozen at goal: only stay, cost 0, still occupies (goal, t+1)
                 if not allowed(goal, t + 1):
                     continue
-                nrc = rc + vpen.get((goal, t + 1), 0.0)
-                key = (goal, True)
+                nc, extra = cross(crossed, goal, t + 1)
+                nrc = rc + vpen.get((goal, t + 1), 0.0) + extra
+                key = (goal, True, nc)
                 cand = (nrc, cost, path + (goal,))
                 if key not in nxt or cand < nxt[key]:
                     nxt[key] = cand
@@ -132,28 +160,31 @@ def _price(grid, start, goal, horizon, dist, *, vpen, epen, force, block):
                 step = vpen.get((nb, t + 1), 0.0)
                 if nb != cell:
                     step += epen.get(_canon_edge(cell, nb, t), 0.0)
-                nrc = rc + 1.0 + step
+                nc, extra = cross(crossed, nb, t + 1)
+                nrc = rc + 1.0 + step + extra
                 ncost = cost + 1
                 npath = path + (nb,)
                 # unsettled arrival
-                key = (nb, False)
+                key = (nb, False, nc)
                 cand = (nrc, ncost, npath)
                 if key not in nxt or cand < nxt[key]:
                     nxt[key] = cand
                 # option to settle, only on goal (cost of this step still paid;
                 # future steps free)
                 if nb == goal:
-                    key = (nb, True)
+                    key = (nb, True, nc)
                     if key not in nxt or cand < nxt[key]:
                         nxt[key] = cand
         cur = nxt
         if not cur:
             break
-    # accept only fully-parked agents: settled at goal at the horizon.
+    # accept only fully-parked agents: settled at goal at the horizon (the best
+    # over all crossing states -- a path that detours *around* a barrier pays no
+    # penalty but more SOC; pricing compares them by reduced cost).
     best = None
-    final = cur.get((goal, True))
-    if final is not None and (best is None or final < best):
-        best = final
+    for (cell, settled, _crossed), val in cur.items():
+        if cell == goal and settled and (best is None or val < best):
+            best = val
     if best is None:
         return None
     rc, cost, path = best
@@ -190,12 +221,21 @@ class _Column:
         a, b = self.at(t), self.at(t + 1)
         return (a, b) == (u, v) or (a, b) == (v, u)
 
+    def crosses(self, barrier):
+        # Whether this path touches any (cell, time) of a rectangle barrier --
+        # the membership a rectangle cut sums over. A monotone optimal path
+        # crosses an exit barrier exactly once.
+        if self.dummy:
+            return False
+        return any(self.at(t) == v for (v, t) in barrier)
 
-def _solve_master(columns, agents, vcuts, ecuts):
+
+def _solve_master(columns, agents, vcuts, ecuts, rcuts=()):
     """Solve the path LP for the current columns and active cuts.
 
-    Returns ``(obj, lam, sigma, vpi, epi)`` or ``None`` if infeasible.
-    ``sigma[a]`` is the convexity dual; ``vpi/epi`` the (<=0) cut duals.
+    Returns ``(obj, lam, sigma, vpi, epi, rpi)`` or ``None`` if infeasible.
+    ``sigma[a]`` is the convexity dual; ``vpi/epi/rpi`` the (<=0) cut duals
+    (``rpi`` is a list aligned with ``rcuts``, each ``(a1, B1, a2, B2)``).
     """
     n = len(columns)
     aidx = {a: i for i, a in enumerate(agents)}
@@ -214,6 +254,18 @@ def _solve_master(columns, agents, vcuts, ecuts):
         b_ub.append(1.0)
     for key in ecuts:
         A_ub.append([1.0 if col.traverses(key) else 0.0 for col in columns])
+        b_ub.append(1.0)
+    for (a1, b1, a2, b2) in rcuts:
+        # rectangle cut: [a1 crosses its barrier] + [a2 crosses its barrier] <= 1
+        row = []
+        for col in columns:
+            if col.agent == a1 and col.crosses(b1):
+                row.append(1.0)
+            elif col.agent == a2 and col.crosses(b2):
+                row.append(1.0)
+            else:
+                row.append(0.0)
+        A_ub.append(row)
         b_ub.append(1.0)
 
     res = linprog(
@@ -235,7 +287,11 @@ def _solve_master(columns, agents, vcuts, ecuts):
     for key in ecuts:
         epi[key] = marg[r]
         r += 1
-    return res.fun, list(res.x), sigma, vpi, epi
+    rpi = []
+    for _ in rcuts:
+        rpi.append(marg[r])
+        r += 1
+    return res.fun, list(res.x), sigma, vpi, epi, rpi
 
 
 def _separate(columns, lam, vcuts, ecuts, horizon):
@@ -286,8 +342,79 @@ def _fractional_branch(columns, lam, agents, horizon):
     return best
 
 
+def _separate_rectangle(grid, columns, lam, ids, agents, dist, horizon, rcuts):
+    """Find one violated, not-yet-added rectangle cut, or ``None``.
+
+    A rectangle symmetry (Li et al. AAAI'19) is two agents crossing an open
+    rectangle in the same direction so *every* pair of their Manhattan-optimal
+    paths collides inside. We look at the LP's dominant path per agent, find a
+    pair whose paths share a cell, build both agents' optimal-cost MDDs, and ask
+    :func:`mrn_coord.mapf.rectangle.find_rectangle_barriers` for the two exit
+    barriers ``B1``, ``B2`` (each an anti-diagonal of ``(cell, time)`` an optimal
+    crossing path hits exactly once). The cut
+    ``sum_{B1} y_{a1} + sum_{B2} y_{a2} <= 1`` is valid — both agents crossing
+    means a collision — so it is returned only when the current LP violates it
+    (the two agents' barrier usage exceeds 1).
+    """
+    from .mdd import build_mdd
+    from .rectangle import find_rectangle_barriers
+
+    dom = {}
+    for a in ids:
+        best = None
+        for j, col in enumerate(columns):
+            if col.agent == a and not col.dummy and (
+                    best is None or lam[j] > best[0]):
+                best = (lam[j], col)
+        if best is not None and best[0] > _EPS:
+            dom[a] = best[1]
+
+    existing = set(rcuts)
+    for ia in range(len(ids)):
+        for ib in range(ia + 1, len(ids)):
+            a1, a2 = ids[ia], ids[ib]
+            if a1 not in dom or a2 not in dom:
+                continue
+            c1 = dist[a1].get(agents[a1][0])
+            c2 = dist[a2].get(agents[a2][0])
+            if c1 is None or c2 is None:
+                continue
+            # a shared cell between the two dominant paths, within both MDDs
+            ctime = None
+            for t in range(min(c1, c2) + 1):
+                if dom[a1].at(t) == dom[a2].at(t):
+                    ctime = t
+                    break
+            if ctime is None:
+                continue
+            m1 = build_mdd(grid, agents[a1][0], agents[a1][1], c1)
+            m2 = build_mdd(grid, agents[a2][0], agents[a2][1], c2)
+            if m1 is None or m2 is None:
+                continue
+            found = find_rectangle_barriers(m1, m2, ctime)
+            if found is None:
+                continue
+            b1, b2, klass = found
+            if klass < 1:                      # need at least a semi-cardinal cut
+                continue
+            rcut = (a1, b1, a2, b2)
+            if rcut in existing:
+                continue
+            lhs = 0.0
+            for j, col in enumerate(columns):
+                if lam[j] <= _EPS or col.dummy:
+                    continue
+                if col.agent == a1 and col.crosses(b1):
+                    lhs += lam[j]
+                elif col.agent == a2 and col.crosses(b2):
+                    lhs += lam[j]
+            if lhs > 1.0 + _EPS:
+                return rcut
+    return None
+
+
 def bcp(grid: GridWorld, agents: dict, *, max_nodes: int = 5000,
-        stats: dict | None = None):
+        rectangle: bool = False, stats: dict | None = None):
     """Solve a MAPF instance optimally (sum-of-costs) by branch-and-price.
 
     ``agents`` maps an agent id to a ``(start, goal)`` tuple. Returns a
@@ -295,12 +422,21 @@ def bcp(grid: GridWorld, agents: dict, *, max_nodes: int = 5000,
     as :func:`mrn_coord.mapf.cbs.cbs`) or ``None`` if infeasible or the node
     budget is exhausted.
 
+    With ``rectangle=True`` the lazy separation also adds **rectangle cuts** (Lam
+    et al.'s specialized family, on top of the vertex/edge cuts): when two agents
+    cross an open rectangle in the same direction — a symmetry that makes plain
+    branch-and-price enumerate exponentially many equivalent crossings — a single
+    cut ``sum_{B1} y_{a1} + sum_{B2} y_{a2} <= 1`` forbids both crossing it. Same
+    optimum as plain BCP / CBS; fewer nodes. ``rectangle=False`` (default) is the
+    plain BCP, byte-for-byte unchanged.
+
     If ``stats`` is given it records the price-and-cut mechanism:
     ``nodes`` (branch-and-bound nodes solved), ``columns`` (path-columns priced
-    over the whole run), ``cuts`` (conflict rows separated lazily),
-    ``root_integral`` (True iff the root LP already solved the IP — branch-and
-    -price found the optimum with no branching), ``lp_bound`` (the root LP
-    objective, a valid lower bound), and ``cost`` (the certified optimum).
+    over the whole run), ``cuts`` (vertex/edge conflict rows separated lazily),
+    ``rcuts`` (rectangle cuts separated), ``root_integral`` (True iff the root LP
+    already solved the IP — branch-and-price found the optimum with no
+    branching), ``lp_bound`` (the root LP objective, a valid lower bound), and
+    ``cost`` (the certified optimum).
     """
     ids = list(agents)
     dist = {a: _dist_to_goal(grid, agents[a][1]) for a in ids}
@@ -309,7 +445,7 @@ def bcp(grid: GridWorld, agents: dict, *, max_nodes: int = 5000,
             return None  # goal unreachable from start
     horizon = _horizon(grid, agents, dist)
 
-    st = {"nodes": 0, "columns": 0, "cuts": 0,
+    st = {"nodes": 0, "columns": 0, "cuts": 0, "rcuts": 0,
           "root_integral": False, "lp_bound": None, "cost": None}
 
     def node_columns(force, block):
@@ -330,20 +466,28 @@ def bcp(grid: GridWorld, agents: dict, *, max_nodes: int = 5000,
             if seed is not None:
                 columns.append(_Column(a, seed[0], seed[1]))
                 st["columns"] += 1
-        vcuts, ecuts = [], []
+        vcuts, ecuts, rcuts = [], [], []
         while True:
-            master = _solve_master(columns, ids, vcuts, ecuts)
+            master = _solve_master(columns, ids, vcuts, ecuts, rcuts)
             if master is None:
                 return None
-            obj, lam, sigma, vpi, epi = master
+            obj, lam, sigma, vpi, epi, rpi = master
             # pricing: an improving column per agent
             vpen = {k: -p for k, p in vpi.items()}
             epen = {k: -p for k, p in epi.items()}
             improved = False
             for a in ids:
+                # rectangle barriers (and their dual penalties) this agent is in
+                rect = []
+                for i, (a1, b1, a2, b2) in enumerate(rcuts):
+                    if a == a1:
+                        rect.append((b1, -rpi[i]))
+                    elif a == a2:
+                        rect.append((b2, -rpi[i]))
                 col = _price(grid, agents[a][0], agents[a][1], horizon, dist,
                              vpen=vpen, epen=epen,
-                             force=force.get(a, {}), block=block.get(a, set()))
+                             force=force.get(a, {}), block=block.get(a, set()),
+                             rect=tuple(rect))
                 if col is None:
                     continue
                 _pos, cost, rc = col
@@ -355,14 +499,27 @@ def bcp(grid: GridWorld, agents: dict, *, max_nodes: int = 5000,
                 continue
             # LP optimal for this cut set: separate a violated conflict
             cut = _separate(columns, lam, vcuts, ecuts, horizon)
-            if cut is None:
-                return obj, lam, columns, vcuts, ecuts
-            kind, key, _u = cut
-            if kind == "v":
-                vcuts.append(key)
-            else:
-                ecuts.append(key)
-            st["cuts"] += 1
+            if cut is not None:
+                kind, key, _u = cut
+                if kind == "v":
+                    vcuts.append(key)
+                else:
+                    ecuts.append(key)
+                st["cuts"] += 1
+                continue
+            # then a violated rectangle symmetry, if enabled. Cap the rectangle
+            # cuts per node: a shifting fractional solution can keep offering
+            # slightly different barriers, so after a bounded round we stop
+            # separating and let branching finish the job (optimality is the
+            # branch tree's guarantee, not the cut's).
+            if rectangle and len(rcuts) < _RECT_CAP * len(ids):
+                rcut = _separate_rectangle(grid, columns, lam, ids, agents,
+                                           dist, horizon, rcuts)
+                if rcut is not None:
+                    rcuts.append(rcut)
+                    st["rcuts"] += 1
+                    continue
+            return obj, lam, columns, vcuts, ecuts
 
     incumbent = None
     best_cost = math.inf

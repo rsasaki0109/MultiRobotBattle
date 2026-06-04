@@ -1,0 +1,13 @@
+{
+  "all_collision_free": true,
+  "case": "bcp_rectangle",
+  "cuts_off": 354,
+  "cuts_on": 29,
+  "nodes_off": 78,
+  "nodes_on": 4,
+  "opt_match": 4,
+  "optimal_matches_cbs": true,
+  "rcuts_on": 4,
+  "rectangle_cuts_collapse_branching": true,
+  "scenarios": 4
+}

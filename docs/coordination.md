@@ -1079,6 +1079,41 @@ over priced-in columns (`lazy_cuts_and_priced_columns`). Pure-Python LP-per-node
 is the practical ceiling, so the gate stays on tiny instances; the value here is
 the *certificate*, not the scale.
 
+#### Rectangle cuts — a specialized cut family (`bcp.py`, `rectangle=True`)
+
+The docstring's "further cut families … on this same frame" is not just a promise:
+`bcp(grid, agents, rectangle=True)` adds the **rectangle cut**, the first of Lam et
+al.'s specialized families, reusing the same rectangle symmetry geometry as the
+CBS-side `rectangle.py` (Li et al. AAAI'19). When two agents cross an open
+rectangle in the **same direction**, every pair of their Manhattan-optimal paths
+collides inside, and plain branch-and-price must *branch* through the symmetric
+crossings — the same blowup CBS suffers. A single linear cut breaks it:
+
+> `Σ_{(v,t)∈B1} y[a1,v,t] + Σ_{(v,t)∈B2} y[a2,v,t] ≤ 1`
+
+where `B1`, `B2` are the two agents' exit **barriers** — anti-diagonals of
+`(cell, time)` that an optimal crossing path hits *exactly once*. So each sum is
+`1` iff that agent crosses the rectangle, and the cut says they cannot both cross
+(if they did, they would collide). It is separated lazily: from the LP's dominant
+paths, find a pair sharing a cell, build their optimal-cost MDDs, and ask
+`find_rectangle_barriers` for `B1`, `B2`; add the cut only when the current LP
+violates it. Pricing the cut's dual is the one subtlety — the coefficient is
+*binary* (cross or not), so charging the dual penalty per barrier cell would
+over-count a path that grazes the barrier twice and break the LP lower bound;
+the pricing DP therefore carries a per-cut **"already-crossed" bit** and charges
+the penalty exactly once. With `rectangle=False` (default) none of this runs and
+the solver is byte-for-byte the plain BCP above.
+
+The `bcp_rectangle` gate uses the same explicit same-direction crossings as the
+CBS `rectangle_symmetry` gate (random instances almost never contain one) and pins
+the win: rectangle ON matches both plain BCP (OFF) and CBS on every scenario
+(`optimal_matches_cbs` — the cut drops no solution), while the branch-and-bound
+nodes collapse from an aggregate **78 → 4** (one root node per scenario, each
+closed by a single rectangle cut, `rcuts_on == 4`) and the lazily separated
+vertex/edge cuts drop **354 → 29**, all collision-free. It is the LP-side analogue
+of `rectangle.py`'s CBS barrier split (which collapses the same symmetry 298 → 15
+high-level expansions) — same geometry, expressed as a cut rather than a branch.
+
 ### High level: LaCAM (`lacam.py`)
 
 `lacam(grid, agents)` takes a different tack from the CBS family: instead of

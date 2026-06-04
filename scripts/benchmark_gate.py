@@ -3376,6 +3376,76 @@ def _run_bcp_branch_price() -> dict:
     }
 
 
+def _run_bcp_rectangle() -> dict:
+    # Rectangle cuts for BCP (bcp.py's rectangle=True), the specialized cut family
+    # Lam, Le Bodic, Harabor & Stuckey layer on the branch-and-cut-and-price frame
+    # ("Branch-and-Cut-and-Price for MAPF", IJCAI 2019), reusing the rectangle
+    # symmetry geometry of Li et al. AAAI'19 (rectangle.py). When two agents cross
+    # an open rectangle in the SAME direction, every pair of their Manhattan
+    # paths collides inside, and plain branch-and-price must enumerate the
+    # symmetric crossings by branching -- the same blowup CBS suffers. A single
+    # rectangle cut sum_{B1} y_{a1} + sum_{B2} y_{a2} <= 1 (B1, B2 the two exit
+    # barriers, each an anti-diagonal an optimal crossing path hits exactly once)
+    # forbids both agents crossing at once, collapsing the whole symmetry. The cut
+    # is separated lazily from the MDD barriers, and its dual is priced exactly via
+    # a per-barrier "already-crossed" bit so the LP bound stays valid.
+    #
+    # Same explicit same-direction anti-diagonal crossings as the CBS
+    # rectangle_symmetry gate (random instances almost never contain one). Pins:
+    # (1) OPTIMALITY -- rectangle ON matches both plain BCP (OFF) and cbs on every
+    # scenario (opt_match), proving the cut drops no solution; (2) the COLLAPSE --
+    # the branch-and-bound nodes fall from an aggregate 78 (OFF) to 4 (ON, one root
+    # node per scenario), each closed by a single rectangle cut (rcuts_on == 4),
+    # and the lazily separated vertex/edge cuts drop 354 -> 29; (3) collision-free
+    # throughout. If a rectangle cut ever dropped the optimum opt_match falls; if
+    # detection/pricing regressed nodes_on climbs back toward nodes_off.
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.bcp import bcp
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    scenarios = [
+        ("cross6", 6, 6, {0: ((2, 0), (4, 5)), 1: ((1, 1), (4, 2))}),
+        ("cross7c", 7, 7, {0: ((1, 1), (5, 6)), 1: ((0, 2), (6, 3))}),
+        ("cross7b", 7, 7, {0: ((2, 0), (6, 6)), 1: ((0, 2), (6, 4))}),
+        ("cross7a", 7, 7, {0: ((2, 0), (4, 6)), 1: ((0, 2), (5, 6))}),
+    ]
+    scn = opt_match = rcuts_on = 0
+    nodes_off = nodes_on = cuts_off = cuts_on = 0
+    all_cf = True
+    for _, w, h, ag in scenarios:
+        grid = GridWorld(w, h)
+        base = cbs(grid, ag, max_expansions=20000)
+        soff: dict = {}
+        off = bcp(grid, ag, rectangle=False, stats=soff, max_nodes=20000)
+        son: dict = {}
+        on = bcp(grid, ag, rectangle=True, stats=son, max_nodes=20000)
+        if base is None or off is None or on is None:
+            continue
+        scn += 1
+        opt_match += int(on.cost == off.cost == base.cost)
+        nodes_off += soff["nodes"]
+        nodes_on += son["nodes"]
+        cuts_off += soff["cuts"]
+        cuts_on += son["cuts"]
+        rcuts_on += son["rcuts"]
+        all_cf = all_cf and detect_first_conflict(on.paths) is None
+
+    return {
+        "case": "bcp_rectangle",
+        "scenarios": scn,
+        "opt_match": opt_match,
+        "nodes_off": nodes_off,
+        "nodes_on": nodes_on,
+        "cuts_off": cuts_off,
+        "cuts_on": cuts_on,
+        "rcuts_on": rcuts_on,
+        "all_collision_free": all_cf,
+        "optimal_matches_cbs": opt_match == scn and scn > 0,
+        "rectangle_cuts_collapse_branching": nodes_on < nodes_off and rcuts_on > 0,
+    }
+
+
 def _run_rhcr(agents: int = 6, steps: int = 120, allocator: str = "stream",
               rows: int = 2, cols: int = 3, aisle: int = 1, window: int = 8,
               replan_period: int = 4, solver: str = "pbs",
@@ -4059,6 +4129,10 @@ SUITE = [
     # LP solved by column generation (pricing) + lazy conflict cuts + branching;
     # same optimum as CBS, certified by the LP lower bound (gap zero)
     ("bcp_branch_price", _run_bcp_branch_price),
+    # BCP rectangle cuts: Lam et al.'s specialized cut family on the branch-price
+    # frame -- a single cut sum_B1 y_a1 + sum_B2 y_a2 <= 1 collapses the
+    # same-direction rectangle-crossing symmetry that branching enumerates
+    ("bcp_rectangle", _run_bcp_rectangle),
     # LNS destroy-repair lowers sum-of-costs at scale (anytime improvement)
     ("lns_scaling_improvement", _run_lns_scaling_improvement),
     ("lns_adaptive_vs_fixed", _run_lns_adaptive_vs_fixed),
