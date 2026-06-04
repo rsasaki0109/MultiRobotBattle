@@ -165,6 +165,12 @@ The pieces compose bottom-up:
   sparse maps), but it stalls on the cyclic, slack-free regions (a packed
   rectangle, a full ring) that de Wilde et al. (2014) showed the bare core
   cannot solve — the exact completeness gap the rotate primitive closes.
+- :mod:`bibox` — Bibox (Surynek 2009): a constructive, polynomial-time *complete*
+  solver for **biconnected** graphs with at least two blanks, built on an *open
+  ear decomposition*. Derived ears (chains attached at both ends to the part built
+  so far) are solved in reverse order and locked, each filled by *rotating* the
+  cycle it forms with a return path; the basic cycle is closed last. Valid by
+  construction and complete on its class, where optimal search (CBS) blows up.
 - :mod:`prioritized` — prioritized planning: fast and incomplete; plans agents
   in priority order, each treating higher-priority paths as moving obstacles.
 - :mod:`ddm` — database-driven multi-robot planning (Han & Yu 2020): a decoupled
@@ -222,6 +228,7 @@ from .grid import Cell, GridWorld, manhattan
 from .path_follower import pure_pursuit
 from .prioritized import prioritized_planning
 from .whca import whca_star
+from .bibox import bibox, ear_decomposition
 from .push_and_rotate import push_and_rotate
 from .push_and_swap import push_and_swap
 from .sipp import plan_sipp
@@ -279,6 +286,8 @@ __all__ = [
     "whca_star",
     "push_and_rotate",
     "push_and_swap",
+    "bibox",
+    "ear_decomposition",
     "pure_pursuit",
     "Solution",
     "sum_of_costs",

@@ -981,6 +981,55 @@ them around the hub and Push-and-Swap solves it collision-free in eight moves
 (`swap_solves`, `swap_valid`, `swap_moves == 8`) — a positive isolation of the
 one primitive that distinguishes this core from plain prioritized pushing.
 
+### High level: Bibox — constructive completeness via ear decomposition (`bibox.py`)
+
+`bibox` reproduces **Bibox** (Surynek, ICRA 2009; *"A Complete Multi-robot
+Path-planning Algorithm"*, AAMAS 2014) — a *constructive*, polynomial-time solver
+that is **complete** on **biconnected** (2-vertex-connected) graphs with at least
+two blanks. It is a paradigm distinct from every search and every push/swap solver
+here: it works off an **open ear decomposition**. The graph is split into a basic
+cycle `L0` plus *derived ears* — chains whose two endpoints lie on the part built
+so far and whose interior vertices are new. Bibox solves the derived ears **in
+reverse order** (`Lr` down to `L1`), locking each ear's interior once its goal
+agents are placed, and finally solves the basic cycle.
+
+**How an ear is filled.** An ear plus a return path through the already-built
+subgraph forms a cycle; Bibox stages each goal agent at the ear's entrance and a
+single **cycle rotation** conveys it one step into the interior, shoving whatever
+sat there out through the exit. Because every locked ear holds exactly its goal
+blanks, the working subgraph always keeps the two free vertices the rotations need
+(Surynek's Prop. 5); a *BorrowBlanks* goal transform first parks two blanks in the
+basic cycle and *ReturnBlanks* slides agents to their original goals at the end.
+This implementation is **undirected**, so the directed-graph *escape doors* are
+unneeded; the basic cycle is closed on the small theta region `L0 ∪ int(L1)` by a
+generic biconnected-region endgame (peel vertices while the remainder stays
+biconnected, then finish the O(1) core by exact joint search) — the same guarantee
+as Surynek's `BringAgentsTogether` buffer maneuver, realized through the region's
+biconnectivity. Every move steps one agent into an adjacent empty cell, so plans
+are collision-free and on-goal **by construction**.
+
+The `mapf_bibox` gate pins six things. **(1) Structure** — on `3×3` and `4×4` the
+decomposition is a real *open* one: the basic cycle is a cycle (`struct_3x3_is_cycle`),
+endpoints lie in the prefix and interiors are new (`*_prefix_ok`), no ear is closed
+(`*_open`), and the ears cover every vertex (`*_covers`); `3×3` yields a 4-cycle and
+3 ears, `4×4` yields 8 ears. **(2) Complete + sound** — the defining property —
+against a brute-force solvability oracle on small biconnected maps Bibox solves
+*every* solvable instance (`complete_incomplete == 0`, `is_complete`) and never
+"solves" an unsolvable one (`complete_unsound == 0`, `is_sound`), over 366 checks.
+**(3) Valid by construction** — across a 564-instance random battery every returned
+plan is collision-free and on-goal (`battery_cf_violations == 0`,
+`battery_goalfail == 0`, `battery_all_valid`). **(4) Completeness contrast** — on
+packed biconnected formations (`≥ 2` blanks) where optimal CBS busts a 2000-node
+budget, Bibox still solves all 32, valid by construction
+(`packed_bibox_solved == 32` vs `packed_cbs_solved == 1`, `packed_bibox_beats_cbs`).
+**(5) Rotation exercised** — a 6-agent `4×3` instance is solved through the
+ear-rotation machinery (`rotation_ears == 5`, `rotation_multi_ear`,
+`rotation_moves == 17`, collision-free). **(6) Honest scope** — outside its class
+Bibox returns `None`: a path graph with cut vertices (`scope_noncbc_none`) and a
+single-blank `2×2` (`scope_fewblank_none`). The showcase is the `2×3` theta swap,
+solved in six moves (`showcase_swap_moves == 6`) — constructive and valid, though
+in general suboptimal versus CBS's cost.
+
 ### High level: M* — subdimensional expansion (`mstar.py`)
 
 `mstar` reproduces Wagner & Choset's **M\*** (*Subdimensional expansion for

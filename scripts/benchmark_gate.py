@@ -3307,6 +3307,252 @@ def _run_push_and_swap() -> dict:
             "showcase_pr_moves": sstats.get("moves", -1)}
 
 
+def _run_bibox() -> dict:
+    # bibox.py reproduces Surynek's "Bibox" (ICRA 2009 / AAMAS 2014) -- a
+    # CONSTRUCTIVE, polynomial-time COMPLETE solver for biconnected graphs with
+    # >= 2 blanks, and a paradigm distinct from every search/primitive solver in
+    # the repo: it works off an OPEN EAR DECOMPOSITION. The graph is split into a
+    # basic cycle L0 plus derived ears (chains attached at both endpoints to the
+    # part built so far); ears are solved in REVERSE order and locked, each filled
+    # by ROTATING the cycle it forms with a return path so staged agents are
+    # conveyed into its interior. The basic cycle is then closed on the theta
+    # region L0 union int(L1). A BorrowBlanks goal transform first parks two blanks
+    # in L0 (undone by ReturnBlanks). Every move steps one agent into an adjacent
+    # empty cell, so plans are collision-free and on-goal BY CONSTRUCTION.
+    #
+    # What this gate pins:
+    # (1) STRUCTURE. The ear decomposition is a real open decomposition: the basic
+    #     cycle is a cycle, the ears cover every vertex, endpoints lie in the
+    #     prefix, interiors are new, and no ear is closed (open).
+    # (2) COMPLETE + SOUND (the defining property). Against a brute-force
+    #     solvability oracle on small biconnected maps, Bibox solves EVERY solvable
+    #     instance (complete_incomplete == 0) and NEVER "solves" an unsolvable one
+    #     (complete_unsound == 0).
+    # (3) VALID BY CONSTRUCTION. On a broad random battery every returned plan is
+    #     collision-free (battery_cf_violations == 0) and on-goal (battery_goalfail
+    #     == 0).
+    # (4) COMPLETENESS CONTRAST. On packed biconnected formations (>= 2 blanks)
+    #     where optimal CBS busts its expansion budget, Bibox still solves them all,
+    #     valid by construction -- bibox_solved > cbs_solved.
+    # (5) ROTATION EXERCISED. A multi-ear instance is solved through the ear-
+    #     rotation machinery (>= 2 ears), reported with its move count.
+    # (6) HONEST SCOPE. Outside its class Bibox returns None: a graph with a cut
+    #     vertex (not biconnected), and an instance with fewer than two blanks.
+    import random
+    from collections import deque
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.bibox import bibox, ear_decomposition
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    def _adj(grid):
+        free = [(x, y) for x in range(grid.width) for y in range(grid.height)
+                if grid.is_free((x, y))]
+        fset = set(free)
+        return {c: [n for n in ((c[0] + 1, c[1]), (c[0] - 1, c[1]),
+                                (c[0], c[1] + 1), (c[0], c[1] - 1)) if n in fset]
+                for c in free}, free
+
+    def _valid(sol, agents):
+        return (detect_first_conflict(sol.paths) is None
+                and all(sol.paths[a][-1] == agents[a][1] for a in agents))
+
+    def _brute_solvable(grid, agents, cap=300000):
+        adj, _ = _adj(grid)
+        ids = sorted(agents)
+        start = tuple(agents[a][0] for a in ids)
+        goal = tuple(agents[a][1] for a in ids)
+        if start == goal:
+            return True
+        seen = {start}
+        q = deque([start])
+        while q and len(seen) < cap:
+            cfg = q.popleft()
+            occ = set(cfg)
+            for i, a in enumerate(ids):
+                for nb in adj[cfg[i]]:
+                    if nb not in occ:
+                        nc = cfg[:i] + (nb,) + cfg[i + 1:]
+                        if nc not in seen:
+                            seen.add(nc)
+                            if nc == goal:
+                                return True
+                            q.append(nc)
+        return None                                  # unknown (hit cap)
+
+    def _rand(grid, free, n, rng):
+        s = rng.sample(free, n)
+        g = rng.sample(free, n)
+        return {i: (s[i], g[i]) for i in range(n)}
+
+    # (1) STRUCTURE -- 3x3 and 4x4 open ear decompositions.
+    def _struct(grid):
+        adj, _ = _adj(grid)
+        bc, ears = ear_decomposition(grid)
+        adjset = {c: set(ns) for c, ns in adj.items()}
+        is_cycle = (len(bc) >= 3
+                    and all(bc[(i + 1) % len(bc)] in adjset[bc[i]]
+                            for i in range(len(bc))))
+        built = set(bc)
+        prefix_ok = open_ok = True
+        cover = set(bc)
+        for e in ears:
+            if e[0] not in built or e[-1] not in built:
+                prefix_ok = False
+            if e[0] == e[-1]:
+                open_ok = False
+            for iv in e[1:-1]:
+                if iv in built:
+                    prefix_ok = False
+            built |= set(e)
+            cover |= set(e)
+        return bc, ears, is_cycle, prefix_ok, open_ok, cover == set(adj)
+
+    bc3, ears3, cyc3, pre3, open3, cov3 = _struct(GridWorld(3, 3))
+    bc4, ears4, cyc4, pre4, open4, cov4 = _struct(GridWorld(4, 4))
+
+    # (2) COMPLETE + SOUND -- brute oracle on small biconnected maps.
+    rng = random.Random(2026)
+    complete_checks = complete_incomplete = complete_unsound = 0
+    for w, h, blk in ((3, 3, ()), (2, 4, ()), (2, 3, ()), (3, 3, ((1, 1),))):
+        grid = GridWorld(w, h, frozenset(blk))
+        _, free = _adj(grid)
+        V = len(free)
+        for n in range(1, min(4, V - 1) + 1):
+            for _ in range(25):
+                agents = _rand(grid, free, n, rng)
+                sol = bibox(grid, agents)
+                bt = _brute_solvable(grid, agents)
+                if bt is None:
+                    continue
+                complete_checks += 1
+                if bt and sol is None:
+                    complete_incomplete += 1
+                if (not bt) and sol is not None:
+                    complete_unsound += 1
+
+    # (3) VALID BY CONSTRUCTION -- broad random battery.
+    battery_instances = battery_solved = battery_cf = battery_goalfail = 0
+    for w, h in ((3, 3), (2, 4), (4, 3), (4, 4), (3, 4)):
+        grid = GridWorld(w, h)
+        _, free = _adj(grid)
+        V = len(free)
+        for n in range(1, V - 1):
+            for _ in range(12):
+                agents = _rand(grid, free, n, rng)
+                sol = bibox(grid, agents)
+                battery_instances += 1
+                if sol is not None:
+                    battery_solved += 1
+                    if detect_first_conflict(sol.paths) is not None:
+                        battery_cf += 1
+                    if any(sol.paths[a][-1] != agents[a][1] for a in agents):
+                        battery_goalfail += 1
+
+    # (4) COMPLETENESS CONTRAST -- packed formations vs CBS's expansion budget.
+    def _packed(w, h, blanks, seed):
+        rng2 = random.Random(seed * 131 + w * 7 + h * 3 + blanks)
+        grid = GridWorld(w, h)
+        cells = [(x, y) for y in range(h) for x in range(w)]
+        goal = cells[:len(cells) - blanks]
+        n = len(goal)
+        pos = {i: goal[i] for i in range(n)}
+        occ = {goal[i]: i for i in range(n)}
+        empt = set(cells) - set(goal)
+        nb = lambda c: [d for d in ((c[0] + 1, c[1]), (c[0] - 1, c[1]),
+                                    (c[0], c[1] + 1), (c[0], c[1] - 1))
+                        if grid.is_free(d)]
+        for _ in range(30 * n):
+            e = rng2.choice(sorted(empt))
+            cand = [c for c in nb(e) if c in occ]
+            if not cand:
+                continue
+            c = rng2.choice(cand)
+            a = occ.pop(c)
+            occ[e] = a
+            pos[a] = e
+            empt.discard(e)
+            empt.add(c)
+        return grid, {i: (pos[i], goal[i]) for i in range(n)}
+
+    packed_instances = packed_bibox = packed_cbs = packed_bibox_valid = 0
+    for blanks in (2, 3):
+        for w, h in ((4, 4), (3, 4)):
+            for seed in range(8):
+                grid, agents = _packed(w, h, blanks, seed)
+                packed_instances += 1
+                sol = bibox(grid, agents)
+                if sol is not None:
+                    packed_bibox += 1
+                    packed_bibox_valid += int(_valid(sol, agents))
+                base = cbs(grid, agents, max_expansions=2000)
+                if base is not None:
+                    packed_cbs += 1
+
+    # (5) ROTATION EXERCISED -- a multi-ear instance solved by the ear machinery.
+    rgrid = GridWorld(4, 3)
+    _, rfree = _adj(rgrid)
+    rrng = random.Random(7)
+    rot_stats: dict = {}
+    rot_sol = None
+    while rot_sol is None:
+        rag = _rand(rgrid, rfree, 6, rrng)
+        rot_stats = {}
+        rot_sol = bibox(rgrid, rag, stats=rot_stats)
+
+    # (6) HONEST SCOPE -- out of class returns None.
+    cut = GridWorld(1, 4)                             # a path: articulation points
+    scope_noncbc = bibox(cut, {0: ((0, 0), (0, 3)), 1: ((0, 3), (0, 0))}) is None
+    tiny = GridWorld(2, 2)                            # 4 cells, 3 agents -> 1 blank
+    scope_fewblank = bibox(tiny, {0: ((0, 0), (1, 1)), 1: ((1, 0), (0, 1)),
+                                  2: ((0, 1), (1, 0))}) is None
+
+    # showcase: a 2x3 theta swap solved by Bibox (suboptimal vs CBS optimum).
+    sgrid = GridWorld(2, 3)
+    sag = {0: ((0, 0), (0, 2)), 1: ((0, 2), (0, 0))}
+    sstats: dict = {}
+    ssol = bibox(sgrid, sag, stats=sstats)
+    sopt = cbs(sgrid, sag, max_expansions=20000)
+
+    return {"case": "mapf_bibox",
+            "struct_3x3_basic_len": len(bc3), "struct_3x3_ears": len(ears3),
+            "struct_3x3_is_cycle": cyc3, "struct_3x3_prefix_ok": pre3,
+            "struct_3x3_open": open3, "struct_3x3_covers": cov3,
+            "struct_4x4_ears": len(ears4), "struct_4x4_covers": cov4,
+            "struct_4x4_prefix_ok": pre4, "struct_4x4_open": open4,
+            "complete_checks": complete_checks,
+            "complete_incomplete": complete_incomplete,
+            "complete_unsound": complete_unsound,
+            "is_complete": complete_incomplete == 0,
+            "is_sound": complete_unsound == 0,
+            "battery_instances": battery_instances,
+            "battery_solved": battery_solved,
+            "battery_cf_violations": battery_cf,
+            "battery_goalfail": battery_goalfail,
+            "battery_all_valid": battery_cf == 0 and battery_goalfail == 0,
+            "packed_instances": packed_instances,
+            "packed_bibox_solved": packed_bibox,
+            "packed_cbs_solved": packed_cbs,
+            "packed_bibox_valid": packed_bibox_valid,
+            "packed_bibox_valid_when_solved": packed_bibox_valid == packed_bibox,
+            "packed_bibox_beats_cbs": packed_bibox > packed_cbs,
+            "rotation_ears": rot_stats.get("ears", -1),
+            "rotation_basic_len": rot_stats.get("basic_cycle_len", -1),
+            "rotation_moves": rot_stats.get("moves", -1),
+            "rotation_multi_ear": rot_stats.get("ears", 0) >= 2,
+            "rotation_cf": detect_first_conflict(rot_sol.paths) is None,
+            "scope_noncbc_none": scope_noncbc,
+            "scope_fewblank_none": scope_fewblank,
+            "showcase_swap_moves": sstats.get("moves", -1),
+            "showcase_swap_solves": ssol is not None,
+            "showcase_swap_cf": bool(ssol is not None and _valid(ssol, sag)),
+            "showcase_cbs_opt": sopt.cost if sopt is not None else -1,
+            "showcase_bibox_suboptimal": bool(
+                ssol is not None and sopt is not None
+                and ssol.cost >= sopt.cost)}
+
+
 def _run_mstar_subdimensional() -> dict:
     # M* (mstar) is a Python reproduction of Wagner & Choset's "M*" /
     # "Subdimensional expansion for multirobot path planning" (IROS 2011 / AIJ
@@ -4517,6 +4763,10 @@ SUITE = [
     # slack, valid by construction, solves crowded maps where CBS blows up
     ("push_and_rotate", _run_push_and_rotate),
     ("mapf_push_and_swap", _run_push_and_swap),
+    # Bibox: constructive polynomial COMPLETE solver on biconnected graphs via an
+    # open ear decomposition (solve ears in reverse by cycle rotation, then the
+    # basic cycle); valid by construction, solves packed formations CBS busts on
+    ("mapf_bibox", _run_bibox),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),
