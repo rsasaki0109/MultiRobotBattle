@@ -500,6 +500,37 @@ the reference as above (the `ecbs` target ships in the same `cmake --build`), se
 `LIBMRP_ECBS`, and the `mapf-libmrp-equivalence` CI job runs it on every push —
 so the suboptimality *bound*, like the optimum itself, is a guarded contract.
 
+#### BCBS — ECBS's looser sibling (`bcbs.py`)
+
+The [SoCS 2014 paper](https://ojs.aaai.org/index.php/SOCS/article/view/18315) that
+gave us ECBS introduced it as the *improvement* over a first variant, **BCBS**,
+and `bcbs.py` keeps that first variant as a gated contrast — so the package holds
+both and the difference is explicit. Both run focal search at both levels (OPEN by
+a primary key, FOCAL ranked by fewest conflicts); the one knob that differs is the
+**high-level focal bound**. BCBS(`w_high`, `w_low`) bounds the high-level FOCAL by
+`w_high ·` the best **cost** in OPEN and the low level by `w_low`, and because the
+high-level bound is taken against a *cost* rather than a lower bound on the
+optimum, the two factors **multiply**: `cost ≤ w_high · w_low · optimal`. ECBS
+instead tracks `LB(N) = Σ` low-level lower bounds and bounds FOCAL by `w · min LB`;
+since `LB` really does lower-bound the optimum, its guarantee is just `w` — no
+squaring. That tighter accounting is the whole of ECBS's contribution. `bcbs.py`
+reuses ECBS's focal low level (`_focal_low_level`) and conflict counter unchanged;
+only the high-level threshold differs.
+
+The `mapf_bcbs` gate pins three things. **Optimality:** BCBS(1, 1) equals CBS on a
+100-instance battery (`optimal_at_1_1`). **The product bound:** BCBS(1.5, 1.5) stays
+within `1.5² · optimum` on every instance, and the independent `w_high`/`w_low`
+knobs — which ECBS, with its single `w`, does not offer — stay within
+`w_high · w_low · opt` and collision-free (`product_bound_holds`). **The distinction
+made concrete:** on a found instance (5×5, 7 agents, seed 23, optimum 24)
+BCBS(1.5, 1.5) and ECBS(1.5) *diverge* — BCBS expands **fewer** nodes (3 vs 4) and
+returns a **higher** cost (31 vs 28), the looser product bound letting it halt
+earlier at a worse-but-still-bounded solution, exactly the trade ECBS's tight bound
+removes. Both stay within their own guarantees (BCBS 31 ≤ 1.5²·24 = 54; ECBS
+28 ≤ 1.5·24 = 36). On the easy battery the two coincide (the low level returns
+cost-optimal paths, so `cost = LB` and the thresholds agree); the divergence is the
+honest, narrow window where BCBS's looser bookkeeping actually shows.
+
 ### High level: EECBS (`eecbs.py`)
 
 `eecbs(grid, agents, w=1.5)` is also **bounded-suboptimal**, but it fixes the

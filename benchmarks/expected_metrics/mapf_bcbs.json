@@ -1,0 +1,19 @@
+{
+  "battery_bound_ok": 99,
+  "battery_collision_free": 99,
+  "battery_instances": 99,
+  "battery_opt_match": 99,
+  "both_within_own_bounds": true,
+  "bcbs_fewer_exp_higher_cost": true,
+  "case": "mapf_bcbs",
+  "knob_bound_ok": 3,
+  "knob_collision_free": 3,
+  "knob_configs": 3,
+  "optimal_at_1_1": true,
+  "product_bound_holds": true,
+  "showcase_bcbs_cost": 31,
+  "showcase_bcbs_exp": 3,
+  "showcase_ecbs_cost": 28,
+  "showcase_ecbs_exp": 4,
+  "showcase_optimum": 24
+}

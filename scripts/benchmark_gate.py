@@ -642,6 +642,109 @@ def _run_eecbs_vs_ecbs() -> dict:
             "monotone": exp_wdg <= exp_dg <= exp_cg <= exp_none}
 
 
+def _run_bcbs() -> dict:
+    # BCBS (bcbs.py) is a Python reproduction of the OTHER suboptimal CBS variant
+    # in Barer, Sharon, Stern & Felner's "Suboptimal Variants of the Conflict-
+    # Based Search Algorithm" (SoCS 2014) -- the one ECBS (already in the package)
+    # improved on. Both run focal search at both levels; the difference is the
+    # high-level focal bound. BCBS(w_high, w_low) bounds the high-level focal by
+    # w_high * the best COST in OPEN and the low level by w_low, so the factors
+    # MULTIPLY: cost <= w_high * w_low * optimal. ECBS instead bounds by w * the
+    # best LOWER BOUND (a true bound on the optimum), giving just w -- the tighter
+    # accounting that superseded BCBS. This gate keeps BCBS as a faithful, honest
+    # contrast (it reuses ECBS's focal low level unchanged; only the high-level
+    # bound differs).
+    #
+    # Pins: (1) OPTIMAL -- BCBS(1,1) equals cbs on a battery (optimal_at_1_1).
+    # (2) PRODUCT BOUND -- BCBS(1.5,1.5) cost <= 1.5^2 * optimum on every instance
+    # (product_bound_holds), and the independent w_high/w_low knobs (which ECBS,
+    # single-w, does not have) stay within w_high*w_low*opt and collision-free.
+    # (3) THE DISTINCTION, made concrete -- on a found instance (5x5, 7 agents,
+    # seed 23) BCBS(1.5,1.5) and ECBS(1.5) DIVERGE: BCBS expands FEWER nodes (3 vs
+    # 4) and returns a HIGHER cost (31 vs 28, optimum 24) -- the looser product
+    # bound lets BCBS stop earlier at a worse but still-bounded solution, exactly
+    # the trade ECBS's tight bound removes. Both stay within their own guarantees
+    # (BCBS 31 <= 1.5^2*24=54; ECBS 28 <= 1.5*24=36).
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.bcbs import bcbs
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.ecbs import ecbs
+
+    def _rand(seed, w, h, n, ob):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < ob}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        if len(free) < 2 * n:
+            return None
+        rng.shuffle(free)
+        return GridWorld(w, h, frozenset(blocked)), \
+            {i: (free[i], free[n + i]) for i in range(n)}
+
+    # (1)+(2) battery
+    inst = opt_match = bound_ok = cf = 0
+    W = 1.5
+    for seed in range(100):
+        r = _rand(seed, 5, 5, 4, 0.1)
+        if r is None:
+            continue
+        grid, ag = r
+        base = cbs(grid, ag, max_expansions=40000)
+        if base is None:
+            continue
+        b11 = bcbs(grid, ag, w_high=1.0, w_low=1.0, max_expansions=40000)
+        bww = bcbs(grid, ag, w_high=W, w_low=W, max_expansions=40000)
+        if b11 is None or bww is None:
+            continue
+        inst += 1
+        opt_match += int(b11.cost == base.cost)
+        bound_ok += int(bww.cost <= W * W * base.cost + 1e-9)
+        cf += int(detect_first_conflict(bww.paths) is None)
+
+    # independent knobs (unique to BCBS) on the showcase instance
+    grid, ag = _rand(23, 5, 5, 7, 0.05)
+    opt = cbs(grid, ag, max_expansions=80000).cost
+    knob_ok = 0
+    knob_cf = 0
+    for wh, wl in ((1.0, 3.0), (3.0, 1.0), (2.0, 1.0)):
+        rk = bcbs(grid, ag, w_high=wh, w_low=wl, max_expansions=40000)
+        knob_ok += int(rk.cost <= wh * wl * opt + 1e-9)
+        knob_cf += int(detect_first_conflict(rk.paths) is None)
+
+    # (3) divergence showcase
+    sb: dict = {}
+    se: dict = {}
+    bshow = bcbs(grid, ag, w_high=W, w_low=W, max_expansions=40000, stats=sb)
+    eshow = ecbs(grid, ag, w=W, max_expansions=40000, stats=se)
+
+    return {
+        "case": "mapf_bcbs",
+        "battery_instances": inst,
+        "battery_opt_match": opt_match,
+        "battery_bound_ok": bound_ok,
+        "battery_collision_free": cf,
+        "knob_configs": 3,
+        "knob_bound_ok": knob_ok,
+        "knob_collision_free": knob_cf,
+        "showcase_optimum": opt,
+        "showcase_bcbs_cost": bshow.cost,
+        "showcase_bcbs_exp": sb["expansions"],
+        "showcase_ecbs_cost": eshow.cost,
+        "showcase_ecbs_exp": se["expansions"],
+        "optimal_at_1_1": opt_match == inst and inst > 0,
+        "product_bound_holds": (bound_ok == inst and knob_ok == 3
+                                and cf == inst),
+        "bcbs_fewer_exp_higher_cost": (sb["expansions"] < se["expansions"]
+                                       and bshow.cost > eshow.cost),
+        "both_within_own_bounds": (bshow.cost <= W * W * opt
+                                   and eshow.cost <= W * opt),
+    }
+
+
 def _run_icts_vs_cbs() -> dict:
     # ICTS (icts) is a Python reproduction of Sharon, Stern, Goldenberg & Felner's
     # "The increasing cost tree search for optimal multi-agent pathfinding" (AIJ
@@ -4043,6 +4146,10 @@ SUITE = [
     ("cbsh_vs_cbs", _run_cbsh_vs_cbs),
     # EECBS: admissible WDG bound + EES cut bounded-suboptimal expansions vs ECBS
     ("eecbs_vs_ecbs", _run_eecbs_vs_ecbs),
+    # BCBS: ECBS's sibling from the same paper -- focal at both levels but the
+    # high-level bound is on the best COST, so factors multiply (w_high*w_low);
+    # kept as a gated contrast (fewer expansions, higher cost than tighter ECBS)
+    ("mapf_bcbs", _run_bcbs),
     # ICTS: cost-tree optimal search (same optimum as CBS); pairwise pruning
     # cuts the k-agent joint searches
     ("icts_vs_cbs", _run_icts_vs_cbs),

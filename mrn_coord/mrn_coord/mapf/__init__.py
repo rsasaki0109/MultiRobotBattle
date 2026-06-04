@@ -63,6 +63,11 @@ The pieces compose bottom-up:
 - :mod:`ecbs` — Enhanced CBS: bounded-suboptimal (``cost <= w * optimal``) via
   focal search at both levels; expands far fewer nodes than CBS for a little
   cost slack, so it scales to more agents.
+- :mod:`bcbs` — Bounded CBS (Barer et al. 2014), ECBS's sibling from the same
+  paper: focal at both levels too, but the high-level bound is taken against the
+  best *cost* (not a lower bound), so the two factors multiply — ``w_high *
+  w_low`` suboptimal, with independent knobs. ECBS's tighter ``w`` bound is what
+  superseded it; kept as a gated contrast (it expands fewer nodes at higher cost).
 - :mod:`eecbs` — EECBS (Li et al. 2021): bounded-suboptimal like ECBS, but it
   reuses CBSH's admissible WDG heuristic for a tight lower bound and runs
   Explicit Estimation Search at the high level, certifying the ``w`` bound with
@@ -170,6 +175,7 @@ from .bypass import cbs_bypass
 from .cbm import cbm
 from .cbs import cbs
 from .cbs_ta import cbs_ta
+from .bcbs import bcbs
 from .pibt_swap import pibt_swap
 from .cbsh import cbsh
 from .ddm import ddm
@@ -230,6 +236,7 @@ __all__ = [
     "ccbs",
     "ecbs",
     "eecbs",
+    "bcbs",
     "anonymous_makespan",
     "tswap",
     "icts",
