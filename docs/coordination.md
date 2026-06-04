@@ -705,6 +705,39 @@ teams on 5×5, seed 0): makespan 5 via 3 high-level nodes, above the anonymous
 lower bound 4, with a within-team target *interchange* — an agent fills its team's
 other target, the anonymous freedom CBM still has inside each team.
 
+#### CBS-TA — CBS with optimal target assignment (`cbs_ta.py`)
+
+`cbm` interpolates flow and labeled MAPF over **teams** and optimizes *makespan*;
+**CBS-TA** ([Hönig, Kiesel, Tinka, Durham & Ayanian, *"Conflict-Based Search with
+Optimal Task Assignment"*, ICAPS 2018](https://ojs.aaai.org/index.php/ICAPS/article/view/13796))
+is the labeled, **sum-of-costs** cousin: each agent may serve any goal from a pool,
+and we want the *jointly* optimal choice of assignment **and** paths. Assigning
+first by cheapest free-space distance then routing is not optimal — the cheapest
+matching can force an expensive collision that a slightly-costlier matching avoids.
+
+CBS-TA keeps CBS's two levels but replaces the single root with a **forest of
+roots**, one per target assignment, unfolded lazily in increasing assignment-cost
+order by **Murty's K-best algorithm** over the agent×target distance matrix
+(min-cost matching by `hungarian`). The first root is the cheapest assignment;
+only when a root is *expanded* is the next-cheapest assignment materialized as a
+new root. Each root plans every agent to its assigned target with no constraints —
+so a root's sum-of-costs equals its assignment cost exactly — and from there
+ordinary CBS constraint nodes resolve conflicts. The whole forest is searched
+best-first by sum-of-costs, so the first conflict-free node popped is optimal over
+*both* assignment and paths. Lazy unfolding stays optimal because Murty yields
+assignments non-decreasing in cost and constraints only raise cost, so any
+not-yet-materialized assignment costs at least as much as the last root.
+
+The `mapf_cbs_ta` gate pins the mechanism and both interpolation extremes: Murty's
+K-best matches the brute-force sorted assignment-cost order exactly (0 mismatches
+over 298 matrices); one distinct goal per agent degenerates to plain `cbs`
+(120/120 same cost, collision-free); with an anonymous 3-target pool the combined
+cost equals a brute force that runs `cbs` on *every* assignment (120/120,
+collision-free); and on that same battery CBS-TA strictly beats fixing the
+distance-cheapest (Hungarian 1-best) assignment on 7/120. The frozen showcase
+(seed 8): the cheapest assignment is forced into a conflict for cost 8, while
+CBS-TA swaps two agents' targets for cost 7, via 2 expansions across 3 roots.
+
 #### Offline TSWAP — constructive anonymous MAPF by target swapping (`tswap.py`)
 
 `flow` is the makespan-**optimal** anonymous solver, but it pays for it — a

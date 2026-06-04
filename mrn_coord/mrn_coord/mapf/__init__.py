@@ -107,6 +107,13 @@ The pieces compose bottom-up:
   constraints; the high level is CBS over *inter-team* conflicts. It interpolates
   the two extremes — one team is pure :mod:`flow`, singleton teams are labeled
   makespan-optimal MAPF — and is makespan-optimal throughout.
+- :mod:`cbs_ta` — CBS with optimal Target Assignment (Hönig et al. 2018): when
+  each agent may serve any goal from a pool, find the *jointly* optimal assignment
+  *and* paths. CBS's single root becomes a **forest** of roots (one per assignment,
+  unfolded lazily in increasing cost by Murty's K-best matching); searched
+  best-first by sum-of-costs the first conflict-free node is jointly optimal. The
+  labeled, sum-of-costs cousin of :mod:`cbm` (teams/makespan): one distinct goal
+  per agent is byte-for-byte :mod:`cbs`, a shared pool is the anonymous optimum.
 - :mod:`flow` — anonymous makespan-optimal MAPF (Yu & LaValle 2013): when targets
   are interchangeable, minimum-makespan routing reduces to integer MAX FLOW on a
   time-expanded network — polynomial, no search tree, with a self-certified
@@ -156,6 +163,7 @@ from .bcp import bcp
 from .bypass import cbs_bypass
 from .cbm import cbm
 from .cbs import cbs
+from .cbs_ta import cbs_ta
 from .cbsh import cbsh
 from .ddm import ddm
 from .epea import epea_star
@@ -206,6 +214,7 @@ __all__ = [
     "cbs_bypass",
     "cbm",
     "cbs",
+    "cbs_ta",
     "cbsh",
     "ddm",
     "epea_star",

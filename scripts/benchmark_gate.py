@@ -2124,6 +2124,160 @@ def _run_cbm_tapf() -> dict:
     }
 
 
+def _run_cbs_ta() -> dict:
+    # CBS-TA (cbs_ta.py) is a Python reproduction of Hönig, Kiesel, Tinka, Durham
+    # & Ayanian's "Conflict-Based Search with Optimal Task Assignment" (ICAPS
+    # 2018). Plain CBS is handed one goal per agent; CBS-TA leaves the assignment
+    # open -- each agent may serve any goal from a pool -- and finds the JOINTLY
+    # optimal assignment+paths. It keeps CBS's two levels but replaces the single
+    # root with a FOREST of roots, one per target assignment, unfolded lazily in
+    # increasing assignment-cost order by Murty's K-best algorithm over the
+    # agent x target distance matrix (min-cost matching by hungarian). Only when a
+    # root is expanded is the next-cheapest assignment materialized; the whole
+    # forest is searched best-first by sum-of-costs, so the first conflict-free
+    # node popped is optimal over BOTH assignment and paths.
+    #
+    # The gate pins the mechanism and the two interpolation extremes:
+    # (1) MURTY EXACT: the K-best generator yields assignment costs in exactly the
+    #     brute-force sorted order (0 mismatches over 300 random matrices).
+    # (2) DEGENERATE == CBS: give each agent a single distinct goal and the forest
+    #     has one root -- cbs_ta's sum-of-costs equals cbs on every instance,
+    #     collision-free.
+    # (3) JOINTLY OPTIMAL: with an anonymous pool (3 agents may serve any of 3
+    #     targets) cbs_ta's cost equals a brute force that runs cbs on EVERY
+    #     assignment and takes the min -- on every instance, collision-free.
+    # (4) ASSIGNMENT MATTERS: on the same battery, cbs_ta strictly beats fixing the
+    #     distance-cheapest (Hungarian 1-best) assignment and routing it with cbs on
+    #     7 of 120 -- the cheapest matching is NOT always jointly optimal once
+    #     collisions are priced in. SHOWCASE seed 8: the cheapest assignment costs 8
+    #     (a forced conflict), cbs_ta swaps two agents' targets for cost 7, via 2
+    #     expansions across 3 materialized roots.
+    import itertools as _it
+    import random
+
+    from mrn_coord.lifelong.allocation import hungarian
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.cbs_ta import _bfs_dist, _murty, cbs_ta
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+
+    INF = float("inf")
+
+    # (1) Murty K-best == brute sorted assignment costs.
+    def brute_kbest(cost):
+        R, C = len(cost), len(cost[0])
+        res = []
+        for perm in _it.permutations(range(C), R):
+            t = sum(cost[i][perm[i]] for i in range(R))
+            if t < INF:
+                res.append(t)
+        res.sort()
+        return res
+
+    murty_inst = murty_mismatch = 0
+    for seed in range(300):
+        rng = random.Random(seed)
+        R = rng.randint(2, 4)
+        C = rng.randint(R, R + 2)
+        cost = [[float(rng.randint(1, 9)) if rng.random() > 0.15 else INF
+                 for _ in range(C)] for _ in range(R)]
+        bt = brute_kbest(cost)
+        if not bt:
+            continue
+        murty_inst += 1
+        got = [t for (a, t), _ in zip(_murty(cost), range(min(len(bt), 8)))]
+        if got != bt[:len(got)]:
+            murty_mismatch += 1
+
+    # (2) degenerate (single goal each) == cbs.
+    deg_inst = deg_match = deg_cf = 0
+    for seed in range(120):
+        rng = random.Random(seed)
+        cells = rng.sample([(x, y) for x in range(5) for y in range(5)], 6)
+        grid = GridWorld(5, 5)
+        agents = {i: (cells[i], cells[i + 3]) for i in range(3)}
+        c = cbs(grid, agents)
+        ct = cbs_ta(grid, {i: (cells[i], [cells[i + 3]]) for i in range(3)})
+        if (c is None) != (ct is None):
+            continue
+        deg_inst += 1
+        if c is not None and c.cost == ct.cost:
+            deg_match += 1
+        if ct is not None and detect_first_conflict(ct.paths) is None:
+            deg_cf += 1
+
+    # (3)+(4) anonymous pool: jointly optimal vs brute, vs fixed cheapest.
+    def brute_best(grid, starts, targets, na):
+        best = None
+        for combo in _it.permutations(targets, na):
+            sol = cbs(grid, {i: (starts[i], combo[i]) for i in range(na)})
+            if sol is not None and (best is None or sol.cost < best):
+                best = sol.cost
+        return best
+
+    def cheapest_fixed(grid, starts, targets, na):
+        dist = [_bfs_dist(grid, starts[i]) for i in range(na)]
+        cost = [[float(dist[i].get(t, INF)) for t in targets] for i in range(na)]
+        a = hungarian(cost)
+        if len(a) < na:
+            return None
+        return {i: (starts[i], targets[a[i]]) for i in range(na)}
+
+    na = 3
+    anon_inst = anon_opt = anon_cf = beats = 0
+    showcase = {}
+    for seed in range(120):
+        rng = random.Random(seed)
+        cells = rng.sample([(x, y) for x in range(5) for y in range(5)], 6)
+        grid = GridWorld(5, 5)
+        starts, targets = cells[:na], cells[na:na + na]
+        bm = brute_best(grid, starts, targets, na)
+        st: dict = {}
+        sol = cbs_ta(grid, {i: (starts[i], targets) for i in range(na)}, stats=st)
+        if bm is None or sol is None:
+            continue
+        anon_inst += 1
+        if sol.cost == bm:
+            anon_opt += 1
+        if detect_first_conflict(sol.paths) is None:
+            anon_cf += 1
+        fixed = cheapest_fixed(grid, starts, targets, na)
+        fixed_sol = cbs(grid, fixed) if fixed is not None else None
+        if fixed_sol is not None and sol.cost < fixed_sol.cost:
+            beats += 1
+        if seed == 8:
+            showcase = {
+                "ta_cost": sol.cost,
+                "fixed_cost": fixed_sol.cost if fixed_sol else -1,
+                "roots": st["roots"],
+                "expansions": st["expansions"],
+            }
+
+    return {
+        "case": "mapf_cbs_ta",
+        "murty_instances": murty_inst,
+        "murty_mismatches": murty_mismatch,
+        "degenerate_instances": deg_inst,
+        "degenerate_match_cbs": deg_match,
+        "degenerate_collision_free": deg_cf,
+        "anon_instances": anon_inst,
+        "anon_opt_match_brute": anon_opt,
+        "anon_collision_free": anon_cf,
+        "ta_beats_fixed_cheapest": beats,
+        "showcase_ta_cost": showcase.get("ta_cost"),
+        "showcase_fixed_cost": showcase.get("fixed_cost"),
+        "showcase_roots": showcase.get("roots"),
+        "showcase_expansions": showcase.get("expansions"),
+        "murty_kbest_exact": murty_mismatch == 0 and murty_inst > 0,
+        "degenerate_is_cbs": (deg_match == deg_inst and deg_cf == deg_inst
+                              and deg_inst > 0),
+        "jointly_optimal": (anon_opt == anon_inst and anon_cf == anon_inst
+                            and anon_inst > 0),
+        "assignment_matters": beats > 0 and showcase.get("ta_cost", 0) <
+        showcase.get("fixed_cost", 0),
+    }
+
+
 def _run_disjoint_vs_standard() -> dict:
     # Disjoint splitting (cbs's disjoint=True) is a Python reproduction of Li,
     # Harabor, Stuckey, Ma & Koenig's "Disjoint Splitting for Multi-Agent Path
@@ -3787,6 +3941,10 @@ SUITE = [
     # max-flow low level under CBS-over-teams; interpolates flow (one team) and
     # labeled MAPF (singleton teams), makespan-optimal
     ("mapf_cbm", _run_cbm_tapf),
+    # CBS-TA: CBS with optimal Target Assignment -- a forest of roots (one per
+    # assignment, unfolded lazily by Murty's K-best) over CBS's constraint tree,
+    # jointly optimal over assignment + paths; degenerates to cbs (one goal each)
+    ("mapf_cbs_ta", _run_cbs_ta),
     # CCBS: continuous-time CBS with disk agents -- geometrically collision-free
     # where the discrete vertex/edge model is blind (mid-edge crossings)
     ("ccbs_continuous_time", _run_ccbs_continuous_time),

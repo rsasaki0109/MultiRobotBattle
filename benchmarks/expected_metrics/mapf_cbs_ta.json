@@ -1,0 +1,20 @@
+{
+  "anon_collision_free": 120,
+  "anon_instances": 120,
+  "anon_opt_match_brute": 120,
+  "assignment_matters": true,
+  "case": "mapf_cbs_ta",
+  "degenerate_collision_free": 120,
+  "degenerate_instances": 120,
+  "degenerate_is_cbs": true,
+  "degenerate_match_cbs": 120,
+  "jointly_optimal": true,
+  "murty_instances": 298,
+  "murty_kbest_exact": true,
+  "murty_mismatches": 0,
+  "showcase_expansions": 2,
+  "showcase_fixed_cost": 8,
+  "showcase_roots": 3,
+  "showcase_ta_cost": 7,
+  "ta_beats_fixed_cheapest": 7
+}
