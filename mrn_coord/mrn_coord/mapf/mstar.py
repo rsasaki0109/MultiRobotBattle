@@ -42,8 +42,8 @@ collision set — and with it the search dimension — stays small.
 
 This module reproduces *basic* M*. The recursive variant rM*, which further
 splits a collision set into independent sub-problems, is a refinement of the
-same backpropagation and is left out; basic M* already exhibits the defining
-subdimensional behavior this gate pins.
+same backpropagation; it lives in :mod:`mrn_coord.mapf.rmstar` and reuses
+:func:`_dist_to_goal` from here, leaving this module unchanged.
 """
 
 from __future__ import annotations

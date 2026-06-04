@@ -1082,9 +1082,56 @@ that M\* collapses. **Honest scope:** this is *basic* M\*, not the recursive rM\
 that splits an independent collision set into sub-problems — so when several
 *distinct* conflicts arise basic M\* merges them into one collision set and, on
 dense random instances where conflicts chain, it couples the whole team and loses
-its edge (rM\* is the fix, left for later). The gate therefore demonstrates the
-mechanism on the regime it was designed for — few, isolated interactions — and
+its edge (rM\* is the fix — see the next section). The gate therefore demonstrates
+the mechanism on the regime it was designed for — few, isolated interactions — and
 pins the exact-optimum agreement with CBS everywhere.
+
+#### Recursive M* (`rmstar.py`)
+
+`rmstar(grid, agents)` reproduces the **recursive** variant rM\* of Wagner &
+Choset's subdimensional expansion — the refinement basic `mstar` deliberately
+leaves out. Basic M\* carries a single **flat** collision set per configuration;
+because backpropagation floods that set backward along every predecessor and the
+start configuration is a common ancestor of *every* collision, independent
+interactions get **unioned** there. A configuration carrying the union then
+branches the full local dimension of *all* those agents at once, so the search
+dimension is the size of the union of all interactions — not of any one of them.
+
+rM\* replaces the flat set with a **partition** of the agents into independent
+collision groups and couples only agents that *genuinely* collide — pairwise.
+Two groups merge solely when an agent of one actually collides with an agent of
+the other; agents that merely collided at the same timestep elsewhere stay in
+separate groups. (Returning the *pairs* that collide rather than the flat
+colliding *set* is what avoids the spurious all-pairs union — the one subtle bug
+that, left in, makes the partition collapse straight back to basic M\*.) This is
+exactly a recursive decomposition of the collision set into independent
+sub-problems, so peak coupling is the largest **irreducible** interacting group.
+Within a coupled group rM\* branches its joint **optimal policy** — the
+jointly-optimal, collision-free sub-moves read off an exact sum-of-costs
+cost-to-go over that group's own joint space, computed with the same
+`(config, settled)` done-bit `mstar` uses so vacate-and-return is priced
+correctly. Groups larger than `MAX_EXACT_GROUP` fall back to basic M\*'s
+branch-all (correct, just unrefined). The result is the **same optimum as CBS**;
+`mstar` itself is left byte-for-byte unchanged and `rmstar` reuses its
+`_dist_to_goal`.
+
+The `rmstar_recursive` gate pins the same exact-optimum agreement (random
+`n∈{2,3}` maps, `rand_opt_match == rand_instances == 37`, every plan
+collision-free) and then the **decomposition** itself. The constructed family
+stacks `k` head-on swaps in disjoint walled blocks — pair `(2b, 2b+1)` must
+exchange through its own block, blocks never interact. Basic M\* unions all `k`
+pairs at the shared start (`basic_peak_cset` grows `2, 4, 6` over `k = 1, 2, 3`)
+and its expansions climb fast (635 popped at `k=3`); rM\* keeps `k` independent
+size-2 groups (`rm_max_group == 2`, **constant**) and pops far fewer joint
+configurations (91 at `k=3`, and just 307 at `k=4`). Basic M\* is only run up to
+`k=3`: at `k=4` its 8-way union branches `5**8` successors per node and is
+intractable — which is exactly the cost rM\* removes, so rM\* is shown carrying
+`k=4` alone (`rmstar_beats_basic_mstar`, `keeps_groups_independent`). Correctness
+on denser `n=4..5` instances, where a group can grow into the branch-all
+fallback, is carried off-gate by the module's dev validation (it would be too slow
+inline). This is the dual of the `mstar` gate: there walled bystanders that
+*cannot* collide keep the set small; here bystanders that *do* collide, but
+independently, are kept in separate groups by the recursion.
 
 #### Enhanced Partial Expansion A* (`epea.py`)
 

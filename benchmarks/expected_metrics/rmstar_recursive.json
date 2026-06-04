@@ -1,0 +1,19 @@
+{
+  "all_collision_free": true,
+  "basic_expansions_k3": 635,
+  "basic_peak_cset": 6,
+  "basic_unions_collisions": true,
+  "case": "rmstar_recursive",
+  "keeps_groups_independent": true,
+  "optimal_matches_cbs": true,
+  "rand_instances": 37,
+  "rand_opt_match": 37,
+  "rand_valid": 37,
+  "rm_expansions_k3": 91,
+  "rm_expansions_k4": 307,
+  "rm_max_group": 2,
+  "rmstar_beats_basic_mstar": true,
+  "show_instances": 4,
+  "show_opt_match": 4,
+  "show_valid": 4
+}

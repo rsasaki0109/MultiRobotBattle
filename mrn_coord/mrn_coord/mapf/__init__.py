@@ -95,6 +95,13 @@ The pieces compose bottom-up:
   their full moves. Same optimum as CBS; on instances with few, isolated
   interactions the collision set — and the search — stays low-dimensional and
   invariant to the rest of the team.
+- :mod:`rmstar` — recursive M* (Wagner & Choset 2011/2015): basic M*'s flat
+  collision set unions independent collisions that share an ancestor; rM* keeps a
+  *partition* and couples only agents that genuinely collide, so peak coupling is
+  the largest irreducible interacting group, not the union. Coupled groups branch
+  their joint optimal policy. Same optimum as CBS; on collisions that decompose,
+  the peak group stays constant and expansions grow polynomially where basic M*
+  grows exponentially.
 - :mod:`epea` — Enhanced Partial Expansion A* (Goldenberg et al. 2014): optimal
   joint-space search that, when it expands a node, generates *only* the children
   whose ``f`` equals the node's, via an Operator Selection Function, and
@@ -215,6 +222,7 @@ from .lacam import lacam, lacam_ltm
 from .lns import mapf_lns
 from .lns2 import mapf_lns2
 from .mstar import joint_astar, mstar
+from .rmstar import rmstar
 from .satmdd import satmdd
 from .standley import independence_detection, od_astar
 from .pbs import pbs, pbs_paths
@@ -275,6 +283,7 @@ __all__ = [
     "pibt_swap",
     "mstar",
     "joint_astar",
+    "rmstar",
     "od_astar",
     "independence_detection",
     "satmdd",

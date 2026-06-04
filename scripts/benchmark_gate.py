@@ -3680,6 +3680,143 @@ def _run_mstar_subdimensional() -> dict:
     }
 
 
+def _run_rmstar() -> dict:
+    # rM* (rmstar.py) is a Python reproduction of Wagner & Choset's RECURSIVE M*
+    # (IROS 2011 / AIJ 2015), the refinement basic M* (mstar.py) leaves out. Basic
+    # M* keeps a single FLAT collision set: when independent collisions share an
+    # ancestor configuration (the start always is one) backpropagation UNIONS them,
+    # so a node ends up branching the full local dimension of the union of all
+    # interacting agents. rM* keeps a PARTITION instead and couples only agents
+    # that GENUINELY collide (pairwise), merging two groups solely when an agent of
+    # one actually collides with an agent of the other -- equivalent to recursively
+    # decomposing the collision set into independent sub-problems. A coupled group
+    # branches its joint OPTIMAL policy, not all moves. It returns the SAME optimal
+    # sum-of-costs as cbs (and as basic mstar), checked on random maps and a
+    # constructed family that pins the mechanism. (Correctness on denser n=4..5
+    # instances -- where a group can grow to the branch-all fallback -- is carried
+    # off-gate by the module's dev validation; here it would be too slow.)
+    #
+    # The signature property: peak coupling is the largest IRREDUCIBLE interacting
+    # group, not the union. The constructed family stacks `k` swaps in disjoint
+    # walled blocks -- every pair (2b, 2b+1) must exchange through its own block,
+    # and blocks never interact. Basic M* unions all k pairs at the shared start
+    # (basic_peak_cset == 2k, GROWS), so it branches all 2k agents and its
+    # expansions explode; rM* keeps k independent size-2 groups (rm_max_group == 2,
+    # CONSTANT) and expands far fewer joint configurations -- polynomially, not
+    # exponentially. If the decomposition ever regresses, rm_max_group rises toward
+    # the team size and rm beats basic M* no longer.
+    import random
+
+    from mrn_coord.mapf import GridWorld
+    from mrn_coord.mapf.cbs import cbs
+    from mrn_coord.mapf.conflicts import detect_first_conflict
+    from mrn_coord.mapf.mstar import mstar
+    from mrn_coord.mapf.rmstar import rmstar
+    from mrn_coord.mapf.solution import sum_of_costs
+
+    def _valid(sol, agents):
+        return (detect_first_conflict(sol.paths) is None
+                and all(sol.paths[a][-1] == agents[a][1] for a in agents))
+
+    def _rand(w, h, n, seed, obs):
+        rng = random.Random(seed)
+        blocked = {(x, y) for x in range(w) for y in range(h)
+                   if rng.random() < obs}
+        free = [(x, y) for x in range(w) for y in range(h)
+                if (x, y) not in blocked]
+        rng.shuffle(free)
+        return (GridWorld(w, h, frozenset(blocked)),
+                {i: (free[i], free[n + i]) for i in range(n)})
+
+    # breadth: small random maps, n in {2,3}, on grids small enough that even a
+    # fully-coupled group stays cheap (the dev validation carries larger maps).
+    rand_inst = rand_opt = rand_valid = 0
+    for (w, h, n, obs) in ((5, 5, 2, 0.0), (5, 5, 2, 0.15),
+                           (4, 4, 3, 0.0), (4, 4, 3, 0.12)):
+        for seed in range(10):
+            grid, ag = _rand(w, h, n, seed, obs)
+            base = cbs(grid, ag, max_expansions=20000)
+            if base is None:
+                continue
+            sol = rmstar(grid, ag, max_expansions=80000)
+            if sol is None:
+                continue
+            rand_inst += 1
+            rand_opt += int(sum_of_costs(sol.paths) == base.cost)
+            rand_valid += int(_valid(sol, ag))
+
+    # constructed family: k swaps in disjoint walled blocks
+    def _disjoint_swaps(k):
+        W, H = 2, 4 * k - 1
+        blocked = set()
+        for b in range(k - 1):
+            for x in range(W):
+                blocked.add((x, 4 * b + 3))
+        grid = GridWorld(W, H, frozenset(blocked))
+        ag = {}
+        for b in range(k):
+            y0 = 4 * b
+            ag[2 * b] = ((0, y0), (0, y0 + 2))
+            ag[2 * b + 1] = ((0, y0 + 2), (0, y0))
+        return grid, ag
+
+    # rM* scales to k=4 cheaply; basic M* is run only where it is still
+    # affordable (k<=3). At k=4 basic M*'s union couples all 8 agents and branches
+    # 5**8 successors per node -- that intractability *is* the point rM* fixes, so
+    # rM* is shown carrying k=4 alone while basic M* tops out at k=3.
+    show_inst = show_opt = show_valid = 0
+    rm_groups = set()
+    rm_exps: dict = {}
+    for k in (1, 2, 3, 4):
+        grid, ag = _disjoint_swaps(k)
+        base = cbs(grid, ag, max_expansions=50000)
+        sr: dict = {}
+        sol = rmstar(grid, ag, stats=sr, max_expansions=200000)
+        if base is None or sol is None:
+            continue
+        show_inst += 1
+        show_opt += int(sum_of_costs(sol.paths) == base.cost)
+        show_valid += int(_valid(sol, ag))
+        rm_groups.add(sr["max_group"])
+        rm_exps[k] = sr["expansions"]
+
+    basic_csets = []
+    basic_exps: dict = {}
+    for k in (1, 2, 3):
+        grid, ag = _disjoint_swaps(k)
+        sm: dict = {}
+        mstar(grid, ag, stats=sm, max_expansions=200000)
+        basic_csets.append(sm["max_collision_set"])
+        basic_exps[k] = sm["expansions"]
+
+    basic_grows = all(basic_csets[i] < basic_csets[i + 1]
+                      for i in range(len(basic_csets) - 1))
+    # where both run (k=2,3), rM* expands strictly fewer joint configurations
+    rm_beats = all(rm_exps[k] < basic_exps[k] for k in (2, 3))
+
+    return {
+        "case": "rmstar_recursive",
+        "rand_instances": rand_inst,
+        "rand_opt_match": rand_opt,
+        "rand_valid": rand_valid,
+        "show_instances": show_inst,
+        "show_opt_match": show_opt,
+        "show_valid": show_valid,
+        "rm_max_group": max(rm_groups),
+        "basic_peak_cset": max(basic_csets),
+        "rm_expansions_k4": rm_exps[4],
+        "basic_expansions_k3": basic_exps[3],
+        "rm_expansions_k3": rm_exps[3],
+        "optimal_matches_cbs": (rand_opt == rand_inst
+                                and show_opt == show_inst),
+        "all_collision_free": (rand_valid == rand_inst
+                               and show_valid == show_inst),
+        "keeps_groups_independent": rm_groups == {2},
+        "basic_unions_collisions": (max(basic_csets) == 6 and basic_grows),
+        "rmstar_beats_basic_mstar": rm_beats,
+    }
+
+
 def _run_standley_id_od() -> dict:
     # Standley's "Finding Optimal Solutions to Cooperative Pathfinding Problems"
     # (AAAI 2010), reproduced in standley.py: two attacks on the b**n joint
@@ -4770,6 +4907,10 @@ SUITE = [
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),
+    # rM*: recursive M* -- partition instead of flat collision set couples only
+    # genuinely-colliding agents, so peak coupling is the largest irreducible group
+    # (not the union); same optimum as CBS, beats basic M* where collisions split
+    ("rmstar_recursive", _run_rmstar),
     # Standley OD + ID: operator decomposition cuts joint branching b**n -> b;
     # independence detection solves only the colliding groups (same optimum as CBS)
     ("standley_id_od", _run_standley_id_od),
