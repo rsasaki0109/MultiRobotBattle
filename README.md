@@ -217,6 +217,15 @@ same plan, same feet (`python3 scripts/make_zmp_figure.py`):
   <img src="docs/media/zmp_stability.png" alt="A figure of the Zero-Moment Point. Left: a top-down floor with the planned footsteps as coloured rectangles; the preview-control ZMP (green) threads through every support foot while a no-preview reactive ZMP (red) overshoots upward past the feet at every step, leaving the support polygon. Right: the ZMP tracking its stepped reference over time, forward (a staircase climb) and lateral (the side-to-side sway), with the center of mass that produces it." width="760">
 </p>
 
+And it scales to a **team**: several humanoids plan footsteps to their goals and
+**prioritized footstep MAPF** deconflicts their bodies tick by tick, so they
+cross a shared area without touching — a lower-priority humanoid waits or detours
+(`python3 scripts/make_footstep_mapf_gif.py`):
+
+<p align="center">
+  <img src="docs/media/footstep_mapf.gif" alt="Three humanoids on a shared floor, each with its own colour, plan footsteps from their starts to their goal rings; their zigzagging footstep trails cross in the middle while their translucent body discs slide along without ever overlapping, a lower-priority humanoid detouring around the others." width="560">
+</p>
+
 **Coordination** — MAPF (Conflict-Based Search / prioritized), formation
 control, frontier coverage. Each has a CLI demo (`mrn_mapf_demo`,
 `mrn_formation_demo`, `mrn_coverage_demo`) and a thin ROS node; the top GIF
