@@ -231,6 +231,13 @@ The pieces compose bottom-up:
   foot must step to bring the CoM to rest after a push. Stepping there captures
   the fall; stepping short or long does not. A big push beyond one step's reach
   is only *N-step capturable*. Exact closed-form LIPM, pure Python.
+- :mod:`dcm_walk` — **DCM walking control** (Englsberger et al., IEEE T-RO
+  2015): the Capture Point made into a continuous walking controller. A backward
+  recursion ``ξ_ini = p + (ξ_eos − p) e^{−ωT}`` plans a bounded DCM reference
+  over a footstep plan (the CoM trails it through the full stride), and the
+  tracking law ``r_cmd = r_ref + (1 + k_ξ/ω)(ξ − ξ_ref)`` drives the DCM error to
+  zero at the chosen rate ``k_ξ`` — while open-loop (no feedback) blows up at
+  exactly rate ``ω``. Exact closed-form LIPM, pure Python.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -305,6 +312,12 @@ from .capture_point import (
     omega0,
     recover_step,
     simulate_lipm,
+)
+from .dcm_walk import (
+    DCMPlan,
+    plan_dcm_reference,
+    track_dcm,
+    vrp_command,
 )
 from .conflicts import (
     EdgeConflict,
@@ -395,6 +408,10 @@ __all__ = [
     "recover_step",
     "n_step_capture",
     "omega0",
+    "plan_dcm_reference",
+    "track_dcm",
+    "vrp_command",
+    "DCMPlan",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

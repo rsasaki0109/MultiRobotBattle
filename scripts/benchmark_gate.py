@@ -5171,6 +5171,83 @@ def _run_capture_point() -> dict:
     }
 
 
+def _run_dcm_walk() -> dict:
+    import math as _math
+
+    from mrn_coord.mapf.capture_point import (
+        capture_point,
+        omega0,
+        simulate_lipm,
+    )
+    from mrn_coord.mapf.dcm_walk import plan_dcm_reference, track_dcm
+
+    z = 0.8
+    w = omega0(z)
+    T = 0.7
+    # a stride of swing steps then a double-stance hold so the trailing CoM,
+    # which low-passes the DCM with time constant 1/omega, fully settles
+    feet = [0.0, 0.3, 0.6, 0.9, 1.2, 1.2, 1.2]
+    plan = plan_dcm_reference(feet, T, z, dt=0.01)
+
+    # (1) the backward recursion: continuous across steps, ends at rest on the
+    # last foot, and is exactly xi_ini = p + (xi_eos - p) e^{-wT}
+    continuity = max(abs(plan.xi_eos[i] - plan.xi_ini[i + 1])
+                     for i in range(len(feet) - 1))
+    decay = _math.exp(-w * T)
+    recursion_ok = all(
+        abs(plan.xi_ini[i] - (feet[i] + (plan.xi_eos[i] - feet[i]) * decay))
+        < 1e-12 for i in range(len(feet)))
+
+    # (2) the planned DCM/CoM stay bounded in the feet span (the divergence is
+    # caught step to step) while a free single-foot DCM blows up
+    dcm_excursion = plan.dcm_excursion()
+    free = simulate_lipm(0.0, 0.5, feet[0], z, duration=T * len(feet))
+    free_div = max(abs(v) for v in free.xi)
+
+    # (3) the trailing CoM walks the full stride and settles on the last foot
+    com_span = max(plan.com) - min(plan.com)
+    foot_span = max(feet) - min(feet)
+
+    # (4) the instantaneous DCM IS the capture point of the trailing CoM
+    i = len(plan.t) // 2
+    v_i = (plan.xi[i] - plan.com[i]) * w
+    icp_ok = abs(capture_point(plan.com[i], v_i, z) - plan.xi[i]) < 1e-9
+
+    # (5) the tracking law: feedback converges at the chosen rate k_xi, k_xi=0
+    # freezes the error (cancels the natural omega-divergence), and open-loop
+    # (no feedback term) blows up at exactly rate omega
+    d = 0.1
+    conv = track_dcm(plan, plan.xi[0] + d, k_xi=3.0)
+    frozen = track_dcm(plan, plan.xi[0] + d, k_xi=0.0)
+    ol = track_dcm(plan, plan.xi[0] + d, k_xi=3.0, feedback=False)
+    rate_k1 = track_dcm(plan, plan.xi[0] + d, k_xi=1.0).decay_rate()
+    rate_k3 = conv.decay_rate()
+
+    plan2 = plan_dcm_reference(feet, T, z, dt=0.01)
+
+    return {
+        "case": "dcm_walk",
+        "omega0": round(w, 3),
+        "recursion_exact": recursion_ok,
+        "dcm_reference_continuous": continuity < 1e-12,
+        "terminal_rest_on_foot": abs(plan.xi_eos[-1] - feet[-1]) < 1e-12,
+        "dcm_bounded_in_feet": dcm_excursion < 1e-6,
+        "com_in_support_span": plan.com_in_support_span(margin=1e-6),
+        "free_dcm_diverges": free_div > 100.0,
+        "com_progresses_full_stride": com_span >= 0.99 * foot_span,
+        "com_settles_on_last_foot": abs(plan.com[-1] - feet[-1]) < 1e-3,
+        "icp_consistency": icp_ok,
+        "feedback_converges": conv.converged(),
+        "feedback_rate_tracks_gain": abs(rate_k3 - 3.0) < 0.2,
+        "higher_gain_faster": rate_k3 > rate_k1 + 1.0,
+        "zero_gain_freezes": (abs(frozen.err[-1] - d) < 1e-6
+                              and abs(frozen.decay_rate()) < 1e-2),
+        "open_loop_diverges": ol.err[-1] > 100.0,
+        "open_loop_rate_is_omega": abs(ol.decay_rate() + w) < 0.05,
+        "deterministic": plan2.xi == plan.xi,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5380,6 +5457,13 @@ SUITE = [
     # there captures the fall, short/long does not, and a big push is only
     # N-step capturable (bigger push -> more steps)
     ("capture_point", _run_capture_point),
+    # DCM walking control (Englsberger et al., T-RO 2015): the Capture Point made
+    # into a continuous walking controller. A backward recursion plans a bounded
+    # DCM reference over a footstep plan (the CoM trails it through the full
+    # stride); the tracking law r_cmd = r_ref + (1 + k/omega)(xi - xi_ref) drives
+    # the DCM error to zero at the chosen rate k, while open-loop (no feedback)
+    # blows up at exactly rate omega -- the one feedback term stabilises the walk
+    ("dcm_walk", _run_dcm_walk),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

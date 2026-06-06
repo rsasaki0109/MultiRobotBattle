@@ -1868,6 +1868,58 @@ monotonically more steps (`nstep_small = 1`, `nstep_mid = 2`, `nstep_big = 4`,
 `nstep_monotone`) — the capturability margin. Pure point-mass LIPM, the same
 honest scope as `lipm_walk`.
 
+### DCM walking control (`dcm_walk.py`)
+
+`capture_point` answers a *one-shot* question — after one push, where do I step
+to stop? `dcm_walk` runs that idea continuously: given a whole footstep plan,
+what Center-of-Pressure trajectory drives the robot through it, and how do I
+track it back after a disturbance? It reproduces Englsberger, Ott &
+Albu-Schäffer, *"Three-Dimensional Bipedal Walking Control Based on Divergent
+Component of Motion"* (IEEE Transactions on Robotics, 2015) — the framework that
+turned the Capture Point into a full walking controller.
+
+**The split.** Over a Virtual Repellent Point `r` (on the ground: the CoP /
+support point), the LIPM separates into a divergent and a convergent part:
+`ξ̇ = ω(ξ − r)` (the DCM `ξ = x + ẋ/ω` runs *away* from `r`) and `ẋ = −ω(x − ξ)`
+(the CoM *low-passes* the DCM, eigenvalue `−ω`, can never diverge on its own).
+All the instability lives in the one scalar `ξ`, so walking control reduces to
+**driving `ξ`** — and `ξ` is driven by where the foot goes, exactly the
+capture-point insight run continuously.
+
+**Planning the reference.** Hold each footstep `pᵢ` for a step time `T`; over
+that step the DCM is the pure exponential `ξ(τ) = pᵢ + (ξ_ini,i − pᵢ) e^{ωτ}`.
+Stitch steps by continuity (`ξ_eos,i = ξ_ini,i+1`) and end at rest on the last
+foot, then invert the exponential to get the **backward recursion**
+`ξ_ini,i = pᵢ + (ξ_eos,i − pᵢ) e^{−ωT}`. Run it from the last step back and the
+DCM reference is continuous and *bounded* — it weaves between the feet instead
+of diverging, because each foot is placed to catch the previous step's
+divergence. The CoM trailing it (exact closed form) is a smooth walking
+trajectory.
+
+**Tracking it.** Pushed off the reference, the DCM tracking law
+`r_cmd = r_ref + (1 + k_ξ/ω)(ξ − ξ_ref)` makes the error `e = ξ − ξ_ref` obey
+`ė = −k_ξ e` — exponential decay at the rate *you* choose.
+
+The `dcm_walk` gate pins all of it. **(1) The recursion** is exact
+(`recursion_exact`), continuous across steps (`dcm_reference_continuous`), and
+ends at rest on the last foot (`terminal_rest_on_foot`). **(2) Boundedness** —
+the planned DCM and CoM never leave the feet span (`dcm_bounded_in_feet`,
+`com_in_support_span`), *whereas* a free single-foot DCM blows up past 100 m
+(`free_dcm_diverges`): the instability is real and the planner is what catches
+it. **(3) The walk** — the trailing CoM covers the full stride
+(`com_progresses_full_stride`) and settles on the last foot after a
+double-stance hold (`com_settles_on_last_foot`; the CoM low-passes with time
+constant `1/ω`). **(4) Consistency** — the instantaneous DCM is *exactly* the
+capture point of the trailing CoM (`icp_consistency`), tying this module back to
+`capture_point`. **(5) The tracking law** — feedback converges at the chosen
+gain (`feedback_converges`, `feedback_rate_tracks_gain` with `decay_rate ≈ k_ξ =
+3`), faster for larger gain (`higher_gain_faster`); `k_ξ = 0` *freezes* the error
+(`zero_gain_freezes` — the feedback term cancels the natural `ω`-divergence but
+does not pull back); and with the feedback term removed the error blows up at
+*exactly* rate `ω` (`open_loop_diverges`, `open_loop_rate_is_omega`) — the one
+feedback term is what stabilises the open-loop-unstable LIPM. Pure point-mass
+LIPM, exact `e^{±ωt}` rollouts, the same honest scope as `capture_point`.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

@@ -1,0 +1,20 @@
+{
+  "case": "dcm_walk",
+  "com_in_support_span": true,
+  "com_progresses_full_stride": true,
+  "com_settles_on_last_foot": true,
+  "dcm_bounded_in_feet": true,
+  "dcm_reference_continuous": true,
+  "deterministic": true,
+  "feedback_converges": true,
+  "feedback_rate_tracks_gain": true,
+  "free_dcm_diverges": true,
+  "higher_gain_faster": true,
+  "icp_consistency": true,
+  "omega0": 3.5,
+  "open_loop_diverges": true,
+  "open_loop_rate_is_omega": true,
+  "recursion_exact": true,
+  "terminal_rest_on_foot": true,
+  "zero_gain_freezes": true
+}
