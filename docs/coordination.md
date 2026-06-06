@@ -1978,6 +1978,63 @@ ZMP stays in the moving support polygon (`walk_zmp_in_support`). **(5) Isolation
 produces the recovery contrast. Pure Python, same point-mass LIPM scope as
 `lipm_walk` / `capture_point`.
 
+### MPC walking with automatic footstep placement (`herdt_walk.py`)
+
+`mpc_walk`'s honest limit is recorded above: a push beyond the in-place
+capturable margin keeps the ZMP legal yet the CoM falls, because a *fixed* foot
+cannot be re-placed — it needs a step. `herdt_walk` reproduces Herdt, Diedam,
+Wieber, Mombaur, Kheddar, Yokoi, *"Online Walking Motion Generation with
+Automatic Footstep Placement"* (Advanced Robotics 24(5–6), 2010), the **direct
+extension** that removes exactly that limit: the **footstep positions become
+decision variables of the same QP**. The controller then chooses *where to step*
+automatically to follow a reference walking velocity, and under a strong push it
+takes a **capture step** in the push direction instead of tipping over.
+
+**The Herdt QP.** Same cart-table LIPM. Over the horizon the decision variables
+are the jerks `U` **and** the next `m` footstep positions `Xᶠ` that fall inside
+it. A 0/1 selection schedule says which foot supports each sample — the current
+committed foot `f_c` or one of the future feet — so the support location at
+sample `i` is `foot = U_c f_c + U_f Xᶠ`. The objective adds a ZMP-centring term
+to Wieber's: `min (α/2)‖U‖² + (β/2)‖V − v_ref‖² + (γ/2)‖Z − U_c f_c − U_f Xᶠ‖²`,
+subject to the ZMP staying in the foot, `|Z − foot| ≤ ℓ`, and to foot
+reachability `Δ ≤ Xᶠⱼ − Xᶠⱼ₋₁ ≤ Δ̄`.
+
+**Why it is still a box QP (the reduction).** `mpc_walk` already changes
+variables to the ZMP because `P_zu` is invertible. Herdt does it **twice**: let
+`dᵢ = Zᵢ − footᵢ` (ZMP relative to its support foot) and `δⱼ = Xᶠⱼ − Xᶠⱼ₋₁`
+(foot increments). In `y = [d ; δ]` the support constraint is the plain box
+`−ℓ ≤ d ≤ ℓ`, the reachability constraint is the plain box `Δ ≤ δ ≤ Δ̄`, and the
+objective is strictly convex — `α > 0` makes the jerk block SPD and `γ > 0`
+makes the foot block SPD (without the ZMP-centring term the foot variables would
+be a Hessian nullspace direction). So the whole automatic-footstep QP is solved
+exactly by the *same* `solve_box_qp` active-set method `mpc_walk` uses. In closed
+loop the support foot is committed to the first automatically-placed footstep
+`Xᶠ₁` at each phase boundary — that commitment is the footstep placement realised.
+
+The `herdt_walk` gate pins it. **(1) The augmented QP is well posed** — the
+selection schedule partitions every sample onto one foot
+(`selection_partitions_support`), the `(d, δ)` Hessian is positive-definite
+(`hessian_pd`), the box QP hits KKT to machine precision (`qp_kkt_exact`), and
+the recovered jerks reproduce the planned ZMP through a cart-table rollout
+(`reduction_recovers_zmp`). **(2) The headline** — the *same* push beyond the
+in-place capturable margin (`push_beyond_capturable`, `ξ = dv/ω > foot half`)
+that makes the fixed-foot MPC diverge (`fixed_foot_falls`) is recovered by
+automatic footstep placement (`auto_footstep_recovers`): the controller takes a
+capture step (`auto_takes_capture_step`, foot displaced > 0.10 m) and keeps the
+ZMP in the moving support (`auto_zmp_in_support`). The only difference between
+the two runs is whether the feet are QP variables. **(3) Isolation** — with the
+feet *frozen* the controller is **bit-for-bit** the fixed-foot `mpc_walk`
+standing-balance run (`frozen_equals_mpc_walk`), tying Herdt back to its Wieber
+parent. **(4) Direction adaptation** — a forward push steps forward, a backward
+push steps backward (`footstep_adapts_to_push`). **(5) Forward walking** — the
+controller places regular footsteps (`walk_steps_regular`), the CoM advances at
+the reference velocity (`walk_advances_at_vref`, `walk_tracks_vref`), and the ZMP
+stays in the moving support (`walk_zmp_in_support`). Pure Python, no numpy; like
+the rest of the humanoid thread this is the sagittal (1-D, point-mass) reduction —
+the full paper also plans the lateral footstep and a double-support phase (here
+the instantaneous foot switch is counted feasible against the two-foot convex
+hull, the stand-in for double support).
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

@@ -246,6 +246,15 @@ The pieces compose bottom-up:
   exactly each tick by a small active-set QP. The hard constraint keeps the ZMP
   legal under a strong push, where the unconstrained LQR-like cousin carries it
   out of the foot. Pure Python, no numpy.
+- :mod:`herdt_walk` — **MPC walking with automatic footstep placement** (Herdt
+  et al., Advanced Robotics 2010): the direct extension of :mod:`mpc_walk` that
+  removes its honest limit. The footstep positions become decision variables of
+  the same QP, so the controller automatically chooses where to step to follow a
+  reference velocity. Changing variables twice — to the ZMP *and* the foot
+  increments — keeps it a box QP solved by the same active-set method. Under a
+  strong push that makes the fixed-foot MPC fall, this one takes a *capture step*
+  and recovers; with the feet frozen it collapses bit-for-bit to :mod:`mpc_walk`.
+  Pure Python, no numpy.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -334,6 +343,13 @@ from .mpc_walk import (
     build_condensed,
     simulate_mpc,
     solve_box_qp,
+)
+from .herdt_walk import (
+    HerdtMPC,
+    HerdtParams,
+    HerdtWalkResult,
+    build_herdt,
+    simulate_herdt,
 )
 from .conflicts import (
     EdgeConflict,
@@ -434,6 +450,11 @@ __all__ = [
     "MPCParams",
     "CondensedMPC",
     "MPCWalkResult",
+    "build_herdt",
+    "simulate_herdt",
+    "HerdtMPC",
+    "HerdtParams",
+    "HerdtWalkResult",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

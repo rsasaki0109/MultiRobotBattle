@@ -5376,6 +5376,141 @@ def _run_mpc_walk() -> dict:
     }
 
 
+def _run_herdt_walk() -> dict:
+    from mrn_coord.mapf.herdt_walk import (
+        HerdtParams,
+        build_herdt,
+        simulate_herdt,
+    )
+    from mrn_coord.mapf import mpc_walk
+
+    p = HerdtParams(z_h=0.8, dt=0.1, horizon=16, alpha=1e-5, beta=1.0,
+                    gamma=1e-3, foot_half=0.05, step_ticks=8,
+                    step_lo=-0.05, step_hi=0.40)
+    h = build_herdt(p)
+    w = p.omega
+
+    # (1) the footstep-augmented QP reduces to a box QP in (d, delta) that is
+    # strictly convex (Hessian PD) and solved exactly (KKT to machine precision),
+    # and the support schedule partitions each sample onto exactly one foot.
+    from mrn_coord.mapf.herdt_walk import _selection
+    sup, m_sel = _selection(8, 16, 8)
+    partition_ok = all(0 <= sup[i] <= m_sel for i in range(16))
+    xq = [0.0, 0.30, 0.0]
+    _, feet_q, Zq, dq, deltaq, (H, grad, lo, hi, y) = h.solve(
+        xq, 0.0, 8, [0.0] * 16, foot_vars=True, return_qp=True)
+    nT = len(y)
+    # KKT residual on the box QP
+    kkt = 0.0
+    for i in range(nT):
+        gi = sum(H[i][j] * y[j] for j in range(nT)) + grad[i]
+        if lo[i] + 1e-9 < y[i] < hi[i] - 1e-9:
+            kkt = max(kkt, abs(gi))
+        elif y[i] <= lo[i] + 1e-9:
+            kkt = max(kkt, max(0.0, -gi))
+        else:
+            kkt = max(kkt, max(0.0, gi))
+    # Hessian positive-definite (all LDL pivots > 0)
+    Hh = [row[:] for row in H]
+    pd = True
+    for k in range(nT):
+        piv = Hh[k][k]
+        if piv <= 1e-12:
+            pd = False
+            break
+        for i in range(k + 1, nT):
+            f = Hh[i][k] / piv
+            for j in range(k, nT):
+                Hh[i][j] -= f * Hh[k][j]
+    # the reduction is consistent: recovered ZMP equals d + its support foot, and
+    # the recovered jerks reproduce that ZMP through the cart-table rollout.
+    N = p.horizon
+    cm = h.condensed
+    A, b, c = cm.A, cm.b, cm.c
+    s = mpc_walk._matvec(cm.Pzs, xq)
+    Uq = mpc_walk._fwd_sub(cm.Pzu, [Zq[i] - s[i] for i in range(N)])
+    xx = list(xq)
+    z_roll = []
+    for u in Uq:
+        xx = [A[0][0] * xx[0] + A[0][1] * xx[1] + A[0][2] * xx[2] + b[0] * u,
+              A[1][1] * xx[1] + A[1][2] * xx[2] + b[1] * u,
+              A[2][2] * xx[2] + b[2] * u]
+        z_roll.append(mpc_walk._dot(c, xx))
+    reduction_exact = max(abs(z_roll[i] - Zq[i]) for i in range(N)) < 1e-10
+
+    # (2) THE HEADLINE: a push beyond the in-place capturable margin
+    # (xi = dv/omega > foot half) makes the FIXED-foot MPC fall, but automatic
+    # footstep placement takes a capture step and recovers. Same push, same
+    # controller -- the only difference is whether the feet are QP variables.
+    push_dv = 0.30
+    beyond = (push_dv / w) > p.foot_half
+    auto = simulate_herdt([0, 0, 0], herdt=h, n_steps=60, vref_val=0.0,
+                          push_tick=5, push_dv=push_dv, foot_vars=True)
+    fixed = simulate_herdt([0, 0, 0], herdt=h, n_steps=60, vref_val=0.0,
+                           push_tick=5, push_dv=push_dv, foot_vars=False)
+
+    # (3) ISOLATION: with the feet frozen the controller is bit-for-bit the
+    # fixed-foot mpc_walk standing-balance run -- ties Herdt back to its parent.
+    mp = mpc_walk.MPCParams(z_h=0.8, dt=0.1, horizon=16, alpha=1e-5, beta=1.0)
+    cmw = mpc_walk.build_condensed(mp)
+    cen, hal = mpc_walk.standing_support(0.05, 60, horizon=16)
+    vr = [0.0] * len(cen)
+    mw = mpc_walk.simulate_mpc([0, 0, 0], cen, hal, vr, condensed=cmw,
+                               n_steps=60, push_tick=5, push_dv=push_dv,
+                               constrained=True)
+    frozen_match = max(max(abs(fixed.zmp[k] - mw.zmp[k]),
+                           abs(fixed.jerk[k] - mw.jerk[k])) for k in range(60))
+
+    # (4) the footstep adapts to the push DIRECTION: a forward push steps
+    # forward, a backward push steps backward.
+    fwd = simulate_herdt([0, 0, 0], herdt=h, n_steps=20, vref_val=0.0,
+                         push_tick=2, push_dv=0.20, foot_vars=True)
+    bwd = simulate_herdt([0, 0, 0], herdt=h, n_steps=20, vref_val=0.0,
+                         push_tick=2, push_dv=-0.20, foot_vars=True)
+
+    # (5) forward walking: the controller places regular footsteps and the CoM
+    # advances at the reference velocity with the ZMP in the moving support.
+    vref = 0.20
+    walk = simulate_herdt([0, 0, 0], herdt=h, n_steps=56, vref_val=vref,
+                          foot_vars=True)
+    nominal = vref * p.step_ticks * p.dt
+    incs = [walk.committed_feet[i + 1] - walk.committed_feet[i]
+            for i in range(len(walk.committed_feet) - 1)]
+    steps_regular = all(abs(incs[i] - nominal) < 0.03 for i in range(1, len(incs)))
+    expected_adv = 56 * vref * p.dt
+
+    # determinism
+    auto_b = simulate_herdt([0, 0, 0], herdt=h, n_steps=60, vref_val=0.0,
+                            push_tick=5, push_dv=push_dv, foot_vars=True)
+
+    return {
+        "case": "herdt_walk",
+        "omega": round(w, 3),
+        # (1) the footstep-augmented QP is a well-posed box QP
+        "selection_partitions_support": partition_ok,
+        "hessian_pd": pd,
+        "qp_kkt_exact": kkt < 1e-8,
+        "reduction_recovers_zmp": reduction_exact,
+        # (2) headline: fixed foot falls, automatic footstep recovers the SAME push
+        "push_beyond_capturable": beyond,
+        "fixed_foot_falls": fixed.diverged() and not fixed.recovered(),
+        "auto_footstep_recovers": auto.recovered() and not auto.diverged(),
+        "auto_takes_capture_step": auto.foot_displacement() > 0.10,
+        "auto_zmp_in_support": auto.zmp_feasible(),
+        # (3) isolation: frozen feet == fixed-foot mpc_walk, bit-for-bit
+        "frozen_equals_mpc_walk": frozen_match < 1e-12,
+        # (4) footstep adapts to the push direction
+        "footstep_adapts_to_push": (fwd.committed_feet[1] > 0.01
+                                    and bwd.committed_feet[1] < -0.01),
+        # (5) forward walking is regular, advances at vref, ZMP in support
+        "walk_steps_regular": steps_regular,
+        "walk_advances_at_vref": walk.com_advance() >= 0.85 * expected_adv,
+        "walk_tracks_vref": abs(walk.mean_vel() - vref) < 0.05,
+        "walk_zmp_in_support": walk.zmp_feasible(),
+        "deterministic": auto.zmp == auto_b.zmp,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5600,6 +5735,13 @@ SUITE = [
     # set) is what keeps the ZMP legal under a strong push, where the
     # unconstrained LQR-like cousin would carry it out of the foot (tip over)
     ("mpc_walk", _run_mpc_walk),
+    # MPC walking with automatic footstep placement (Herdt et al. 2010): the
+    # direct extension of mpc_walk -- the footstep positions become QP variables,
+    # so a SECOND change of variables (to the ZMP AND the foot increments) keeps
+    # it a box QP. Under a push beyond the in-place capturable margin the
+    # fixed-foot MPC falls; this one takes a capture step and recovers. Frozen
+    # feet collapse it bit-for-bit back to mpc_walk
+    ("herdt_walk", _run_herdt_walk),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

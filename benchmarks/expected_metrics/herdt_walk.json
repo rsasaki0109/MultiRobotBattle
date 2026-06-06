@@ -1,0 +1,20 @@
+{
+  "auto_footstep_recovers": true,
+  "auto_takes_capture_step": true,
+  "auto_zmp_in_support": true,
+  "case": "herdt_walk",
+  "deterministic": true,
+  "fixed_foot_falls": true,
+  "footstep_adapts_to_push": true,
+  "frozen_equals_mpc_walk": true,
+  "hessian_pd": true,
+  "omega": 3.5,
+  "push_beyond_capturable": true,
+  "qp_kkt_exact": true,
+  "reduction_recovers_zmp": true,
+  "selection_partitions_support": true,
+  "walk_advances_at_vref": true,
+  "walk_steps_regular": true,
+  "walk_tracks_vref": true,
+  "walk_zmp_in_support": true
+}

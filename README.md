@@ -74,6 +74,7 @@ honest gated result is in [`docs/coordination.md`](docs/coordination.md):
 | **Capture Point push recovery** | Pratt et al. 2006 | step to ξ = x + ẋ/ω₀ to absorb a push | step there captures; short/long falls; big push N-step |
 | **DCM walking control** | Englsberger et al. 2015 | backward-recursion DCM reference + tracking law over a footstep plan | error → 0 at chosen rate k; open-loop blows up at ω |
 | **Trajectory-free MPC walking** | Wieber 2006 | constrained-QP MPC: hard ZMP-in-support box + jerk/velocity objective | hard constraint keeps ZMP legal under a push where unconstrained tips over |
+| **Auto-footstep MPC walking** | Herdt et al. 2010 | footsteps become QP variables (second change of vars → still a box QP) | capture step recovers a push the fixed-foot MPC falls under; frozen feet ≡ Wieber |
 
 ---
 
