@@ -91,12 +91,16 @@ value land in **30 seconds** and to be found. Leverage order:
   `mapf_gallery.gif` comparison to r/robotics, Hacker News (*Show HN*), and X
   with a one-line hook ("45 MAPF algorithms, faithfully reproduced and
   benchmarked"); open a PR adding the repo to *Awesome-MAPF* / *Awesome-Robotics*.
-- [ ] **README refresh**: lead with the MAPF zoo, not the ROS stack. A comparison
-  table (algorithm | paper | one-line idea | gated WIN/LOSS/equivalence), the
-  gallery GIF up top, a 5-line quickstart.
-- [ ] **Pip-installable, ROS-free MAPF core**: package `mrn_coord.mapf` so
-  researchers/students can `pip install` and solve an instance without ROS /
-  colcon; ship a quickstart + Jupyter notebooks.
+- [x] **README refresh**: leads with the MAPF zoo — the `mapf_gallery.gif` hero,
+  a 5-line `pip install` + solve quickstart, and a representative comparison
+  table (algorithm | paper | one-line idea | gated result) linking the full
+  paper-by-paper catalogue in `docs/coordination.md`.
+- [x] **Pip-installable, ROS-free MAPF core**: root `pyproject.toml` packages
+  `mrn_coord` / `mrn_coord.mapf` / `mrn_coord.lifelong` as the `mapf-zoo`
+  distribution — `pip install` and solve without ROS / colcon, zero required
+  deps (numpy/scipy gated behind the `[bcp]` extra via a lazy import). Verified
+  in a clean venv with ROS *and* numpy unreachable; `docs/pypi.md` is the long
+  description. Still TODO: publish to PyPI; ship Jupyter notebooks.
 - [ ] **Browser demo (Pyodide)**: the cores are pure Python — a clickable,
   in-browser "solve & animate" gallery is highly shareable.
 - [ ] **More visuals**: per-family GIFs (rectangle/corridor symmetry, lifelong

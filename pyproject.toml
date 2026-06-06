@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mapf-zoo"
+version = "0.1.0"
+description = "45+ Multi-Agent Path Finding algorithms, faithfully reproduced from their papers and benchmark-gated — pure Python, ROS-free."
+readme = "docs/pypi.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Ryohei Sasaki", email = "rsasaki0109@gmail.com" }]
+keywords = [
+  "mapf",
+  "multi-agent-path-finding",
+  "pathfinding",
+  "cbs",
+  "pibt",
+  "lacam",
+  "ecbs",
+  "robotics",
+  "multi-robot",
+  "planning",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = []
+
+[project.optional-dependencies]
+# Only branch-and-cut-and-price (bcp) needs an LP solver; everything else is
+# pure standard-library Python.
+bcp = ["numpy>=1.21", "scipy>=1.7"]
+all = ["numpy>=1.21", "scipy>=1.7"]
+
+[project.urls]
+Homepage = "https://github.com/rsasaki0109/multirobot-navigation"
+Repository = "https://github.com/rsasaki0109/multirobot-navigation"
+Documentation = "https://github.com/rsasaki0109/multirobot-navigation/blob/main/docs/coordination.md"
+Issues = "https://github.com/rsasaki0109/multirobot-navigation/issues"
+
+[project.scripts]
+# ROS-free CLIs that ship with the wheel.
+mapf-demo = "mrn_coord.mapf.demo:main"
+mapf-bench = "mrn_coord.mapf.bench_cli:main"
+
+[tool.setuptools]
+# The importable package lives at mrn_coord/mrn_coord; treat mrn_coord/ as the
+# package root so `import mrn_coord.mapf` resolves without ROS / colcon.
+package-dir = { "" = "mrn_coord" }
+# Ship only the ROS-free cores: the MAPF zoo and the lifelong engines it reuses
+# (cbs_ta pulls hungarian/auction from lifelong.allocation). The ROS node
+# modules (planner_node, follower_node, ros_conversion) are present but never
+# imported by these packages, so the wheel needs no rclpy.
+packages = ["mrn_coord", "mrn_coord.mapf", "mrn_coord.lifelong"]

@@ -208,7 +208,23 @@ The pieces compose bottom-up:
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
-from .bcp import bcp
+try:
+    from .bcp import bcp
+except ModuleNotFoundError as _bcp_exc:  # numpy/scipy are optional extras
+    _bcp_missing = _bcp_exc
+
+    def bcp(*_args, **_kwargs):  # type: ignore[misc]
+        """Placeholder when the optional LP backend (numpy/scipy) is absent.
+
+        Only :mod:`bcp` (branch-and-cut-and-price) needs numpy/scipy; the rest
+        of the zoo is pure standard-library Python. Install the backend with
+        ``pip install mapf-zoo[bcp]`` to enable it.
+        """
+        raise ImportError(
+            "mapf.bcp requires numpy and scipy — install them with "
+            "`pip install mapf-zoo[bcp]`"
+        ) from _bcp_missing
+
 from .bypass import cbs_bypass
 from .cbm import cbm
 from .cbs import cbs

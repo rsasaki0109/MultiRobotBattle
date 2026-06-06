@@ -1,15 +1,73 @@
 # multirobot-navigation
 
 <p align="center">
-  <img src="docs/media/gazebo_demo.gif" alt="Three robots cross a 3D Gazebo arena of cylindrical obstacles via the repo's A* grid planning, pure pursuit, and reciprocal avoidance, each sweeping a 360-degree LiDAR whose returns trace the obstacles" width="720">
+  <img src="docs/media/mapf_gallery.gif" alt="The same 12x12 multi-agent path-finding instance with 14 agents solved side by side by four algorithms — CBS finds the optimal sum-of-costs 123, prioritized planning 129, PIBT and LaCAM flow greedily at 280 — each agent a coloured disc sliding to its goal ring, collision-free" width="760">
 </p>
 
 <p align="center">
-  <em>Three robots cross a 3D Gazebo arena — A* planning, pure pursuit, and reciprocal avoidance, all driven by the real <code>mrn_coord</code>/<code>mrn_sim</code> code, each sweeping a 360° LiDAR. Rendered fully offscreen on the GPU; regenerate with <code>scripts/record_gazebo_gif.py</code>.</em>
+  <em>The same 12×12 instance, 14 agents, solved side by side by four MAPF algorithms — optimal <strong>CBS</strong> finds sum-of-costs 123 while prioritized planning, <strong>PIBT</strong>, and <strong>LaCAM</strong> flow greedily higher. One of <strong>45+ algorithms</strong> in the zoo, each faithfully reproduced from its paper and benchmark-gated.</em>
 </p>
 
 [![build-jazzy](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml)
 [![docs](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml)
+[![MAPF zoo](https://img.shields.io/badge/MAPF%20zoo-45%2B%20algorithms%20%C2%B7%20gated-blue)](docs/coordination.md)
+
+## A pip-installable MAPF algorithm zoo
+
+> **45+ Multi-Agent Path Finding algorithms, faithfully reproduced from their
+> papers and benchmark-gated — pure Python, ROS-free.**
+
+Most MAPF code online is one algorithm per repo, in C++, wired to a build
+system. This is the whole family in one importable package: solve an instance
+and compare paradigms in five lines — no ROS and no compiler. Every solver is
+reproduced from its source paper and **benchmark-gated** in CI, so each claim
+(a WIN, a LOSS, or an equivalence vs. a reference solver) is *measured*.
+
+```bash
+# Works today (PyPI release planned):
+pip install "git+https://github.com/rsasaki0109/multirobot-navigation"
+```
+
+```python
+from mrn_coord.mapf import GridWorld, cbs
+
+grid = GridWorld(5, 5)
+agents = {"1": ((0, 2), (4, 2)), "2": ((2, 0), (2, 4))}   # two crossing agents
+
+sol = cbs(grid, agents)            # optimal, sum-of-costs Conflict-Based Search
+print(sol.cost, sol.makespan)      # -> 9 5  (collision-free, optimal)
+```
+
+Swap `cbs` for `ecbs`, `lacam`, `mapf_lns`, `pbs`, `mstar`, … — they share the
+same `(grid, agents)` interface. The core has **zero required dependencies**
+(only the LP-based `bcp` needs `pip install "...[bcp]"` for numpy/scipy).
+
+### A taste of the catalogue
+
+A representative slice — the full paper-by-paper catalogue with every solver's
+honest gated result is in [`docs/coordination.md`](docs/coordination.md):
+
+| Algorithm | Paper | One-line idea | Gated result |
+| --- | --- | --- | --- |
+| **CBS** | Sharon et al. 2015 | optimal two-level conflict-based search | the reference optimum |
+| **CBSH** | Li et al. 2019 | admissible WDG heuristic + cardinal split | same optimum, **~13× fewer** expansions |
+| **ECBS** | Barer et al. 2014 | bounded-suboptimal focal search | cost ≤ `w·opt`, far fewer nodes |
+| **EECBS** | Li et al. 2021 | WDG bound + Explicit Estimation Search | **~1.9× fewer** than ECBS at tight `w` |
+| **FECBS** | Chan et al. 2021 | lend the unused suboptimality budget | **~9× fewer** than ECBS, dense tight-`w` |
+| **EPEA\*** | Goldenberg et al. 2014 | generate only `f`-matching children | **~58× fewer** nodes than joint A\* |
+| **M\* / rM\*** | Wagner & Choset 2011 | subdimensional expansion | coupling stays at the irreducible group |
+| **ICTS** | Sharon et al. 2013 | increasing-cost tree over MDDs | same optimum, orthogonal to CBS |
+| **rectangle** | Li et al. 2019 | barrier constraints break crossing symmetry | **~20×** blowup collapse |
+| **BCP** | Lam et al. 2019 | branch-cut-and-price (LP / duality) | LP-certified optimum (gap zero) |
+| **LaCAM** | Okumura 2023 | complete config search driven by PIBT | scales to large teams |
+| **MAPF-LNS2** | Li et al. 2022 | collision-minimizing anytime repair | feasible where CBS busts its budget |
+| **Push-and-Rotate** | de Wilde et al. 2014 | constructive push/swap/rotate primitives | solves packed grids search blows up on |
+| **flow** | Yu & LaValle 2013 | anonymous makespan as integer max-flow | polynomial, self-certified optimum |
+| **RHCR** | Li et al. 2021 | rolling-horizon lifelong MAPF | sustained warehouse throughput |
+
+---
+
+The MAPF zoo is the coordination layer of a larger stack:
 
 ROS 2-native **multi-robot simulation, navigation, and coordination** — a
 deterministic, pure-core, CI-tested stack for developing and benchmarking
@@ -190,10 +248,15 @@ configuration, the counter climbing past **25 tasks/step**
   <img src="docs/media/fleet_demo.gif" alt="A hundred autonomous mobile robots swarm a large shelf-and-aisle warehouse floor on a lifelong-MAPF schedule, collision-free via PIBT, the counter showing over twenty-five tasks served per timestep" width="640">
 </p>
 
-**3D physics — Gazebo** — the demo at the top of this README runs in the
-`mrn_gazebo` (`gz sim`, Harmonic) **3D** world: three robots cross the obstacle
-arena under the repo's own A\* grid planning + pure-pursuit + reciprocal
-avoidance, driven over `cmd_vel`. Each carries a **360° LiDAR** whose live returns
+**3D physics — Gazebo** — the same algorithms run in the `mrn_gazebo`
+(`gz sim`, Harmonic) **3D** world: three robots cross the obstacle arena under
+the repo's own A\* grid planning + pure-pursuit + reciprocal avoidance, driven
+over `cmd_vel`.
+
+<p align="center">
+  <img src="docs/media/gazebo_demo.gif" alt="Three robots cross a 3D Gazebo arena of cylindrical obstacles via the repo's A* grid planning, pure pursuit, and reciprocal avoidance, each sweeping a 360-degree LiDAR whose returns trace the obstacles" width="640">
+</p>
+ Each carries a **360° LiDAR** whose live returns
 are overlaid on the render, so you can watch the lasers trace the obstacles and
 the other robots. It is rendered and recorded **fully offscreen on the GPU** (no
 GUI, no desktop window) by `scripts/record_gazebo_gif.py` — the 3D counterpart to
@@ -224,7 +287,11 @@ the matching `mrn_coord` algorithm and sharing one recording harness
 
 ## Quick Start
 
-Build with ROS 2 Jazzy:
+**Just the MAPF zoo, no ROS?** See [the pip quickstart above](#a-pip-installable-mapf-algorithm-zoo)
+— `pip install` the pure-Python coordination core and solve an instance in five
+lines, no colcon required.
+
+For the full simulation / navigation / Gazebo stack, build with ROS 2 Jazzy:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
