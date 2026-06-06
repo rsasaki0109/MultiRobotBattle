@@ -1,0 +1,18 @@
+{
+  "case": "kajita_stabilizer",
+  "closed_loop_stable": true,
+  "continuous_poles_exact": true,
+  "designed_rate_recovered": true,
+  "deterministic": true,
+  "large_push_saturates_and_fails": true,
+  "model_error_rejected": true,
+  "no_disturbance_is_noop": true,
+  "omega": 3.5,
+  "open_loop_diverges_under_push": true,
+  "open_loop_unstable": true,
+  "realised_zmp_in_support": true,
+  "small_push_no_saturation": true,
+  "stabilizer_recovers_push": true,
+  "walk_open_loop_diverges": true,
+  "walk_stabilizer_tracks": true
+}

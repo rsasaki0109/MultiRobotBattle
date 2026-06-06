@@ -255,6 +255,16 @@ The pieces compose bottom-up:
   strong push that makes the fixed-foot MPC fall, this one takes a *capture step*
   and recovers; with the feet frozen it collapses bit-for-bit to :mod:`mpc_walk`.
   Pure Python, no numpy.
+- :mod:`kajita_stabilizer` — **biped walking stabilization by LIPM tracking**
+  (Kajita et al., IROS 2010): the closed-loop, on-the-real-robot counterpart of
+  the open-loop pattern generators above. The LIPM is inherently unstable, so
+  playing a precomputed ZMP back open-loop diverges under any perturbation; the
+  stabilizer measures the actual CoM and commands a modified ZMP
+  ``p = p^ref + k_p (x−x^ref) + k_v (ẋ−ẋ^ref)`` (``k_p>1`` overcomes the
+  instability), saturated to the support foot (ankle strategy). A push within the
+  capturable margin is rejected with the ZMP inside the foot; a larger push
+  saturates and the robot must *step* — the escalation to :mod:`capture_point` /
+  :mod:`herdt_walk`. Pure Python, no numpy.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -350,6 +360,14 @@ from .herdt_walk import (
     HerdtWalkResult,
     build_herdt,
     simulate_herdt,
+)
+from .kajita_stabilizer import (
+    StabilizerParams,
+    StabilizerResult,
+    gains_for_poles,
+    reference_trajectory,
+    simulate_stabilizer,
+    stabilizer_params,
 )
 from .conflicts import (
     EdgeConflict,
@@ -455,6 +473,12 @@ __all__ = [
     "HerdtMPC",
     "HerdtParams",
     "HerdtWalkResult",
+    "stabilizer_params",
+    "simulate_stabilizer",
+    "reference_trajectory",
+    "gains_for_poles",
+    "StabilizerParams",
+    "StabilizerResult",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

@@ -75,6 +75,7 @@ honest gated result is in [`docs/coordination.md`](docs/coordination.md):
 | **DCM walking control** | Englsberger et al. 2015 | backward-recursion DCM reference + tracking law over a footstep plan | error → 0 at chosen rate k; open-loop blows up at ω |
 | **Trajectory-free MPC walking** | Wieber 2006 | constrained-QP MPC: hard ZMP-in-support box + jerk/velocity objective | hard constraint keeps ZMP legal under a push where unconstrained tips over |
 | **Auto-footstep MPC walking** | Herdt et al. 2010 | footsteps become QP variables (second change of vars → still a box QP) | capture step recovers a push the fixed-foot MPC falls under; frozen feet ≡ Wieber |
+| **Walking stabilizer (LIPM tracking)** | Kajita et al. 2010 | closed-loop ZMP feedback `p = p^ref + k_p e + k_v ė` (k_p>1 beats the LIP instability), ZMP clipped to the foot | open-loop ZMP playback diverges under a push; the stabilizer rejects it — until the ankle saturates and a step is needed |
 
 ---
 

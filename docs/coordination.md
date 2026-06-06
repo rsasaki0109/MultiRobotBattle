@@ -2035,6 +2035,57 @@ the full paper also plans the lateral footstep and a double-support phase (here
 the instantaneous foot switch is counted feasible against the two-foot convex
 hull, the stand-in for double support).
 
+### Biped walking stabilization by LIPM tracking (`kajita_stabilizer.py`)
+
+Every walking controller above — `lipm_walk`, `capture_point`, `dcm_walk`,
+`mpc_walk`, `herdt_walk` — computes a *reference* CoM/ZMP trajectory **ahead of
+time**, open-loop. On a real robot that is not enough, and the reason is the
+Linear Inverted Pendulum itself: `ẍ = ω²(x − p)` has an eigenvalue `+ω`, so the
+plant is **unstable**. The smallest perturbation — a push, a modelling error,
+even the discretisation gap between the planner's cart-table and the real
+dynamics — makes the actual CoM peel away from the reference like `e^{ω t}`.
+Replaying the precomputed ZMP open-loop does *not* reject it. `kajita_stabilizer`
+reproduces Kajita, Morisawa, Miura, Nakaoka, Harada, Kaneko, Kanehiro & Yokoi,
+*"Biped Walking Stabilization Based on Linear Inverted Pendulum Tracking"* (IROS
+2010) — the **closed-loop, on-the-real-robot** feedback layer that closes the loop
+the open-loop generators leave open.
+
+The control law measures the actual CoM state `(x, ẋ)` and commands a **modified
+ZMP** `p^cmd = p^ref + k_p (x − x^ref) + k_v (ẋ − ẋ^ref)`. The error
+`e = x − x^ref` then obeys `ë = ω²(1 − k_p) e − ω² k_v ė`, whose characteristic
+polynomial `s² + ω²k_v s + ω²(k_p − 1)` is stable **iff `k_p > 1` and `k_v > 0`**:
+the position gain must *over-shift* the ZMP past the error to overcome the
+pendulum's instability. `gains_for_poles(λ, ω)` places a double real pole at `−λ`
+by `k_v = 2λ/ω²`, `k_p = 1 + λ²/ω²`. The commanded ZMP is then **saturated to the
+support foot** (`p^ref ± foot_half`) — this is the *ankle strategy*, and where it
+saturates is exactly the honest limit below.
+
+The `kajita_stabilizer` gate pins all of it. **(1) Pole placement** — the gains
+match `(s + λ)²` to machine precision (`continuous_poles_exact`), the realised
+sampled-data loop (the exact 2×2 LIPM error-transition matrix) is stable
+(`closed_loop_stable`, spectral radius < 1) while the open loop is not
+(`open_loop_unstable`, spectral radius `e^{ωdt} > 1`), and the realised decay
+rate recovers the design `λ` within 15 % (`designed_rate_recovered`). **(2) The
+headline** — a push within the capturable margin makes open-loop playback diverge
+(`open_loop_diverges_under_push`) but the stabilizer recovers it
+(`stabilizer_recovers_push`) with the realised ZMP inside the foot
+(`realised_zmp_in_support`); a small push is rejected *without* the ankle ever
+saturating (`small_push_no_saturation`). **(3) The honest limit** — a push past
+the capturable margin (`ξ = ẋ/ω > foot half`) saturates the ankle and in-place
+recovery *fails* (`large_push_saturates_and_fails`): the robot must take a step,
+the escalation to `capture_point` / `herdt_walk`. **(4) No-op** — with zero
+disturbance and an exact model the stabilizer adds nothing
+(`no_disturbance_is_noop`, closed ≡ open ≡ reference). **(5) Modelling error** — a
+persistent ZMP bias makes the open loop diverge but the closed loop holds a
+*bounded* steady error matching the predicted `−bias/(k_p − 1)`
+(`model_error_rejected`). **(6) Forward walk** — on a preview-control reference
+walk a mid-walk push is tracked out (`walk_stabilizer_tracks`) while open-loop
+playback diverges (`walk_open_loop_diverges`). Pure Python, no numpy; the "real"
+robot is integrated with the **exact** LIPM solution (so the reproduction also
+rejects the planner/plant model mismatch), sagittal (1-D point-mass) like the rest
+of the thread — the full paper also runs a foot-force/torque ZMP-realisation loop
+and lateral balance.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

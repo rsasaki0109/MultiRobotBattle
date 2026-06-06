@@ -44,7 +44,7 @@ simulator emits them; that repo consumes them.
 - [x] CI: build + `colcon test` over all packages + coordination CLI demos.
 - [x] **MAPF algorithm zoo** (`mrn_coord.mapf`): 45+ algorithms faithfully
   reproduced from their papers in pure Python, each *benchmark-gated* in
-  `scripts/benchmark_gate.py` (full gate **91/91**). CBS family (CBSH, ECBS,
+  `scripts/benchmark_gate.py` (full gate **92/92**). CBS family (CBSH, ECBS,
   EECBS, FECBS, ICBS/bypass, MA-CBS, disjoint, BCP, rectangle/corridor/mutex
   symmetry), optimal joint-space search (M\*, rM\*, EPEA\*, ICTS, Standley
   OD/ID), declarative (MDD-SAT), constructive (Push-and-Rotate/Swap, TSWAP,
@@ -55,7 +55,8 @@ simulator emits them; that repo consumes them.
   + ZMP-preview-control walking pattern generation (Kajita et al.) + Capture
   Point push recovery (Pratt et al.) + DCM walking control (Englsberger et
   al.) + trajectory-free constrained-QP MPC walking (Wieber) + automatic
-  footstep placement MPC (Herdt et al.)**, and the low
+  footstep placement MPC (Herdt et al.) + closed-loop walking stabilizer by
+  LIPM tracking (Kajita et al.)**, and the low
   levels (space-time A\*,
   SIPP/SIPPS, Multi-Label A\*). Each documented algorithm-by-algorithm with its
   honest gated result in `docs/coordination.md`.

@@ -5511,6 +5511,108 @@ def _run_herdt_walk() -> dict:
     }
 
 
+def _run_kajita_stabilizer() -> dict:
+    import dataclasses
+
+    from mrn_coord.mapf import kajita_stabilizer as ks
+
+    lam = 4.0
+    p = ks.stabilizer_params(lam=lam, z_h=0.8, dt=0.02, foot_half=0.05)
+    w = p.omega
+
+    # (1) gains place the error dynamics' poles at a double real -lam exactly
+    # (continuous algebraic identity), and the realised sampled-data closed loop
+    # is stable (spectral radius < 1) while the open loop (no feedback) is not.
+    w2 = w * w
+    cont_exact = (abs(w2 * p.k_v - 2.0 * lam) < 1e-9
+                  and abs(w2 * (p.k_p - 1.0) - lam * lam) < 1e-9
+                  and p.k_p > 1.0)
+    rho_closed = ks.spectral_radius(ks.closed_loop_matrix(p))
+    p_open = dataclasses.replace(p, k_p=0.0, k_v=0.0)
+    rho_open = ks.spectral_radius(ks.closed_loop_matrix(p_open))
+    rate = ks.continuous_rate(p)
+    rate_ok = abs(rate - lam) / lam < 0.15
+
+    # standing reference; the LIPM is unstable so open-loop playback diverges
+    # under any perturbation, while the stabilizer rejects it.
+    N = 200
+    zr, cr, vr = ks.standing_reference(N)
+
+    # (2) a push within the in-place-capturable margin: closed recovers, open falls
+    cl = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=True,
+                                push_tick=10, push_dv=0.10)
+    ol = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=False,
+                                push_tick=10, push_dv=0.10)
+
+    # a small push is rejected WITHOUT saturating the ankle (ZMP stays interior)
+    small = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=True,
+                                   push_tick=10, push_dv=0.05)
+
+    # (3) honest limit: a push past the capturable margin saturates the ankle and
+    # in-place recovery FAILS -- the robot must take a step (capture_point/herdt).
+    big = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=True,
+                                 push_tick=10, push_dv=0.30)
+
+    # (4) no disturbance + exact model => the stabilizer is a no-op (adds nothing)
+    cl0 = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=True)
+    ol0 = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=False)
+
+    # (5) a persistent ZMP modelling error: open-loop diverges, closed-loop holds
+    # a bounded steady error matching the predicted -bias/(k_p-1)
+    bias = 0.02
+    clb = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=True,
+                                 zmp_bias=bias)
+    olb = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=False,
+                                 zmp_bias=bias)
+    pred_ss = -bias / (p.k_p - 1.0)
+    bias_ok = (abs(clb.steady_error() - pred_ss) < 1e-3
+               and clb.max_error() < 0.05 and olb.diverged())
+
+    # (6) a forward walk (reference from the preview controller): a mid-walk push
+    # is tracked out by the stabilizer; open-loop playback diverges.
+    zref = ks.stepping_zmp_reference(step_len=0.15, step_ticks=40, n_feet=6,
+                                     settle_ticks=120)
+    com_ref, vel_ref, zmp_ind = ks.reference_trajectory(zref, params=p)
+    wcl = ks.simulate_stabilizer(zmp_ind, com_ref, vel_ref, params=p,
+                                 stabilize=True, push_tick=150, push_dv=0.12)
+    wol = ks.simulate_stabilizer(zmp_ind, com_ref, vel_ref, params=p,
+                                 stabilize=False, push_tick=150, push_dv=0.12)
+
+    # determinism
+    cl_b = ks.simulate_stabilizer(zr, cr, vr, params=p, stabilize=True,
+                                  push_tick=10, push_dv=0.10)
+
+    return {
+        "case": "kajita_stabilizer",
+        "omega": round(w, 3),
+        # (1) pole placement + stability of the realised loop
+        "continuous_poles_exact": cont_exact,
+        "closed_loop_stable": rho_closed < 1.0,
+        "open_loop_unstable": rho_open > 1.0,
+        "designed_rate_recovered": rate_ok,
+        # (2) headline: open-loop playback of a precomputed ZMP falls under a push,
+        # the LIPM-tracking stabilizer recovers it with the ZMP inside the foot
+        "open_loop_diverges_under_push": ol.diverged(),
+        "stabilizer_recovers_push": cl.converged() and not cl.diverged(),
+        "realised_zmp_in_support": cl.realised_zmp_in_support(),
+        "small_push_no_saturation": (small.converged()
+                                     and not small.ever_saturated()),
+        # (3) honest limit: too-large push saturates the ankle and fails in place
+        "large_push_saturates_and_fails": (big.ever_saturated()
+                                           and not big.converged()),
+        # (4) zero disturbance + exact model => stabilizer is a no-op
+        "no_disturbance_is_noop": (cl0.max_error() < 1e-9
+                                   and ol0.max_error() < 1e-9),
+        # (5) persistent modelling error rejected to the predicted steady state
+        "model_error_rejected": bias_ok,
+        # (6) forward walk: stabilizer tracks a mid-walk push, open loop diverges
+        "walk_open_loop_diverges": wol.diverged(),
+        "walk_stabilizer_tracks": (wcl.converged(tol=0.02)
+                                   and wcl.max_error() < 0.05),
+        "deterministic": cl.com == cl_b.com,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5742,6 +5844,10 @@ SUITE = [
     # fixed-foot MPC falls; this one takes a capture step and recovers. Frozen
     # feet collapse it bit-for-bit back to mpc_walk
     ("herdt_walk", _run_herdt_walk),
+    # closed-loop stabilizer: the on-the-real-robot feedback that rejects the
+    # perturbations the open-loop pattern generators above cannot -- LIPM
+    # tracking with the ZMP saturated to the foot (ankle strategy)
+    ("kajita_stabilizer", _run_kajita_stabilizer),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),
