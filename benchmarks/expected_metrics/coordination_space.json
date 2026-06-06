@@ -1,0 +1,14 @@
+{
+  "all_baseline_collides": true,
+  "all_collision_free": true,
+  "all_incur_delay": true,
+  "all_solved": true,
+  "all_use_velocity_tuning": true,
+  "certified_makespan": 14,
+  "deterministic": true,
+  "headon_shared_corridor_unsolvable": true,
+  "instances": 5,
+  "makespan_optimal": true,
+  "three_robots_collision_free": true,
+  "three_robots_solved": true
+}

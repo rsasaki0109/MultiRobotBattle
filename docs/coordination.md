@@ -2376,6 +2376,43 @@ here. Collisions are checked on the shared `dt` grid (fine `dt`); a car stops an
 parks on reaching its goal (a modelling choice — a Dubins car cannot otherwise
 halt). Pure Python, no numpy.
 
+### Path–velocity decomposition: coordination space (`coordination_space.py`)
+
+A reproduction of the classic **coordination-diagram** / velocity-tuning paradigm —
+Kant & Zucker, *"Toward Efficient Trajectory Planning: The Path-Velocity
+Decomposition"* (IJRR 1986), and O'Donnell & Lozano-Pérez, *"Deadlock-Free and
+Collision-Free Coordination of Two Robots"* (ICRA 1989). Every other planner in this
+zoo decides *where* each robot goes; this one does the opposite. Each robot's
+**geometric path is fixed** (decoupled, planned in advance), and the planner only
+schedules **how fast** each robot moves along its own path.
+
+The joint state is the tuple of path parameters `(s₁, …, sₙ) ∈ [0,1]ⁿ` — the
+**coordination space**. A pair of robots collides on the sub-square of parameter
+values where their bodies overlap (`build_collision_table` — the obstacles), and a
+collision-free schedule is a **monotone** path through the coordination space from
+`(0,…,0)` to `(1,…,1)` avoiding every collision region. Monotone because a robot only
+ever moves *forward* along its path — it may **wait** (hold `sᵢ`) but never reverse.
+For two robots this is the famous 2-D coordination diagram: a staircase routed around
+the collision blob. `schedule` is A-star over the index lattice `{0,…,m-1}ⁿ`, each
+step advancing any non-empty subset of robots by one (the rest wait → velocity
+tuning), never entering or crossing a colliding cell, minimising makespan;
+collision-free *by construction*.
+
+The gate (`coordination_space`) certifies this against an independent oracle
+(`min_clearance`, the simultaneous-motion clearance of the executed schedule) and an
+independent BFS (for optimality). **Sound + genuine velocity tuning:** a 5-scenario
+battery of timing conflicts (crossings, a shared bridge, a T-junction) whose
+constant-speed baseline *collides* — every one is solved, every solution keeps real
+clearance (after a small safety margin), every solution actually **waits** a robot
+(velocity tuning, not mere reordering) and pays a delay (makespan `>` the
+conflict-free optimum `m-1`). **Optimal makespan:** on a small perpendicular crossing
+`schedule`'s makespan equals the brute BFS minimum over the whole lattice.
+**Honest incompleteness:** two robots assigned the *same* corridor in opposite
+directions have no monotone collision-free schedule (the collision band cuts the
+coordination space in two) — `schedule` correctly returns `None`; velocity tuning
+**cannot reroute**, the paradigm's known limit, not a bug. **Scales:** a 3-robot
+crossing is solved and collision-free. Pure Python, no numpy.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

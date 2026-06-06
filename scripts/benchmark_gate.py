@@ -6453,6 +6453,178 @@ def _run_kcbs() -> dict:
     }
 
 
+def _run_coordination_space() -> dict:
+    # coordination_space.py reproduces the classic PATH-VELOCITY DECOMPOSITION /
+    # coordination-diagram paradigm -- Kant & Zucker, "Toward Efficient Trajectory
+    # Planning: The Path-Velocity Decomposition" (IJRR 1986), and O'Donnell &
+    # Lozano-Perez, "Deadlock-Free and Collision-Free Coordination of Two Robots"
+    # (ICRA 1989). Every other planner here decides WHERE robots go; this one fixes
+    # each robot's geometric path and only schedules HOW FAST it moves along it.
+    # The joint state is the tuple of path parameters (s_1..s_n) -- the COORDINATION
+    # SPACE; a pair collides on the sub-square where their bodies overlap (the
+    # obstacles), and a collision-free schedule is a MONOTONE path from (0,..,0) to
+    # (1,..,1) avoiding them (monotone = robots only move forward, may wait). For
+    # two robots this is the famous 2-D coordination diagram: a staircase routed
+    # around the collision blob. schedule() is A* over the index lattice minimising
+    # makespan; collision-free by construction.
+    #
+    # The gate certifies this against an INDEPENDENT oracle (min_clearance, the
+    # simultaneous-motion clearance of the executed schedule) and an independent
+    # BFS (for makespan optimality):
+    # (1) SOUND + VELOCITY TUNING: a 5-scenario battery of timing conflicts
+    #     (crossings, a shared bridge, a T-junction) whose constant-speed baseline
+    #     COLLIDES -- every one is solved, every solution keeps real clearance
+    #     (>= 0 after a safety margin), every solution actually WAITS a robot (uses
+    #     velocity tuning, not just reordering) and pays a delay (makespan > the
+    #     conflict-free optimum m-1).
+    # (2) OPTIMAL MAKESPAN: on a small perpendicular crossing, schedule()'s makespan
+    #     equals the brute BFS minimum over the whole lattice.
+    # (3) HONEST INCOMPLETENESS: two robots assigned the SAME corridor in opposite
+    #     directions have no monotone collision-free schedule (the collision band
+    #     cuts the space in two) -- schedule() correctly returns None (velocity
+    #     tuning cannot reroute).
+    # (4) SCALES: a 3-robot crossing is solved and collision-free.
+    import math
+    from collections import deque
+
+    from mrn_coord.mapf.coordination_space import (
+        CoordinationProblem, build_collision_table, min_clearance, schedule,
+        schedule_to_trajectories,
+    )
+
+    M = 0.15  # safety margin so the discrete schedule keeps real clearance
+
+    def _moving(a0, a1, b0, b1):
+        r0 = (a0[0] - b0[0], a0[1] - b0[1])
+        d = (a1[0] - a0[0] - (b1[0] - b0[0]), a1[1] - a0[1] - (b1[1] - b0[1]))
+        dd = d[0] * d[0] + d[1] * d[1]
+        if dd <= 1e-15:
+            return math.hypot(r0[0], r0[1])
+        t = max(0.0, min(1.0, -(r0[0] * d[0] + r0[1] * d[1]) / dd))
+        return math.hypot(r0[0] + t * d[0], r0[1] + t * d[1])
+
+    def _baseline_collides(p):
+        table = build_collision_table(p, M)
+        for k in range(p.m):
+            st = tuple(min(p.m - 1, k) for _ in range(p.n))
+            for (a, b), mask in table.items():
+                if mask[st[a]][st[b]]:
+                    return True
+        return False
+
+    def _has_wait(s, n):
+        return any(s.states[t][r] == s.states[t + 1][r]
+                   for t in range(len(s.states) - 1) for r in range(n))
+
+    battery = [
+        [[(0, 4), (8, 4)], [(4, 0), (4, 8)]],
+        [[(0, 3), (8, 3)], [(3, 0), (3, 8)]],
+        [[(0, 0), (4, 4), (8, 0)], [(0, 8), (4, 4), (8, 8)]],
+        [[(0, 0), (8, 8)], [(0, 8), (8, 0)]],
+        [[(0, 4), (8, 4)], [(4, 0), (4, 4), (0, 4)]],
+    ]
+    insts = solved = coll_free = tuned = baseline_coll = delayed = 0
+    for paths in battery:
+        p = CoordinationProblem(paths, [0.5] * len(paths), m=20)
+        insts += 1
+        if _baseline_collides(p):
+            baseline_coll += 1
+        s = schedule(p, safety_margin=M)
+        if s is None:
+            continue
+        solved += 1
+        cl = min_clearance(schedule_to_trajectories(p, s), p.radii)
+        if cl >= -1e-6:
+            coll_free += 1
+        if _has_wait(s, p.n):
+            tuned += 1
+        if s.makespan > p.m - 1:
+            delayed += 1
+
+    # (2) makespan optimality vs brute BFS on a small perpendicular crossing
+    ps = CoordinationProblem([[(0, 4), (8, 4)], [(4, 0), (4, 8)]],
+                             [0.5, 0.5], m=12)
+
+    def _bfs_min(p):
+        table = build_collision_table(p, M)
+        pts = p.samples()
+        m, n = p.m, p.n
+        start = tuple(0 for _ in range(n))
+        goal = tuple(m - 1 for _ in range(n))
+        moves = [tuple((mask >> i) & 1 for i in range(n))
+                 for mask in range(1, 1 << n)]
+
+        def cc(st):
+            return any(mask[st[a]][st[b]] for (a, b), mask in table.items())
+
+        def tc(u, v):
+            for a in range(n):
+                for b in range(a + 1, n):
+                    if _moving(pts[a][u[a]], pts[a][v[a]], pts[b][u[b]],
+                               pts[b][v[b]]) < p.radii[a] + p.radii[b] + M - 1e-9:
+                        return True
+            return False
+
+        dist = {start: 0}
+        q = deque([start])
+        while q:
+            u = q.popleft()
+            if u == goal:
+                return dist[u]
+            for mv in moves:
+                v = tuple(min(m - 1, u[i] + mv[i]) for i in range(n))
+                if v == u or v in dist or cc(v) or tc(u, v):
+                    continue
+                dist[v] = dist[u] + 1
+                q.append(v)
+        return None
+
+    bfs_opt = _bfs_min(ps)
+    sched_opt = schedule(ps, safety_margin=M)
+    makespan_optimal = (sched_opt is not None and bfs_opt is not None
+                        and sched_opt.makespan == bfs_opt)
+
+    # (3) head-on shared corridor: no velocity-tuning schedule exists
+    headon = CoordinationProblem([[(0, 4), (8, 4)], [(8, 4), (0, 4)]],
+                                 [0.5, 0.5], m=20)
+    headon_unsolvable = schedule(headon, safety_margin=M) is None
+
+    # (4) three robots
+    p3 = CoordinationProblem([[(0, 4), (8, 4)], [(4, 0), (4, 8)],
+                              [(0, 0), (8, 8)]], [0.4, 0.4, 0.4], m=16)
+    s3 = schedule(p3, safety_margin=M)
+    if s3 is not None:
+        cl3 = min_clearance(schedule_to_trajectories(p3, s3), p3.radii)
+        three_cf = cl3 >= -1e-6
+    else:
+        three_cf = False
+
+    # determinism
+    a = schedule(ps, safety_margin=M)
+    b = schedule(ps, safety_margin=M)
+    deterministic = a.states == b.states and a.makespan == b.makespan
+
+    return {
+        # (1) sound + genuine velocity tuning
+        "all_solved": solved == insts,
+        "all_collision_free": coll_free == solved,
+        "all_use_velocity_tuning": tuned == solved,
+        "all_baseline_collides": baseline_coll == insts,
+        "all_incur_delay": delayed == solved,
+        "instances": insts,
+        # (2) optimal makespan, certified by brute BFS
+        "makespan_optimal": makespan_optimal,
+        "certified_makespan": bfs_opt if bfs_opt is not None else -1,
+        # (3) honest incompleteness
+        "headon_shared_corridor_unsolvable": headon_unsolvable,
+        # (4) three robots
+        "three_robots_solved": s3 is not None,
+        "three_robots_collision_free": three_cf,
+        # (5)
+        "deterministic": deterministic,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -6697,6 +6869,7 @@ SUITE = [
     ("drrt", _run_drrt),
     ("drrt_star", _run_drrt_star),
     ("kcbs", _run_kcbs),
+    ("coordination_space", _run_coordination_space),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

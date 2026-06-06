@@ -316,6 +316,15 @@ The pieces compose bottom-up:
   is CBS, branching on a continuous-time collision by forbidding a robot from the
   conflict location during a short window. Returns dynamically-feasible,
   collision-free trajectories (feasibility, not cost-optimal). Pure Python.
+- :mod:`coordination_space` — **path–velocity decomposition** (Kant & Zucker,
+  IJRR 1986; O'Donnell & Lozano-Pérez, ICRA 1989): the classic coordination
+  diagram. Each robot's geometric path is *fixed*; the planner only schedules how
+  fast each moves along it. The joint state is the tuple of path parameters — the
+  **coordination space** — and a collision-free plan is a **monotone** path
+  through it from start to goal avoiding the pairwise collision regions (A-star over
+  the index lattice, minimising makespan). Resolves *timing* conflicts (crossings,
+  merges) by velocity tuning; correctly returns ``None`` when only rerouting would
+  help (a shared corridor in opposite directions). Pure Python.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -469,6 +478,13 @@ from .kcbs import (
     propagate,
     trajectory_feasible,
 )
+from .coordination_space import (
+    CoordinationProblem,
+    CoordinationSchedule,
+    discretize_path,
+    schedule as coordination_schedule,
+    schedule_to_trajectories,
+)
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -618,6 +634,11 @@ __all__ = [
     "DubinsCar",
     "Constraint",
     "KCBSSolution",
+    "coordination_schedule",
+    "schedule_to_trajectories",
+    "discretize_path",
+    "CoordinationProblem",
+    "CoordinationSchedule",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",
