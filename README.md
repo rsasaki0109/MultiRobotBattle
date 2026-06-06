@@ -193,6 +193,19 @@ the LaCAM/PIBT line, lifelong engines (RHCR, Token Passing, TPTS), and execution
 layers (k-robust, switchable-ADG) — is documented algorithm-by-algorithm, with the
 honest gated result of each, in [`docs/coordination.md`](docs/coordination.md).
 
+**Humanoid footstep planning → dynamically stable walk** — the zoo also drops to
+the footstep resolution of a walking humanoid: search-based **footstep planning**
+(Hornung et al. 2012) places the feet, then **ZMP preview control** (Kajita et al.
+2003) generates the center-of-mass trajectory that walks them — the induced
+Zero-Moment Point (orange) stays under each support foot while the CoM (cyan)
+sways from foot to foot, the dynamic-stability criterion made visible. Both are
+the real `mrn_coord.mapf` code; regenerate with
+`python3 scripts/make_footstep_walk_gif.py`:
+
+<p align="center">
+  <img src="docs/media/footstep_walk.gif" alt="Left: a top-down floor where a humanoid's planned footsteps zigzag forward as oriented rectangles, the current support foot highlighted, the center of mass tracing a cyan swaying path and the zero-moment point an orange line that hugs the support foot. Right: the lateral motion over time — the stepped reference ZMP, the induced ZMP tracking it, and the CoM swaying smoothly between, with a moving time cursor." width="760">
+</p>
+
 **Coordination** — MAPF (Conflict-Based Search / prioritized), formation
 control, frontier coverage. Each has a CLI demo (`mrn_mapf_demo`,
 `mrn_formation_demo`, `mrn_coverage_demo`) and a thin ROS node; the top GIF
