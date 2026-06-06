@@ -1,0 +1,12 @@
+{
+  "case": "lipm_walk",
+  "deterministic": true,
+  "preview_load_bearing": true,
+  "preview_tracks_tight": true,
+  "walk_com_progresses": true,
+  "walk_com_sways": true,
+  "walk_dynamically_stable": true,
+  "walk_stable_outside": 0,
+  "walk_zmp_rms_mm": 17.0,
+  "walk_zmp_rms_small": true
+}

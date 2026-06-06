@@ -5061,6 +5061,72 @@ def _run_footstep_mapf() -> dict:
     }
 
 
+def _run_lipm_walk() -> dict:
+    from mrn_coord.mapf.footstep import (
+        FOOT_LENGTH,
+        FOOT_WIDTH,
+        FootstepState,
+        plan_footsteps,
+    )
+    from mrn_coord.mapf.lipm_walk import (
+        PreviewGains,
+        generate_walk,
+        lipm_track,
+        preview_gains,
+        zmp_stability,
+    )
+
+    R = "R"
+    gains = preview_gains(z_h=0.8, dt=0.02, preview_steps=80, Q=1.0, R=1e-8)
+
+    # synthetic step ZMP reference: preview tracks it; feedback-only cannot
+    ref = []
+    for val, reps in [(0.0, 60), (0.3, 40), (0.6, 40), (0.9, 140)]:
+        ref += [val] * reps
+    _, zmp = lipm_track(ref, gains)
+    body = range(80, len(ref) - 80)
+    err_prev = max(abs(zmp[k] - ref[k]) for k in body)
+    g0 = PreviewGains(K=gains.K, f=tuple(0.0 for _ in gains.f),
+                      z_h=gains.z_h, dt=gains.dt, g=gains.g)
+    _, zmp0 = lipm_track(ref, g0)
+    err_fb = max(abs(zmp0[k] - ref[k]) for k in body)
+
+    # footstep plan -> dynamically stable walk
+    from mrn_coord.mapf.footstep import FootstepWorld
+    world = FootstepWorld(3.0, 1.5)
+    plan = plan_footsteps(world, FootstepState(0.4, 0.75, 0.0, R), (2.4, 0.75),
+                          w=2.0)
+    wp = generate_walk(plan.states, step_duration=0.7, dt=0.02)
+    rms_mm = 1000.0 * wp.zmp_rms_error()
+    frac, out = zmp_stability(wp, foot_length=FOOT_LENGTH, foot_width=FOOT_WIDTH)
+    comx_span = max(wp.com_x) - min(wp.com_x)
+    comy_span = max(wp.com_y) - min(wp.com_y)
+    footx_span = (max(p[0] for p in wp.foot_poses)
+                  - min(p[0] for p in wp.foot_poses))
+
+    # determinism
+    wp2 = generate_walk(plan.states, step_duration=0.7, dt=0.02)
+    deterministic = (wp.com_x == wp2.com_x and wp.com_y == wp2.com_y)
+
+    return {
+        "case": "lipm_walk",
+        # preview control tracks the reference ZMP tightly ...
+        "preview_tracks_tight": err_prev < 0.015,
+        # ... and the preview term is load-bearing: feedback alone lags badly
+        "preview_load_bearing": err_fb > 10.0 * err_prev,
+        # the footstep plan becomes a dynamically stable walk: the induced ZMP
+        # never leaves the support foot (ZMP-stability criterion)
+        "walk_dynamically_stable": out == 0,
+        "walk_stable_outside": out,
+        "walk_zmp_rms_small": (rms_mm < 30.0),
+        "walk_zmp_rms_mm": round(rms_mm, 1),
+        # the CoM walks the full distance and sways laterally onto each foot
+        "walk_com_progresses": comx_span >= 0.9 * footx_span,
+        "walk_com_sways": comy_span > 0.10,
+        "deterministic": deterministic,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5260,6 +5326,11 @@ SUITE = [
     # Euclidean), an anytime decreasing-w schedule, and prioritized footstep
     # MAPF keeping humanoid bodies collision-free (incomplete: head-on fails)
     ("footstep_mapf", _run_footstep_mapf),
+    # LIPM walking pattern generation by ZMP preview control (Kajita et al.'03):
+    # a footstep plan becomes the dynamically stable CoM trajectory that realises
+    # it -- the preview term keeps the induced ZMP under the support foot (without
+    # it, feedback alone lags ~100x worse and leaves the support polygon)
+    ("lipm_walk", _run_lipm_walk),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

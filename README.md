@@ -70,6 +70,7 @@ honest gated result is in [`docs/coordination.md`](docs/coordination.md):
 | **flow** | Yu & LaValle 2013 | anonymous makespan as integer max-flow | polynomial, self-certified optimum |
 | **RHCR** | Li et al. 2021 | rolling-horizon lifelong MAPF | sustained warehouse throughput |
 | **Footstep + multi-humanoid MAPF** | Hornung et al. 2012 | anytime footstep A\* + body-deconflicted teams | bounded-suboptimal; team body-collision-free |
+| **ZMP preview-control walking** | Kajita et al. 2003 | footstep plan → dynamically stable CoM trajectory | ZMP stays in the support foot (preview ~100× tighter) |
 
 ---
 

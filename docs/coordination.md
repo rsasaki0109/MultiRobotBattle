@@ -1787,6 +1787,51 @@ corridor defeats the fixed priority order: a humanoid maps to `None`
 (`headon_some_unsolved`) while whatever is planned stays collision-free
 (`headon_planned_cf`) — the limitation of prioritized planning, shown not hidden.
 
+### Biped walking pattern generation — ZMP preview control (`lipm_walk.py`)
+
+Footstep planning says *where* the feet go; this says *how the body moves* to
+make those footsteps a **dynamically stable** walk. `lipm_walk` reproduces
+Kajita, Kanehiro, Kaneko, Fujiwara, Harada, Yokoi & Hirukawa, *"Biped Walking
+Pattern Generation by using Preview Control of Zero-Moment Point"* (IEEE ICRA
+2003), via the clean state-space restatement in the same group's *"…allowing
+Auxiliary ZMP Control"* (IROS 2006, eqs. 5–9). It is the **dynamics** companion
+to `footstep`'s kinematic planning, and the only controller in this collection.
+
+**The model.** The biped is a **Linear Inverted Pendulum**: a center of mass at
+constant height `z_h` over a "ZMP cart", with sagittal dynamics
+`ẍ = (g/z_h)(x − p)`, where `p` is the **Zero-Moment Point** — the ground point
+about which the foot-ground reaction exerts no horizontal moment. A walk is
+dynamically stable while its ZMP stays inside the **support polygon** (here, the
+support foot). Taking the cart speed `v = ṗ` as input and discretising gives the
+cart-table system `x_{k+1} = A x_k + b v_k`, `p_k = c x_k`, with state
+`x = [pos, vel, accel]` and `c = [1, 0, −z_h/g]` so `c x` is exactly the ZMP.
+
+**The controller.** A ZMP-tracking servo with **preview** of the *future*
+reference minimises `J = Σ Q(p^ref − p)² + R v²`. The optimal law is
+`v_k = −K x_k + Σ_{j=1..N} f_j · p^ref_{k+j}`, where `K` and the preview gains
+`f_j` come from the discrete Riccati equation
+`P = AᵀPA + cᵀQc − AᵀPb(R + bᵀPb)⁻¹bᵀPA`. The preview term lets the CoM start
+shifting *before* each footfall — anticipation is the whole point. `x` and `y`
+are independent 1-D systems; the Riccati equation is solved by pure-Python
+3×3 fixed-point iteration (no numpy). `generate_walk` builds the reference ZMP
+from a footstep plan (it holds under each stance foot in turn) and returns the
+CoM trajectory plus the induced ZMP.
+
+The `lipm_walk` gate pins the method. **(1) Preview tracks** — on a stepped ZMP
+reference the induced ZMP follows it to under 15 mm (`preview_tracks_tight`).
+**(2) Preview is load-bearing** — the paper's contribution isolated: zeroing the
+preview gains (feedback only) makes the ZMP lag **~100× worse**
+(`preview_load_bearing`), since without lookahead the CoM cannot anticipate the
+footfalls. **(3) A footstep plan becomes a stable walk** — feeding a real
+`plan_footsteps` output through `generate_walk`, the induced ZMP **never leaves
+the support foot** (`walk_dynamically_stable`, `walk_stable_outside == 0`,
+`walk_zmp_rms_mm ≈ 17`), the CoM walks the full footstep distance
+(`walk_com_progresses`) and **sways laterally** onto each support foot
+(`walk_com_sways`) — the side-to-side weight shift of a real gait. **(4)
+Deterministic** (`deterministic`). *Scope:* a point-mass LIPM pattern generator,
+not a full whole-body/multi-contact controller — the planning-to-stable-CoM
+seam, kept pure-Python and gated.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

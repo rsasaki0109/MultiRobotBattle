@@ -218,6 +218,14 @@ The pieces compose bottom-up:
   Collision-free by construction; incomplete (fails on symmetric head-on cases,
   like any fixed priority order). A kinematic planning/coordination reproduction
   — no whole-body dynamics.
+- :mod:`lipm_walk` — **biped walking pattern generation by ZMP preview control**
+  (Kajita et al., ICRA 2003): turns a footstep plan into the dynamically stable
+  *center-of-mass* trajectory that realises it. The biped is a Linear Inverted
+  Pendulum (CoM at constant height over a "ZMP cart"); a preview controller —
+  an optimal ZMP-tracking servo that looks ahead at the future reference —
+  drives the CoM so the induced Zero-Moment Point stays under the support foot.
+  The Riccati gains are solved in pure Python (no numpy). This is the *dynamics*
+  companion to :mod:`footstep`'s kinematic planning.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -277,6 +285,14 @@ from .footstep_mapf import (
     bodies_collision_free,
     plan_footsteps_reserved,
     prioritized_footstep_mapf,
+)
+from .lipm_walk import (
+    PreviewGains,
+    WalkPattern,
+    generate_walk,
+    lipm_track,
+    preview_gains,
+    zmp_stability,
 )
 from .conflicts import (
     EdgeConflict,
@@ -356,6 +372,12 @@ __all__ = [
     "plan_footsteps_reserved",
     "prioritized_footstep_mapf",
     "bodies_collision_free",
+    "preview_gains",
+    "generate_walk",
+    "lipm_track",
+    "zmp_stability",
+    "WalkPattern",
+    "PreviewGains",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",
