@@ -5701,6 +5701,112 @@ def _run_push_recovery() -> dict:
     }
 
 
+def _run_capturability() -> dict:
+    import math
+
+    from mrn_coord.mapf import capturability as cap
+    from mrn_coord.mapf.capture_point import capture_point as cp_capture_point
+    from mrn_coord.mapf.push_recovery import StrategyParams
+
+    p = cap.CaptureParams(foot_half=0.08, reaction_shift=0.03)
+    w = p.omega
+
+    # (1) HEADLINE: the closed-form N-step capture region is certified against an
+    # exact greedy LIPM rollout — a push at the midpoint of (region_{N-1},
+    # region_N] needs exactly N steps; all three models agree.
+    margin_matches_sim = True
+    for model in cap.MODELS:
+        for n in range(1, 7):
+            lo = cap.n_step_region(p, n - 1, model=model)
+            hi = cap.n_step_region(p, n, model=model)
+            xi = 0.5 * (lo + hi)
+            if cap.simulate_greedy(xi, p, model=model).margin() != n:
+                margin_matches_sim = False
+            if cap.capturability_margin(xi, p, model=model) != n:
+                margin_matches_sim = False
+
+    # (2) the capturability LIMIT is finite: a push beyond ξ_∞ is unrecoverable by
+    # ANY number of steps; just inside it is still (eventually) capturable.
+    pt = cap.CaptureParams(foot_half=0.0)  # point foot, clean limit
+    inf = cap.inf_step_region(pt, model="point")
+    beyond = cap.simulate_greedy(inf * 1.02, pt, model="point", max_steps=400)
+    inside = cap.simulate_greedy(inf * 0.999, pt, model="point", max_steps=400)
+    limit_is_finite = (math.isinf(cap.capturability_margin(inf * 1.02, pt))
+                       and not beyond.captured and inside.captured)
+
+    # (3) regions are NESTED and converge to the limit from below
+    regs = [cap.n_step_region(p, n, model="foot") for n in range(10)]
+    nested = all(regs[i] < regs[i + 1] for i in range(len(regs) - 1))
+    converges = all(r < cap.inf_step_region(p, model="foot") for r in regs)
+    converges_to_limit = abs(regs[-1] - cap.inf_step_region(p, model="foot")) < 1e-3
+
+    # (4) the three Koolen models nest: point ⊂ foot ⊂ reaction at every N
+    models_nested = all(
+        cap.n_step_region(p, n, model="point")
+        <= cap.n_step_region(p, n, model="foot")
+        <= cap.n_step_region(p, n, model="reaction")
+        for n in range(6)
+    )
+    # point foot cannot capture in place (0-step region is a single point)
+    point_needs_step = cap.n_step_region(p, 0, model="point") == 0.0
+    foot_captures_in_place = cap.n_step_region(p, 0, model="foot") == p.foot_half
+
+    # (5) monotonicity: longer swing time shrinks the limit, longer steps grow it
+    infs_T = [cap.inf_step_region(cap.CaptureParams(step_time=t, foot_half=0.0))
+              for t in (0.25, 0.35, 0.5)]
+    infs_L = [cap.inf_step_region(cap.CaptureParams(l_max=l, foot_half=0.0))
+              for l in (0.3, 0.5, 0.7)]
+    limit_shrinks_with_swing = infs_T[0] > infs_T[1] > infs_T[2]
+    limit_grows_with_step = infs_L[0] < infs_L[1] < infs_L[2]
+
+    # (6) the three models ARE the earlier reproductions: instantaneous capture
+    # point == capture_point module; model-3 0-step region == ankle band + hip
+    # widening from push_recovery (Koolen model 1/2/3 = point/ankle/hip).
+    xi_match = abs((0.0 + 0.4 / w) - cp_capture_point(0.0, 0.4, p.z_com, g=p.g)) < 1e-12
+    sp = StrategyParams()
+    pr_link = cap.CaptureParams(z_com=sp.z_com, g=sp.g,
+                                foot_half=sp.delta_front, reaction_shift=sp.delta_hip)
+    reaction_equals_hip = abs(cap.n_step_region(pr_link, 0, model="reaction")
+                              - (sp.delta_front + sp.delta_hip)) < 1e-12
+
+    # (7) closed-form margin matches greedy over a dense capture-point sweep
+    margin_sweep_ok = True
+    for j in range(0, 60):
+        xi = j * 0.005
+        if cap.capturability_margin(xi, p, model="foot") != \
+                cap.simulate_greedy(xi, p, model="foot").margin():
+            margin_sweep_ok = False
+
+    # determinism
+    a = cap.simulate_greedy(0.20, p, model="foot")
+    b = cap.simulate_greedy(0.20, p, model="foot")
+
+    return {
+        "case": "capturability",
+        "omega": round(w, 3),
+        # (1) closed-form N-step region certified by exact greedy simulation
+        "margin_matches_simulation": margin_matches_sim,
+        "margin_sweep_matches_simulation": margin_sweep_ok,
+        # (2) the capturability limit is finite (unrecoverable beyond it)
+        "capturability_limit_is_finite": limit_is_finite,
+        # (3) regions nested, increasing, converging to the limit
+        "regions_nested": nested,
+        "regions_below_limit": converges,
+        "regions_converge_to_limit": converges_to_limit,
+        # (4) the three Koolen models nest; point foot must step
+        "models_nested_point_foot_reaction": models_nested,
+        "point_foot_cannot_capture_in_place": point_needs_step,
+        "foot_captures_in_place": foot_captures_in_place,
+        # (5) monotonic in swing time and step length
+        "limit_shrinks_with_swing_time": limit_shrinks_with_swing,
+        "limit_grows_with_step_length": limit_grows_with_step,
+        # (6) models ARE the earlier reproductions (capture_point / push_recovery)
+        "capture_point_formula_matches_module": xi_match,
+        "reaction_model_equals_hip_widening": reaction_equals_hip,
+        "deterministic": a.feet == b.feet,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5940,6 +6046,7 @@ SUITE = [
     # the flywheel (hip) widening the capturable interval, step defers to
     # capture_point
     ("push_recovery", _run_push_recovery),
+    ("capturability", _run_capturability),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

@@ -2135,6 +2135,64 @@ Pure Python, no numpy; reuses `kajita_stabilizer`'s exact LIPM integrator and
 defers the step geometry to `capture_point`. Sagittal (1-D point-mass) like the
 rest of the thread.
 
+### N-step capturability analysis (`capturability.py`)
+
+The thread has now built push recovery from every side — `capture_point` (where to
+step), `kajita_stabilizer` (the ankle feedback), `push_recovery` (the ankle/hip/step
+decision surfaces). `capturability` reproduces Koolen, de Boer, Rebula, Goswami &
+Pratt, *"Capturability-based analysis and control of legged locomotion, Part 1"*
+(IJRR 31(9), 2012) — the **analytic backbone** that makes all of it precise. The
+question it answers exactly: *given a push, in how few steps can the robot come to a
+complete stop, and is it recoverable at all?* A state is **N-step capturable** if the
+robot can stop without falling in `N` or fewer steps; the set of capture points from
+which that is possible is the **N-step capture region**, and its size is the
+**N-step capturability margin**.
+
+Split the LIPM through the capture point `ξ = x + ẋ/ω`, which runs away from the CoP
+as `ξ̇ = ω(ξ − p)`. A step takes a swing time `T`, during which the *old* foot is the
+pivot, so the capture point diverges by the growth factor `e^{ωT}` before the new
+foot can act. Measuring the offset from the current stance, the per-step recursion is
+`ηₖ₊₁ = ηₖ·e^{ωT} − sₖ₊₁` with step `|sₖ| ≤ l_max`, captured when `|η_N| ≤ foot_eff`.
+Stepping as far as possible every time collapses to a **geometric series** — the
+closed-form N-step capture region:
+
+    ξ_N = foot_eff + l_max·(e^{−ωT} + e^{−2ωT} + ⋯ + e^{−NωT}).
+
+Koolen analyses **three nested gait models**, which are exactly the earlier
+reproductions: **model 1 — point foot** (`foot_eff = 0`: balance only by stepping,
+so the in-place region is a single point — you *must* step) is `capture_point`;
+**model 2 — finite foot** (`foot_eff = foot_half`: the ankle/CoP strategy) is
+`push_recovery`'s ankle; **model 3 — reaction mass** (`foot_eff = foot_half +
+reaction_shift`: the flywheel/CMP strategy) is `push_recovery`'s hip. The regions
+nest `ξ₀ ⊂ ξ₁ ⊂ ⋯` and, crucially, are **bounded**: even with infinitely many steps
+the capture point outruns the feet once it is too far, so
+
+    ξ_∞ = foot_eff + l_max/(e^{ωT} − 1)
+
+is a hard **capturability limit** — a push past it is unrecoverable by *any* number
+of steps. Longer swing time `T` or shorter steps `l_max` shrink the regions.
+
+The `capturability` gate pins it. **(1) The headline** — the closed-form region is
+*certified* against an exact greedy LIPM rollout: a push at the midpoint of
+`(ξ_{N-1}, ξ_N]` needs exactly `N` steps, for all three models, and the closed-form
+`capturability_margin` agrees to the integer (`margin_matches_simulation`,
+`margin_sweep_matches_simulation`). **(2) The capturability limit is finite**
+(`capturability_limit_is_finite`) — beyond `ξ_∞` the margin is `∞` and the greedy
+rollout never captures; just inside it still (eventually) does. **(3)** The regions
+are **nested**, increasing, and **converge to the limit** from below
+(`regions_nested`, `regions_below_limit`, `regions_converge_to_limit`). **(4)** The
+three Koolen models **nest** `point ⊂ foot ⊂ reaction`
+(`models_nested_point_foot_reaction`); the point foot cannot capture in place
+(`point_foot_cannot_capture_in_place`) while the finite foot can
+(`foot_captures_in_place`). **(5)** The limit is **monotonic** — it shrinks with
+swing time and grows with step length (`limit_shrinks_with_swing_time`,
+`limit_grows_with_step_length`). **(6)** The models *are* the earlier
+reproductions: the instantaneous capture point matches `capture_point`'s formula
+(`capture_point_formula_matches_module`) and model 3's in-place region equals
+`push_recovery`'s ankle band plus hip widening
+(`reaction_model_equals_hip_widening`). Pure Python, no numpy; the closed form is the
+source of truth and the greedy LIPM rollout is the certificate.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

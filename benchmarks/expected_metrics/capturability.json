@@ -1,0 +1,18 @@
+{
+  "capturability_limit_is_finite": true,
+  "capture_point_formula_matches_module": true,
+  "case": "capturability",
+  "deterministic": true,
+  "foot_captures_in_place": true,
+  "limit_grows_with_step_length": true,
+  "limit_shrinks_with_swing_time": true,
+  "margin_matches_simulation": true,
+  "margin_sweep_matches_simulation": true,
+  "models_nested_point_foot_reaction": true,
+  "omega": 3.132,
+  "point_foot_cannot_capture_in_place": true,
+  "reaction_model_equals_hip_widening": true,
+  "regions_below_limit": true,
+  "regions_converge_to_limit": true,
+  "regions_nested": true
+}

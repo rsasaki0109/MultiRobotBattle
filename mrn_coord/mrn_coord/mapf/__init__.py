@@ -273,6 +273,15 @@ The pieces compose bottom-up:
   past that a *step* is required (deferred to :mod:`capture_point`). The closed
   form matches an exact bang-bang LIPPF simulation to machine precision (the
   paper's printed eq. (15) is a typo). Pure Python, no numpy.
+- :mod:`capturability` — **N-step capturability analysis** (Koolen et al., IJRR
+  2012): the analytic backbone tying the push-recovery family together. A push is
+  *N-step capturable* if the robot can stop in ``N`` steps; the N-step capture
+  region is the geometric series ``ξ_N = foot + l_max·Σ_{k=1}^N e^{−kωT}``, nested
+  and bounded by a finite **capturability limit** ``ξ_∞ = foot + l_max/(e^{ωT}−1)``
+  past which no number of steps recovers. Koolen's three models — point foot /
+  finite foot / reaction mass — are exactly :mod:`capture_point` and the
+  :mod:`push_recovery` ankle / hip strategies. The closed form is certified
+  against an exact greedy LIPM rollout. Pure Python, no numpy.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -384,6 +393,15 @@ from .push_recovery import (
     hip_recovery_boundary,
     simulate_ankle,
     simulate_hip,
+)
+from .capturability import (
+    CaptureParams,
+    GreedyRecovery,
+    capture_region,
+    capturability_margin,
+    inf_step_region,
+    n_step_region,
+    simulate_greedy,
 )
 from .conflicts import (
     EdgeConflict,
@@ -501,6 +519,13 @@ __all__ = [
     "hip_recovery_boundary",
     "StrategyParams",
     "RecoveryResult",
+    "n_step_region",
+    "inf_step_region",
+    "capture_region",
+    "capturability_margin",
+    "simulate_greedy",
+    "CaptureParams",
+    "GreedyRecovery",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",
