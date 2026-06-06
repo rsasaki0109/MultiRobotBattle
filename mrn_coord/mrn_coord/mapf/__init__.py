@@ -307,6 +307,15 @@ The pieces compose bottom-up:
   a **graph** and returns its Dijkstra shortest path (anytime, informed
   sampling), certified to converge to ``composite_optimum`` — the brute optimum
   over the full implicit roadmap. Pure Python, no numpy.
+- :mod:`kcbs` — **Kinodynamic CBS** (Kottinger, Almagor & Lahijanian, IROS 2022):
+  the first planner here that respects robot **dynamics**. Each robot is a
+  **Dubins car** (constant speed, bounded turn rate — it cannot turn in place or
+  move sideways, only follow curves of radius ``>= V/ω_max``). The low level is a
+  kinodynamic RRT that forward-propagates the dynamics (exact arc integration) in
+  state×time, avoiding obstacles and space–time constraint tubes; the high level
+  is CBS, branching on a continuous-time collision by forbidding a robot from the
+  conflict location during a short window. Returns dynamically-feasible,
+  collision-free trajectories (feasibility, not cost-optimal). Pure Python.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -450,6 +459,16 @@ from .drrt import (
     solution_clearance,
     tensor_product_size,
 )
+from .kcbs import (
+    Constraint,
+    DubinsCar,
+    KCBSSolution,
+    first_conflict,
+    kcbs,
+    plan_trajectory,
+    propagate,
+    trajectory_feasible,
+)
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -591,6 +610,14 @@ __all__ = [
     "Roadmap",
     "Obstacle",
     "StarSolution",
+    "kcbs",
+    "plan_trajectory",
+    "propagate",
+    "trajectory_feasible",
+    "first_conflict",
+    "DubinsCar",
+    "Constraint",
+    "KCBSSolution",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

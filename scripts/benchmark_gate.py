@@ -6298,6 +6298,161 @@ def _run_drrt_star() -> dict:
     }
 
 
+def _run_kcbs() -> dict:
+    # K-CBS (kcbs.py) reproduces Kottinger, Almagor & Lahijanian's "Conflict-Based
+    # Search for Multi-Robot Motion Planning with Kinodynamic Constraints" (IROS
+    # 2022). Every other CBS variant here -- and CCBS, and dRRT -- plans GEOMETRIC
+    # motion (graph teleports or straight roadmap edges). K-CBS respects DYNAMICS:
+    # each robot is a Dubins car (constant speed, bounded turn rate -> it CANNOT
+    # turn in place or move sideways, only follow curves of radius >= V/omega_max),
+    # and the planner returns dynamically-FEASIBLE trajectories. The low level is a
+    # kinodynamic RRT that forward-propagates the car's dynamics under a discrete
+    # control set in state x time, avoiding obstacles AND space-time constraint
+    # tubes; the high level is CBS that, on a continuous-time collision, forbids a
+    # robot from the conflict location during a short window and branches.
+    #
+    # The gate certifies this against INDEPENDENT oracles: trajectory_feasible
+    # (re-derives the control of every dt step and checks |omega| <= omega_max +
+    # exact propagation) and min_separation (closest approach on the dt grid).
+    # (1) DYNAMIC FEASIBILITY: single-robot plans obey the Dubins dynamics, and a
+    #     start heading AWAY from the goal forces a curved path (a straight line is
+    #     dynamically infeasible) -- the kinodynamic signature.
+    # (2) SOUNDNESS + RESOLUTION: a deterministic 8-scenario crossing battery (two
+    #     cars crossing the centre at 8 entry angles). Several have colliding
+    #     uncoordinated (root) trajectories; K-CBS solves ALL, every solution is
+    #     dynamically feasible and keeps the cars >= r_i + r_j apart, and every
+    #     baseline-conflicting scenario is RESOLVED by branching (expansions > 1).
+    # (3) SCALES TO 3 CARS: a 3-car crossing is solved, feasible, collision-free.
+    # If propagation, the constraint tubes, or conflict detection regressed, a
+    # solution would dip below r_i+r_j (soundness trips) or stop being feasible.
+    import math
+    import random
+
+    from mrn_coord.mapf.kcbs import (
+        DubinsCar, first_conflict, kcbs, min_separation, plan_trajectory,
+        trajectory_feasible,
+    )
+
+    bounds = (0.0, 8.0, 0.0, 8.0)
+    car = DubinsCar(speed=1.0, omega_max=1.5, radius=0.3)
+    dt = 0.1
+    kw = dict(prim_steps=5, goal_radius=0.5)
+    twor = 2 * car.radius
+
+    def _root(rid, s, g):
+        return plan_trajectory(car, s, g, bounds, [], [],
+                               rng=random.Random((hash(rid) ^ 0) & 0xFFFFFFFF),
+                               dt=dt, **kw)
+
+    # (1) single-robot feasibility + curving necessity
+    single_feasible = 0
+    single_total = 0
+    for s, g in (((1, 1, 0), (7, 7, 0)), ((1, 4, 0), (7, 4, 0)),
+                 ((2, 6, -math.pi / 2), (6, 2, 0))):
+        tr = plan_trajectory(car, s, g, bounds, [], [],
+                             rng=random.Random(single_total + 1), dt=dt, **kw)
+        single_total += 1
+        if tr is not None and trajectory_feasible(car, tr, dt):
+            single_feasible += 1
+    # start pointing away from the goal -> must curve
+    tr_away = plan_trajectory(car, (4, 4, math.pi), (6, 4, 0), bounds, [], [],
+                              rng=random.Random(2), dt=dt, **kw)
+    if tr_away is not None:
+        ths = [s[3] for s in tr_away]
+        curving_required = (max(ths) - min(ths) > 0.5
+                            and trajectory_feasible(car, tr_away, dt))
+    else:
+        curving_required = False
+
+    # (2) crossing battery: two cars crossing the centre at 8 entry angles
+    cx, cy = 4.0, 4.0
+    scenarios = []
+    for k in range(8):
+        a = k * math.pi / 8
+        b = a + math.pi / 2
+        s0 = (cx - 3 * math.cos(a), cy - 3 * math.sin(a), a)
+        g0 = (cx + 3 * math.cos(a), cy + 3 * math.sin(a), a)
+        s1 = (cx - 3 * math.cos(b), cy - 3 * math.sin(b), b)
+        g1 = (cx + 3 * math.cos(b), cy + 3 * math.sin(b), b)
+        if all(0.2 <= p[0] <= 7.8 and 0.2 <= p[1] <= 7.8
+               for p in (s0, g0, s1, g1)):
+            scenarios.append((s0, g0, s1, g1))
+
+    insts = solved = coll_free = feasible = base_conflicts = resolved = 0
+    for (s0, g0, s1, g1) in scenarios:
+        insts += 1
+        cars = {0: car, 1: car}
+        s = {0: s0, 1: s1}
+        g = {0: g0, 1: g1}
+        r0, r1 = _root(0, s0, g0), _root(1, s1, g1)
+        base_conf = (r0 is not None and r1 is not None
+                     and first_conflict(r0, r1, car.radius, car.radius, dt)
+                     is not None)
+        if base_conf:
+            base_conflicts += 1
+        sol = kcbs(cars, s, g, bounds, [], dt=dt, window=0.4,
+                   max_expansions=400, rng=random.Random(7), **kw)
+        if sol is None:
+            continue
+        solved += 1
+        sep = min_separation(sol.trajectories[0], sol.trajectories[1], dt)
+        if sep >= twor - 1e-6:
+            coll_free += 1
+        if all(trajectory_feasible(cars[i], sol.trajectories[i], dt)
+               for i in cars):
+            feasible += 1
+        if base_conf and sol.high_level_expansions > 1:
+            resolved += 1
+
+    # (3) three cars crossing
+    cars3 = {i: car for i in range(3)}
+    s3 = {0: (1, 1, 0), 1: (7, 1, math.pi), 2: (4, 7, -math.pi / 2)}
+    g3 = {0: (7, 7, 0), 1: (1, 7, math.pi), 2: (4, 1, -math.pi / 2)}
+    sol3 = kcbs(cars3, s3, g3, bounds, [], dt=dt, window=0.3,
+                max_expansions=400, rng=random.Random(5), **kw)
+    if sol3 is not None:
+        three_feasible = all(trajectory_feasible(cars3[i], sol3.trajectories[i],
+                                                 dt) for i in cars3)
+        three_sep = min(min_separation(sol3.trajectories[a],
+                                       sol3.trajectories[b], dt)
+                        for a in range(3) for b in range(a + 1, 3))
+        three_cf = three_sep >= twor - 1e-6
+    else:
+        three_feasible = three_cf = False
+
+    # determinism
+    sa = kcbs({0: car, 1: car}, {0: scenarios[2][0], 1: scenarios[2][2]},
+              {0: scenarios[2][1], 1: scenarios[2][3]}, bounds, [], dt=dt,
+              window=0.4, max_expansions=400, rng=random.Random(7), **kw)
+    sb = kcbs({0: car, 1: car}, {0: scenarios[2][0], 1: scenarios[2][2]},
+              {0: scenarios[2][1], 1: scenarios[2][3]}, bounds, [], dt=dt,
+              window=0.4, max_expansions=400, rng=random.Random(7), **kw)
+    deterministic = (sa is not None and sb is not None
+                     and round(sa.cost, 6) == round(sb.cost, 6)
+                     and sa.high_level_expansions == sb.high_level_expansions)
+
+    return {
+        # (1) kinodynamic feasibility
+        "single_robot_feasible": single_feasible == single_total,
+        "curving_required": curving_required,
+        # (2) crossing battery: sound + resolves real conflicts
+        "all_solved": solved == insts,
+        "all_collision_free": coll_free == solved,
+        "all_dynamically_feasible": feasible == solved,
+        "all_baseline_conflicts_resolved": resolved == base_conflicts,
+        "baseline_has_conflicts": base_conflicts > 0,
+        "instances": insts,
+        "baseline_conflicts": base_conflicts,
+        "resolved": resolved,
+        # (3) three cars
+        "three_cars_solved": sol3 is not None,
+        "three_cars_feasible": three_feasible,
+        "three_cars_collision_free": three_cf,
+        # (4)
+        "deterministic": deterministic,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -6541,6 +6696,7 @@ SUITE = [
     ("resolved_momentum", _run_resolved_momentum),
     ("drrt", _run_drrt),
     ("drrt_star", _run_drrt_star),
+    ("kcbs", _run_kcbs),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

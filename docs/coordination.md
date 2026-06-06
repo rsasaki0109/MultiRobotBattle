@@ -2329,6 +2329,53 @@ budget dRRT\* is near-optimal (~1 %), exact for most — true asymptotic optimal
 needs the roadmap density to grow; the gate pins near-optimal-for-all plus
 exact-for-most, not exact-for-all.
 
+### Kinodynamic CBS (`kcbs.py`)
+
+A reproduction of Kottinger, Almagor & Lahijanian's *"Conflict-Based Search for
+Multi-Robot Motion Planning with Kinodynamic Constraints"* (IROS 2022). Every CBS
+variant above — and CCBS, and dRRT/dRRT\* — plans **geometric** motion: agents
+teleport between graph vertices or slide along straight roadmap edges. None of them
+respects a robot's **dynamics**. K-CBS does. Each robot is a **Dubins car**
+(`DubinsCar`): constant forward speed `V`, bounded turn rate `ω_max`, so it
+*cannot* turn in place or move sideways — it must follow curves of radius
+`≥ V/ω_max`. The planner returns **dynamically-feasible** trajectories.
+
+The two levels mirror CBS, lifted onto a sampling-based kinodynamic low level:
+
+- **Low level — a kinodynamic RRT** (`KinodynamicRRT` / `plan_trajectory`). It
+  grows a tree of *timed* states by forward-propagating the dynamics under a
+  discrete control set (`propagate` — exact arc integration of
+  `ẋ = V cosθ, ẏ = V sinθ, θ̇ = ω`), planning in state×time. Each edge holds one
+  control for `prim_steps` sub-steps of `dt`; an edge is kept only if every fine
+  state clears the obstacles **and** every space–time `Constraint` tube handed
+  down by the high level. Goal-biased; returns a trajectory sampled every `dt`.
+- **Conflict detection** (`first_conflict`) — the first instant, on the shared
+  `dt` grid, two timed trajectories come within `r_i + r_j` (a robot that has
+  reached its goal *parks* there). This doubles as the independent oracle
+  (`min_separation`) the gate verifies solutions against.
+- **High level — CBS** (`kcbs`). Best-first over a constraint tree by
+  sum-of-durations. On the first conflict it adds, to each robot in turn, a
+  `Constraint` forbidding it from coming within the collision radius of the
+  conflict location during a `± window` interval, and branches — exactly CBS, but
+  the constraint is a continuous space–time tube and the low level is kinodynamic.
+
+The gate (`kcbs`) certifies the dynamics and the coordination against independent
+oracles. **Feasibility:** `trajectory_feasible` re-derives the control of every
+`dt` step and checks `|ω| ≤ ω_max` plus exact propagation — single-robot plans pass,
+and a start heading *away* from the goal is forced onto a **curved** path (a
+straight line is dynamically infeasible) — the kinodynamic signature. **Soundness +
+resolution:** a deterministic 8-scenario crossing battery (two cars crossing the
+centre at eight entry angles) — **5/8** have colliding uncoordinated trajectories;
+K-CBS solves **all 8**, every solution is dynamically feasible and keeps the cars
+`≥ r_i + r_j` apart, and **every** baseline-conflicting scenario is resolved by
+branching (expansions `> 1`). **Scales:** a 3-car crossing is solved, feasible, and
+collision-free. **Honest scope:** the low level is sampling-based, so K-CBS is a
+**feasibility** planner (dynamically feasible + collision-free, not cost-optimal);
+the paper restores completeness with a meta-robot *merge* bound à la MA-CBS, omitted
+here. Collisions are checked on the shared `dt` grid (fine `dt`); a car stops and
+parks on reaching its goal (a modelling choice — a Dubins car cannot otherwise
+halt). Pure Python, no numpy.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

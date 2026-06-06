@@ -1,0 +1,16 @@
+{
+  "all_baseline_conflicts_resolved": true,
+  "all_collision_free": true,
+  "all_dynamically_feasible": true,
+  "all_solved": true,
+  "baseline_conflicts": 5,
+  "baseline_has_conflicts": true,
+  "curving_required": true,
+  "deterministic": true,
+  "instances": 8,
+  "resolved": 5,
+  "single_robot_feasible": true,
+  "three_cars_collision_free": true,
+  "three_cars_feasible": true,
+  "three_cars_solved": true
+}
