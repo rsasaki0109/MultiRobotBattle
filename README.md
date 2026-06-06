@@ -206,6 +206,17 @@ the real `mrn_coord.mapf` code; regenerate with
   <img src="docs/media/footstep_walk.gif" alt="Left: a top-down floor where a humanoid's planned footsteps zigzag forward as oriented rectangles, the current support foot highlighted, the center of mass tracing a cyan swaying path and the zero-moment point an orange line that hugs the support foot. Right: the lateral motion over time — the stepped reference ZMP, the induced ZMP tracking it, and the CoM swaying smoothly between, with a moving time cursor." width="760">
 </p>
 
+Why preview control? The Zero-Moment Point must stay inside the **support
+polygon** (the foot on the ground) or the robot tips over. The preview term — a
+look-ahead at the *future* footsteps — is exactly what keeps it there: with it,
+the ZMP threads every support foot (green, 100% inside); a reactive controller
+with no look-ahead overshoots each footfall and leaves the feet (red, 36%) —
+same plan, same feet (`python3 scripts/make_zmp_figure.py`):
+
+<p align="center">
+  <img src="docs/media/zmp_stability.png" alt="A figure of the Zero-Moment Point. Left: a top-down floor with the planned footsteps as coloured rectangles; the preview-control ZMP (green) threads through every support foot while a no-preview reactive ZMP (red) overshoots upward past the feet at every step, leaving the support polygon. Right: the ZMP tracking its stepped reference over time, forward (a staircase climb) and lateral (the side-to-side sway), with the center of mass that produces it." width="760">
+</p>
+
 **Coordination** — MAPF (Conflict-Based Search / prioritized), formation
 control, frontier coverage. Each has a CLI demo (`mrn_mapf_demo`,
 `mrn_formation_demo`, `mrn_coverage_demo`) and a thin ROS node; the top GIF
