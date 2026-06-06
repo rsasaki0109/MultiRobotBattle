@@ -282,6 +282,17 @@ The pieces compose bottom-up:
   finite foot / reaction mass — are exactly :mod:`capture_point` and the
   :mod:`push_recovery` ankle / hip strategies. The closed form is certified
   against an exact greedy LIPM rollout. Pure Python, no numpy.
+- :mod:`resolved_momentum` — **Resolved Momentum Control** (Kajita et al., IROS
+  2003): the first *whole-body* method here — it commands the total linear and
+  angular momentum of an articulated, free-floating planar humanoid. The
+  **centroidal momentum matrix** ``A(q)`` makes the momentum linear in the
+  generalized velocity, ``h = A(q)·q̇``; a momentum reference plus task constraints
+  (pinned support foot, tracked swing foot) are resolved by the inertia-matrix
+  pseudo-inverse ``q̇ = Bᵀ(BBᵀ)⁻¹ b``. Regulating the angular momentum to zero makes
+  the body counter-rotate internally (the whole-body root of the reaction-mass /
+  hip strategy of :mod:`push_recovery` / :mod:`capturability`), and a kick drives a
+  swing foot along an arc with the support foot pinned. The momentum matrix is
+  certified against a finite-difference. Pure Python, no numpy.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -402,6 +413,16 @@ from .capturability import (
     inf_step_region,
     n_step_region,
     simulate_greedy,
+)
+from .resolved_momentum import (
+    Link,
+    MomentumTask,
+    MomentumTrajectory,
+    PlanarRobot,
+    make_humanoid,
+    resolve_momentum,
+    simulate as simulate_momentum,
+    task_nullspace,
 )
 from .conflicts import (
     EdgeConflict,
@@ -526,6 +547,14 @@ __all__ = [
     "simulate_greedy",
     "CaptureParams",
     "GreedyRecovery",
+    "make_humanoid",
+    "resolve_momentum",
+    "task_nullspace",
+    "simulate_momentum",
+    "PlanarRobot",
+    "Link",
+    "MomentumTask",
+    "MomentumTrajectory",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

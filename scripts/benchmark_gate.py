@@ -5807,6 +5807,171 @@ def _run_capturability() -> dict:
     }
 
 
+def _run_resolved_momentum() -> dict:
+    import math
+    import random
+
+    from mrn_coord.mapf import resolved_momentum as rm
+    from mrn_coord.mapf.resolved_momentum import (
+        MomentumTask, SHANK_TIP, matvec, _cross2,
+    )
+
+    R = rm.make_humanoid()
+    nd = R.ndof
+    rng = random.Random(7)
+
+    def rq():
+        return [rng.uniform(-0.3, 0.3) for _ in range(nd)]
+
+    def rqd():
+        return [rng.uniform(-0.5, 0.5) for _ in range(nd)]
+
+    # (1) HEADLINE: the centroidal momentum matrix A(q) is certified against a
+    # finite-difference of the actual momentum (P = Σ mᵢċᵢ, L about the CoM).
+    eps = 1e-6
+    max_cmm_err = 0.0
+    max_lin_err = 0.0
+    M = R.total_mass()
+    for _ in range(150):
+        q, qd = rq(), rqd()
+        h = R.momentum(q, qd)
+        q2 = [q[k] + eps * qd[k] for k in range(nd)]
+        _, _, c1 = R.forward_kinematics(q)
+        _, _, c2 = R.forward_kinematics(q2)
+        p1, _, _ = R.forward_kinematics(q)
+        p2, _, _ = R.forward_kinematics(q2)
+        rc = R.com(q)
+        Px = Py = L = 0.0
+        for i in range(len(R.links)):
+            m, I = R.links[i].mass, R.links[i].inertia
+            cd = ((c2[i][0] - c1[i][0]) / eps, (c2[i][1] - c1[i][1]) / eps)
+            wd = (p2[i] - p1[i]) / eps
+            Px += m * cd[0]
+            Py += m * cd[1]
+            d = (c1[i][0] - rc[0], c1[i][1] - rc[1])
+            L += I * wd + m * _cross2(d, cd)
+        max_cmm_err = max(max_cmm_err, abs(h[0] - Px), abs(h[1] - Py), abs(h[2] - L))
+        # linear momentum row == total mass × CoM velocity
+        rc2 = R.com(q2)
+        comdot = ((rc2[0] - rc[0]) / eps, (rc2[1] - rc[1]) / eps)
+        max_lin_err = max(max_lin_err, abs(h[0] - M * comdot[0]),
+                          abs(h[1] - M * comdot[1]))
+
+    # (2) the momentum matrix is invariant to base translation (only relative
+    # geometry matters for momentum)
+    q = rq()
+    A1 = R.centroidal_momentum_matrix(q)
+    q2 = list(q)
+    q2[0] += 1.3
+    q2[1] -= 0.7
+    A2 = R.centroidal_momentum_matrix(q2)
+    cmm_translation_invariant = max(
+        abs(A1[r][c] - A2[r][c]) for r in range(3) for c in range(nd)) < 1e-12
+
+    # (3) resolve a momentum reference with a pinned support foot: the resolved
+    # velocity realizes the momentum AND keeps the foot fixed, exactly.
+    q = rq()
+    task = MomentumTask((5.0, -2.0, 1.5), [(2, SHANK_TIP, (0.0, 0.0))])
+    qd = rm.resolve_momentum(R, q, task)
+    h = R.momentum(q, qd)
+    Jf, _ = R.point_jacobian(q, 2, SHANK_TIP)
+    vf = matvec(Jf, qd)
+    realize_err = max(abs(h[0] - 5.0), abs(h[1] + 2.0), abs(h[2] - 1.5))
+    foot_vel = max(abs(v) for v in vf)
+
+    # (4) the redundant solution is minimum-norm; the null-space carries extra
+    # motion without disturbing the momentum or the constraint.
+    Nproj = rm.task_nullspace(R, q, task)
+    z = rqd()
+    nz = matvec(Nproj, z)
+    qd2 = [qd[k] + nz[k] for k in range(nd)]
+    h2 = R.momentum(q, qd2)
+    vf2 = matvec(Jf, qd2)
+    nullspace_preserves = (max(abs(h2[k] - h[k]) for k in range(3)) < 1e-9
+                           and max(abs(v) for v in vf2) < 1e-9)
+    min_norm = sum(v * v for v in qd) <= sum(v * v for v in qd2) + 1e-9
+    nullspace_nontrivial = math.sqrt(sum(v * v for v in nz)) > 1e-3
+
+    # (5) commanding ZERO angular momentum while the CoM moves makes the body
+    # counter-rotate: the centroidal angular momentum is held at 0 by cancellation
+    # between the limbs (the whole-body root of the reaction-mass / hip strategy).
+    task0 = MomentumTask((8.0, 0.0, 0.0), [(2, SHANK_TIP, (0.0, 0.0))])
+    qd0 = rm.resolve_momentum(R, q, task0)
+    h0 = R.momentum(q, qd0)
+    _, _, com = R.forward_kinematics(q)
+    rc = R.com(q)
+    link_L = []
+    for i in range(len(R.links)):
+        m, I = R.links[i].mass, R.links[i].inertia
+        Jc = R.com_jacobian(q, i)
+        Jw = R.angular_jacobian(i)
+        cd = matvec(Jc, qd0)
+        wd = sum(Jw[c] * qd0[c] for c in range(nd))
+        d = (com[i][0] - rc[0], com[i][1] - rc[1])
+        link_L.append(I * wd + m * _cross2(d, cd))
+    zero_L_realized = abs(h0[2]) < 1e-9
+    counter_rotation = max(abs(x) for x in link_L) > 0.1   # limbs do spin
+
+    # (6) KICK: drive a swing foot along an arc while the support foot is pinned
+    # and the momentum stays at its reference throughout.
+    q0 = [0.0] * nd
+    q0[R.joint_col(2)] = 0.3
+    q0[R.joint_col(4)] = -0.3
+    T, dt = 80, 0.01
+
+    def task_fn(t, _q):
+        vx = 0.4 * math.cos(math.pi * t / (T * dt))
+        vy = 0.3 * math.sin(math.pi * t / (T * dt))
+        return MomentumTask((0.0, 0.0, 0.0),
+                            [(2, SHANK_TIP, (0.0, 0.0)),
+                             (4, SHANK_TIP, (vx, vy))])
+
+    traj = rm.simulate(R, q0, task_fn, dt=dt, steps=T,
+                       track={"swing": (4, SHANK_TIP), "support": (2, SHANK_TIP)})
+    # per-step constraint exactness (the hard guarantee)
+    per_step_err = 0.0
+    for k in range(T):
+        qk, qdk = traj.q[k], traj.qd[k]
+        Js, _ = R.point_jacobian(qk, 2, SHANK_TIP)
+        per_step_err = max(per_step_err, max(abs(v) for v in matvec(Js, qdk)))
+    su = traj.point_path("support")
+    sp = traj.point_path("swing")
+    support_drift = max(math.hypot(su[k][0] - su[0][0], su[k][1] - su[0][1])
+                        for k in range(len(su)))
+    swing_moved = math.hypot(sp[-1][0] - sp[0][0], sp[-1][1] - sp[0][1])
+
+    # determinism
+    qa = rm.resolve_momentum(R, q, task)
+    qb = rm.resolve_momentum(R, q, task)
+
+    return {
+        "case": "resolved_momentum",
+        "ndof": nd,
+        "n_joints": R.n_joints,
+        # (1) the centroidal momentum matrix is correct (finite-difference check)
+        "cmm_matches_finite_difference": max_cmm_err < 1e-4,
+        "linear_momentum_is_mass_times_com_velocity": max_lin_err < 1e-4,
+        # (2) momentum is invariant to base translation
+        "cmm_translation_invariant": cmm_translation_invariant,
+        # (3) resolved velocity realizes the reference and pins the support foot
+        "resolve_realizes_reference": realize_err < 1e-8,
+        "support_foot_pinned": foot_vel < 1e-8,
+        # (4) redundant solution is min-norm; null-space preserves momentum
+        "redundant_solution_is_min_norm": min_norm,
+        "nullspace_preserves_momentum": nullspace_preserves,
+        "nullspace_is_nontrivial": nullspace_nontrivial,
+        # (5) zero angular momentum held by internal counter-rotation
+        "zero_angular_momentum_realized": zero_L_realized,
+        "zero_angular_momentum_by_counter_rotation": counter_rotation,
+        # (6) kick: swing foot tracks while support pinned & momentum held
+        "kick_per_step_constraint_exact": per_step_err < 1e-8,
+        "kick_holds_angular_momentum": traj.max_abs_angular_momentum() < 1e-9,
+        "kick_support_stays_pinned": support_drift < 1e-2,
+        "kick_swing_foot_moves": swing_moved > 0.1,
+        "deterministic": qa == qb,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -6047,6 +6212,7 @@ SUITE = [
     # capture_point
     ("push_recovery", _run_push_recovery),
     ("capturability", _run_capturability),
+    ("resolved_momentum", _run_resolved_momentum),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

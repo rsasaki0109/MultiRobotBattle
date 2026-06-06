@@ -1,0 +1,20 @@
+{
+  "case": "resolved_momentum",
+  "cmm_matches_finite_difference": true,
+  "cmm_translation_invariant": true,
+  "deterministic": true,
+  "kick_holds_angular_momentum": true,
+  "kick_per_step_constraint_exact": true,
+  "kick_support_stays_pinned": true,
+  "kick_swing_foot_moves": true,
+  "linear_momentum_is_mass_times_com_velocity": true,
+  "n_joints": 5,
+  "ndof": 8,
+  "nullspace_is_nontrivial": true,
+  "nullspace_preserves_momentum": true,
+  "redundant_solution_is_min_norm": true,
+  "resolve_realizes_reference": true,
+  "support_foot_pinned": true,
+  "zero_angular_momentum_by_counter_rotation": true,
+  "zero_angular_momentum_realized": true
+}

@@ -78,6 +78,7 @@ honest gated result is in [`docs/coordination.md`](docs/coordination.md):
 | **Walking stabilizer (LIPM tracking)** | Kajita et al. 2010 | closed-loop ZMP feedback `p = p^ref + k_p e + k_v ė` (k_p>1 beats the LIP instability), ZMP clipped to the foot | open-loop ZMP playback diverges under a push; the stabilizer rejects it — until the ankle saturates and a step is needed |
 | **Push recovery (ankle/hip/step)** | Stephens 2007 | decision surfaces on the capture point ξ; a flywheel (hip) widens the foot's capturable interval by Δ_hip, then a step | closed-form Δ_hip matches exact bang-bang LIPPF sim (printed eq. 15 is a typo); ankle ⊂ hip ⊂ step nest |
 | **N-step capturability** | Koolen et al. 2012 | N-step capture region `ξ_N = foot + l_max·Σ e^{−kωT}` (geometric series); bounded limit `ξ_∞` past which no number of steps recovers | closed form certified against exact greedy LIPM rollout; point/foot/reaction models = capture_point / push_recovery ankle / hip |
+| **Resolved Momentum Control** | Kajita et al. 2003 | whole-body: centroidal momentum matrix `h = A(q)·q̇`, resolve a momentum + foot-constraint command by inertia-matrix pseudo-inverse | first multibody leg; momentum matrix certified vs finite-difference; L=0 ⇒ internal counter-rotation (= reaction-mass/hip); kick with foot pinned |
 
 ---
 

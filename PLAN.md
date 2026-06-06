@@ -44,7 +44,7 @@ simulator emits them; that repo consumes them.
 - [x] CI: build + `colcon test` over all packages + coordination CLI demos.
 - [x] **MAPF algorithm zoo** (`mrn_coord.mapf`): 45+ algorithms faithfully
   reproduced from their papers in pure Python, each *benchmark-gated* in
-  `scripts/benchmark_gate.py` (full gate **94/94**). CBS family (CBSH, ECBS,
+  `scripts/benchmark_gate.py` (full gate **95/95**). CBS family (CBSH, ECBS,
   EECBS, FECBS, ICBS/bypass, MA-CBS, disjoint, BCP, rectangle/corridor/mutex
   symmetry), optimal joint-space search (M\*, rM\*, EPEA\*, ICTS, Standley
   OD/ID), declarative (MDD-SAT), constructive (Push-and-Rotate/Swap, TSWAP,
@@ -57,7 +57,8 @@ simulator emits them; that repo consumes them.
   al.) + trajectory-free constrained-QP MPC walking (Wieber) + automatic
   footstep placement MPC (Herdt et al.) + closed-loop walking stabilizer by
   LIPM tracking (Kajita et al.) + ankle/hip/step push-recovery decision
-  surfaces (Stephens) + N-step capturability analysis (Koolen et al.)**, and
+  surfaces (Stephens) + N-step capturability analysis (Koolen et al.) +
+  whole-body resolved momentum control (Kajita et al.)**, and
   the low
   levels (space-time A\*,
   SIPP/SIPPS, Multi-Label A\*). Each documented algorithm-by-algorithm with its

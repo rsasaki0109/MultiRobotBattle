@@ -2193,6 +2193,55 @@ reproductions: the instantaneous capture point matches `capture_point`'s formula
 (`reaction_model_equals_hip_widening`). Pure Python, no numpy; the closed form is the
 source of truth and the greedy LIPM rollout is the certificate.
 
+### Resolved Momentum Control (`resolved_momentum.py`)
+
+Everything in the thread so far is a **1-D point mass** — `lipm_walk`,
+`capture_point`, `push_recovery`, `capturability` all collapse the robot to its CoM.
+`resolved_momentum` reproduces Kajita, Kanehiro, Kaneko, Fujiwara, Harada, Yokoi &
+Hirukawa, *"Resolved Momentum Control: Humanoid Motion Planning Based on the Linear
+and Angular Momentum"* (IROS 2003) — the first **whole-body** method here. It plans
+the motion of an articulated, free-floating multibody so that its **total linear and
+angular momentum** take commanded values.
+
+The object that makes this tractable is the **centroidal momentum matrix** `A(q)`:
+the total spatial momentum of the whole robot is *linear* in the generalized
+velocity, `h = [Pₓ; P_y; L] = A(q)·q̇`, where `q̇ = [base ẋ, ẏ, θ̇, joint rates…]`,
+`P = m·ṙ_C` is linear momentum (total mass times CoM velocity) and `L` is the
+angular momentum **about the CoM** — the *centroidal* angular momentum, exactly the
+quantity the hip/flywheel strategy of `push_recovery` and the reaction-mass model of
+`capturability` manipulate. The module builds `A(q)` for a planar (sagittal)
+humanoid (torso + two 2-link legs + an arm) from each link's CoM Jacobian and
+angular Jacobian. Given a momentum reference `h^ref` plus task constraints — a
+support foot pinned to the ground (`J_support q̇ = 0`), a swing foot tracking a path
+(`J_swing q̇ = v_swing`) — the Jacobians are stacked into `B` and the (redundant)
+system is solved with the **pseudo-inverse** `q̇ = Bᵀ(BBᵀ)⁻¹ b`, the minimum-norm
+joint motion realizing the command, exactly as the paper does with the inertia
+matrix's pseudo-inverse. The null-space `N = I − B⁺B` carries any extra posture task
+without disturbing the momentum.
+
+The `resolved_momentum` gate pins it. **(1) The headline** — the centroidal momentum
+matrix is *certified* against a finite-difference of the actual momentum (`P = Σ mᵢċᵢ`,
+`L` summed about the CoM) over 150 random states (`cmm_matches_finite_difference`),
+and its linear rows equal total mass times CoM velocity
+(`linear_momentum_is_mass_times_com_velocity`). **(2)** Momentum is invariant to base
+translation (`cmm_translation_invariant`). **(3)** A resolved velocity **realizes the
+momentum reference** (`resolve_realizes_reference`) and keeps the support foot
+**exactly pinned** (`support_foot_pinned`). **(4)** The redundant solution is
+**minimum-norm** (`redundant_solution_is_min_norm`) and the non-trivial null-space
+preserves both momentum and constraint (`nullspace_preserves_momentum`,
+`nullspace_is_nontrivial`). **(5)** Commanding **zero angular momentum** while the
+CoM moves makes the body **counter-rotate** — the centroidal angular momentum is held
+at zero (`zero_angular_momentum_realized`) by cancellation between the limbs, which
+individually carry angular momentum (`zero_angular_momentum_by_counter_rotation`):
+this is the whole-body root of the reaction-mass / hip strategy. **(6)** A **kick**
+drives the swing foot along an arc with the support foot pinned and the momentum at
+its reference throughout — the per-step constraints hold exactly
+(`kick_per_step_constraint_exact`), the angular momentum stays zero along the motion
+(`kick_holds_angular_momentum`), the support stays put (`kick_support_stays_pinned`,
+Euler-integration drift only) and the swing foot travels (`kick_swing_foot_moves`).
+Pure Python, no numpy — a self-contained planar rigid-body kinematics plus a small
+dense linear-algebra kernel (Gaussian elimination, right pseudo-inverse).
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of
