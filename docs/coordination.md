@@ -2242,6 +2242,58 @@ Euler-integration drift only) and the swing foot travels (`kick_swing_foot_moves
 Pure Python, no numpy — a self-contained planar rigid-body kinematics plus a small
 dense linear-algebra kernel (Gaussian elimination, right pseudo-inverse).
 
+### Discrete RRT in continuous space (`drrt.py`)
+
+A reproduction of Solovey, Salzman & Halperin's *"Finding a Needle in an
+Exponential Haystack: Discrete RRT for Exploration of Implicit Roadmaps in
+Multi-Robot Motion Planning"* (WAFR 2014; IJRR 2016). Every other planner in this
+zoo lives on a **discrete graph** — a grid, an 8-connected roadmap, a hand-built
+adjacency. dRRT plans in **continuous space**: each robot is a disc moving in a
+planar workspace cluttered with circular obstacles, its free configurations
+captured by a per-robot **PRM roadmap** (`build_roadmap` — random obstacle-free
+points plus start/goal, joined to their `k` nearest neighbours by collision-free
+straight segments).
+
+**The haystack.** The team's joint configuration space is the **tensor product**
+of the individual roadmaps: a composite vertex is one roadmap vertex per robot,
+and two are adjacent iff every robot stays put or traverses one of *its own*
+roadmap edges. This composite roadmap has `∏ᵢ |Vᵢ|` vertices — exponential in the
+robot count (`tensor_product_size`) — and is **never built explicitly**. dRRT
+explores it *implicitly* with an RRT-style tree.
+
+**The needle: the direction oracle `O_d` (`direction_oracle`).** Given a tree node
+and a random composite sample, it returns the *single* composite neighbour best
+aligned with the direction to the sample: per robot, pick the roadmap edge whose
+heading maximises the cosine to that robot's desired direction (or *stay* if no
+edge points forward). One implicit-neighbour lookup — never an enumeration of the
+exponential neighbour set. The search (`drrt`) samples a random point per robot
+(goal-biased), finds the nearest tree node, expands it one composite step via the
+oracle, and keeps the new node iff the *simultaneous* straight-line motion of all
+robots is collision-free; a greedy *connect-to-target* drives a fresh node
+straight at the goal. Probabilistically complete.
+
+**Continuous collision checking.** `moving_min_distance` solves the quadratic
+closest-approach of two discs moving simultaneously along their segments;
+`segment_point_distance` clears each robot's swept disc of the obstacles. The same
+predicates back `solution_clearance`, the *independent* oracle the gate verifies
+every returned plan against (re-deriving the min disc/disc and disc/obstacle gap,
+not trusting the planner's own check).
+
+The gate (`drrt`) pins what the paper claims, not optimality (dRRT is a
+**feasibility / anytime** planner). **Soundness:** a 10-seed, 3-robot battery
+(open space + a central obstacle, first 10 seeds, no cherry-picking) solves every
+instance with every pair `≥ 2r` and the obstacles cleared (`all_collision_free`,
+`all_clear_of_obstacles`), endpoints exact. **The needle in the haystack:** a
+4-robot corner-swap whose composite roadmap has **> 3 million** vertices is solved
+by exploring a *tiny* fraction of it (`haystack_tree_size` 6 vs
+`haystack_product_size` 3 111 696 — `implicit_exploration`, ratio `< 1e-3`). **The
+oracle is the mechanism:** on the same instances `O_d` solves **10/10** while the
+random-neighbour ablation solves **1/10** and burns far more nodes
+(`oracle_solves_more_than_random`, `oracle_uses_fewer_nodes`) — isolating dRRT's
+contribution. **Continuous geometry:** a 2-robot swap that must route around a
+central disc is solved with continuous (non-grid) waypoints, every pair `≥ 2r` and
+the obstacle cleared. Pure Python, no numpy.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

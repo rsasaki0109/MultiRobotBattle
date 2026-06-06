@@ -293,6 +293,15 @@ The pieces compose bottom-up:
   hip strategy of :mod:`push_recovery` / :mod:`capturability`), and a kick drives a
   swing foot along an arc with the support foot pinned. The momentum matrix is
   certified against a finite-difference. Pure Python, no numpy.
+- :mod:`drrt` — **discrete RRT** (Solovey, Salzman & Halperin, WAFR 2014 / IJRR
+  2016): multi-robot motion planning in **continuous space**. Each robot is a
+  disc with its own PRM roadmap; the team's joint space is the **tensor product**
+  of those roadmaps (``∏ |V_i|`` composite vertices — exponential, the
+  *haystack*), explored *implicitly* by an RRT whose expansion is the
+  **direction oracle** ``O_d`` (per robot, the one roadmap edge best aligned with
+  the heading to a random sample). Collision checking is exact and continuous
+  (quadratic disc/disc closest-approach + swept-disc/obstacle). Feasibility /
+  probabilistically-complete, not cost-optimal. Pure Python, no numpy.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -423,6 +432,15 @@ from .resolved_momentum import (
     resolve_momentum,
     simulate as simulate_momentum,
     task_nullspace,
+)
+from .drrt import (
+    Obstacle,
+    Roadmap,
+    build_roadmap,
+    direction_oracle,
+    drrt,
+    solution_clearance,
+    tensor_product_size,
 )
 from .conflicts import (
     EdgeConflict,
@@ -555,6 +573,13 @@ __all__ = [
     "Link",
     "MomentumTask",
     "MomentumTrajectory",
+    "drrt",
+    "build_roadmap",
+    "direction_oracle",
+    "solution_clearance",
+    "tensor_product_size",
+    "Roadmap",
+    "Obstacle",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

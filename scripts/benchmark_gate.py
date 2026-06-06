@@ -5972,6 +5972,178 @@ def _run_resolved_momentum() -> dict:
     }
 
 
+def _run_drrt() -> dict:
+    # dRRT (drrt.py) reproduces Solovey, Salzman & Halperin's "Finding a Needle
+    # in an Exponential Haystack: Discrete RRT for Exploration of Implicit
+    # Roadmaps in Multi-Robot Motion Planning" (WAFR 2014 / IJRR 2016). Unlike
+    # every other planner in this zoo it works in CONTINUOUS space: each robot is
+    # a disc with its own PRM roadmap, and the team's joint space is the TENSOR
+    # PRODUCT of those roadmaps -- prod_i |V_i| composite vertices, exponential in
+    # the robot count, never built explicitly (the "haystack"). dRRT explores it
+    # implicitly with an RRT whose expansion is the DIRECTION ORACLE O_d: per
+    # robot, take the one roadmap edge best aligned with the heading to a random
+    # composite sample. Collision checking is exact and continuous (the quadratic
+    # closest-approach of two discs moving simultaneously; swept-disc/obstacle).
+    #
+    # The gate pins what dRRT claims, against an INDEPENDENT geometric oracle
+    # (solution_clearance, which re-derives every plan's min disc/disc and
+    # disc/obstacle gap -- not the planner's own check):
+    # (1) SOUNDNESS: every returned plan keeps all pairs >= 2r and clears the
+    #     obstacles. A 10-seed, 3-robot battery (open space + a central obstacle),
+    #     first 10 seeds, no cherry-picking.
+    # (2) THE NEEDLE IN THE HAYSTACK: a 4-robot corner-swap whose composite
+    #     roadmap has > 3e6 vertices is solved by exploring a TINY fraction of it
+    #     (tree size / product < 1e-3) -- the implicit-exploration signature.
+    # (3) THE ORACLE IS THE MECHANISM: on the same instances, O_d (aligned
+    #     expansion) solves far more, with far fewer tree nodes, than the
+    #     random-neighbour ablation -- isolating dRRT's contribution.
+    # (4) CONTINUOUS GEOMETRY: a 2-robot swap that must route around a central
+    #     disc obstacle is solved with continuous (non-grid) waypoints, every
+    #     pair >= 2r and the obstacle cleared.
+    # If continuous collision detection or the oracle regressed, a plan would dip
+    # below 2r / into an obstacle (soundness trips) or the oracle would stop
+    # beating random (the WIN trips).
+    import math
+    import random
+
+    from mrn_coord.mapf.drrt import (
+        Obstacle, build_roadmap, drrt, solution_clearance,
+        tensor_product_size,
+    )
+
+    W = H = 1.0
+    r = 0.05
+    twor = 2.0 * r
+
+    def _roadmaps(starts, goals, obstacles, seed, n_samples=30, k=12):
+        rng = random.Random(seed)
+        return [build_roadmap(s, g, obstacles, r, W, H,
+                              n_samples=n_samples, k=k, rng=rng)
+                for s, g in zip(starts, goals)]
+
+    def _spread(n, rng, lo=0.05, hi=0.95, gap=3 * r):
+        pts = []
+        while len(pts) < n:
+            p = (rng.uniform(lo, hi), rng.uniform(lo, hi))
+            if all(math.hypot(p[0] - q[0], p[1] - q[1]) >= gap for q in pts):
+                pts.append(p)
+        return pts
+
+    # (1) soundness battery: 3 robots, alternating open / one central obstacle.
+    instances = solved = collision_free = obstacle_clear = 0
+    endpoints_exact = 0
+    for seed in range(10):
+        rng = random.Random(3000 + seed)
+        pool = _spread(6, rng)
+        starts, goals = pool[:3], pool[3:]
+        obs = [] if seed % 2 == 0 else [Obstacle(0.5, 0.5, 0.1)]
+        # keep starts/goals out of the obstacle
+        if obs and any(math.hypot(p[0] - 0.5, p[1] - 0.5) < 0.1 + r
+                       for p in starts + goals):
+            obs = []
+        rms = _roadmaps(starts, goals, obs, seed)
+        sol = drrt(rms, obs, r, width=W, height=H, max_iters=3000,
+                   rng=random.Random(seed))
+        instances += 1
+        if sol is None:
+            continue
+        solved += 1
+        min_pair, min_obs = solution_clearance(sol.paths, obs, r)
+        if min_pair >= twor - 1e-6:
+            collision_free += 1
+        if not obs or min_obs >= -1e-6:
+            obstacle_clear += 1
+        ok_ends = all(
+            sol.paths[i][0] == starts[i] and sol.paths[i][-1] == goals[i]
+            for i in range(3))
+        if ok_ends:
+            endpoints_exact += 1
+
+    # (2) the needle in the exponential haystack: 4-robot corner-swap.
+    corners_s = [(0.1, 0.1), (0.9, 0.9), (0.1, 0.9), (0.9, 0.1)]
+    corners_g = [(0.9, 0.9), (0.1, 0.1), (0.9, 0.1), (0.1, 0.9)]
+    rms = _roadmaps(corners_s, corners_g, [], 7, n_samples=40, k=12)
+    product_size = tensor_product_size(rms)
+    sol4 = drrt(rms, [], r, width=W, height=H, max_iters=4000,
+                rng=random.Random(7))
+    haystack_solved = sol4 is not None
+    explored_fraction = (sol4.tree_size / product_size) if sol4 else 1.0
+    if sol4 is not None:
+        mp4, _ = solution_clearance(sol4.paths, [], r)
+        haystack_collision_free = mp4 >= twor - 1e-6
+    else:
+        haystack_collision_free = False
+
+    # (3) the oracle IS the mechanism: O_d vs random-neighbour, same instances.
+    o_solved = rnd_solved = 0
+    o_nodes = rnd_nodes = 0
+    for seed in range(10):
+        rng = random.Random(4000 + seed)
+        pool = _spread(6, rng)
+        rms = _roadmaps(pool[:3], pool[3:], [], seed)
+        so = drrt(rms, [], r, width=W, height=H, max_iters=2000,
+                  rng=random.Random(seed), oracle="direction")
+        sr = drrt(rms, [], r, width=W, height=H, max_iters=2000,
+                  rng=random.Random(seed), oracle="random")
+        if so:
+            o_solved += 1
+            o_nodes += so.tree_size
+        if sr:
+            rnd_solved += 1
+            rnd_nodes += sr.tree_size
+
+    # (4) continuous geometry: 2-robot swap routing around a central disc.
+    obs_c = [Obstacle(0.5, 0.5, 0.12)]
+    rms = _roadmaps([(0.1, 0.5), (0.9, 0.5)], [(0.9, 0.5), (0.1, 0.5)],
+                    obs_c, 3)
+    swap = drrt(rms, obs_c, r, width=W, height=H, max_iters=3000,
+                rng=random.Random(99))
+    swap_solved = swap is not None
+    if swap is not None:
+        s_pair, s_obs = solution_clearance(swap.paths, obs_c, r)
+        swap_collision_free = s_pair >= twor - 1e-6
+        swap_obstacle_clear = s_obs >= -1e-6
+    else:
+        swap_collision_free = swap_obstacle_clear = False
+
+    # (5) determinism: identical roadmaps + seed -> identical tree.
+    rms_a = _roadmaps([(0.1, 0.5), (0.9, 0.5)], [(0.9, 0.5), (0.1, 0.5)],
+                      obs_c, 3)
+    sa = drrt(rms_a, obs_c, r, width=W, height=H, max_iters=3000,
+              rng=random.Random(99))
+    deterministic = (sa is not None and swap is not None
+                     and sa.tree_size == swap.tree_size
+                     and round(sa.makespan, 9) == round(swap.makespan, 9))
+
+    return {
+        # (1) soundness against the independent clearance oracle
+        "all_solved": solved == instances,
+        "all_collision_free": collision_free == solved,
+        "all_clear_of_obstacles": obstacle_clear == solved,
+        "paths_endpoints_exact": endpoints_exact == solved,
+        "instances": instances,
+        "solved": solved,
+        # (2) needle in the exponential haystack
+        "haystack_solved": haystack_solved,
+        "haystack_collision_free": haystack_collision_free,
+        "implicit_exploration": explored_fraction < 1e-3,
+        "haystack_robots": len(corners_s),
+        "haystack_product_size": product_size,
+        "haystack_tree_size": sol4.tree_size if sol4 else 0,
+        # (3) the direction oracle is the mechanism
+        "oracle_solves_more_than_random": o_solved > rnd_solved,
+        "oracle_uses_fewer_nodes": o_nodes < rnd_nodes,
+        "oracle_solved": o_solved,
+        "random_solved": rnd_solved,
+        # (4) continuous geometry: swap around a disc obstacle
+        "swap_solved": swap_solved,
+        "swap_collision_free": swap_collision_free,
+        "swap_obstacle_clear": swap_obstacle_clear,
+        # (5)
+        "deterministic": deterministic,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -6213,6 +6385,7 @@ SUITE = [
     ("push_recovery", _run_push_recovery),
     ("capturability", _run_capturability),
     ("resolved_momentum", _run_resolved_momentum),
+    ("drrt", _run_drrt),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

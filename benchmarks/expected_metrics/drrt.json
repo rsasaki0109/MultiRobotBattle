@@ -1,0 +1,22 @@
+{
+  "all_clear_of_obstacles": true,
+  "all_collision_free": true,
+  "all_solved": true,
+  "deterministic": true,
+  "haystack_collision_free": true,
+  "haystack_product_size": 3111696,
+  "haystack_robots": 4,
+  "haystack_solved": true,
+  "haystack_tree_size": 6,
+  "implicit_exploration": true,
+  "instances": 10,
+  "oracle_solved": 10,
+  "oracle_solves_more_than_random": true,
+  "oracle_uses_fewer_nodes": true,
+  "paths_endpoints_exact": true,
+  "random_solved": 1,
+  "solved": 10,
+  "swap_collision_free": true,
+  "swap_obstacle_clear": true,
+  "swap_solved": true
+}
