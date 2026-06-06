@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MAPF zoo — solve &amp; animate in your browser</title>
+<style>
+  :root { --bg:#0f1320; --panel:#1a1f33; --ink:#e8ecf6; --muted:#9aa3bf;
+          --accent:#5b8cff; --line:#2a3150; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:22px 18px 8px; text-align:center; }
+  h1 { margin:0 0 4px; font-size:22px; }
+  h1 .z { color:var(--accent); }
+  .sub { color:var(--muted); font-size:14px; margin:0 auto; max-width:680px; }
+  .sub a { color:var(--accent); text-decoration:none; }
+  main { max-width:760px; margin:0 auto; padding:14px 16px 40px; }
+  .controls { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;
+              background:var(--panel); border:1px solid var(--line);
+              border-radius:12px; padding:14px; margin-bottom:14px; }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .field label { font-size:12px; color:var(--muted); }
+  select, button { font:inherit; color:var(--ink); }
+  select { background:#10162a; border:1px solid var(--line); border-radius:8px;
+           padding:8px 10px; min-width:150px; }
+  button { background:var(--accent); border:0; border-radius:8px; padding:9px 16px;
+           color:#fff; font-weight:600; cursor:pointer; }
+  button.ghost { background:#222a45; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .grow { flex:1; }
+  .status { min-height:22px; font-size:13px; color:var(--muted); margin:4px 2px 10px; }
+  .status .err { color:#ff8b8b; }
+  .status b { color:var(--ink); }
+  .canvas-wrap { background:var(--panel); border:1px solid var(--line);
+                 border-radius:12px; padding:12px; }
+  canvas { width:100%; height:auto; display:block; border-radius:8px; background:#0b0f1c; }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:12px;
+            color:var(--muted); }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:0 16px 30px; }
+  footer a { color:var(--accent); text-decoration:none; }
+  code { background:#10162a; padding:1px 5px; border-radius:5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MAPF <span class="z">zoo</span> — solve &amp; animate in your browser</h1>
+  <p class="sub">45+ Multi-Agent Path Finding algorithms, faithfully reproduced
+  from their papers and benchmark-gated. This page runs the <em>real</em>
+  pure-Python solvers in your browser via
+  <a href="https://pyodide.org/" target="_blank" rel="noopener">Pyodide</a> — no
+  server. Pick an instance and a solver, and watch the collision-free paths.
+  Full catalogue in
+  <a href="https://github.com/rsasaki0109/multirobot-navigation/blob/main/docs/coordination.md"
+     target="_blank" rel="noopener">docs/coordination.md</a>.</p>
+</header>
+
+<main>
+  <div class="controls">
+    <div class="field">
+      <label for="preset">Instance</label>
+      <select id="preset">
+        <option value="crossing">crossing — 4 agents, open 7×7</option>
+        <option value="swap">swap — 3 agents reorder in a corridor</option>
+        <option value="doorway">doorway — 3 agents funnel through 1 gap</option>
+        <option value="ring">ring — 8 agents, heavy contention</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="solver">Solver</label>
+      <select id="solver">
+        <option value="cbs">CBS — optimal (sum-of-costs)</option>
+        <option value="ecbs">ECBS — bounded-suboptimal (w=1.5)</option>
+        <option value="pbs">PBS — priority-based search</option>
+        <option value="mstar">M* — subdimensional joint search</option>
+        <option value="lacam">LaCAM — complete, scalable</option>
+        <option value="prioritized">Prioritized — fast, incomplete</option>
+        <option value="lns">MAPF-LNS — anytime large-neighborhood</option>
+      </select>
+    </div>
+    <div class="grow"></div>
+    <button id="solve" disabled>Loading…</button>
+    <button id="play" class="ghost" disabled>Pause</button>
+  </div>
+
+  <div class="status" id="status">Booting Pyodide and the MAPF core…</div>
+
+  <div class="canvas-wrap">
+    <canvas id="cv" width="720" height="720"></canvas>
+    <div class="legend">
+      <span>◯ goal ring</span><span>● agent</span>
+      <span>▦ blocked</span><span>faint disc = start</span>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Part of
+  <a href="https://github.com/rsasaki0109/multirobot-navigation" target="_blank" rel="noopener">multirobot-navigation</a>.
+  Everything you see is computed live by the same code that ships in the repo —
+  served as a pure-Python wheel and run under Pyodide.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
+<script>
+const WHEEL = "./mapf_zoo-0.1.0-py3-none-any.whl";
+const BRIDGE = "./bridge.py";
+const PALETTE = ["#5b8cff","#ff6b6b","#33d6a6","#ffd166","#c792ea",
+                 "#ff9f6b","#4dd0e1","#f06292","#aed581","#ba68c8"];
+
+const $ = id => document.getElementById(id);
+const statusEl = $("status"), cv = $("cv"), ctx = cv.getContext("2d");
+let py = null, current = null, playing = true, t0 = null, raf = null;
+
+function setStatus(html, isErr=false) {
+  statusEl.innerHTML = isErr ? `<span class="err">${html}</span>` : html;
+}
+
+async function boot() {
+  py = await loadPyodide();
+  // Replicate the verified node path: drop the wheel into Pyodide's FS,
+  // extract it onto sys.path, and load the demo bridge — no network besides
+  // the same-origin wheel/bridge fetches.
+  const wheelBuf = new Uint8Array(await (await fetch(WHEEL)).arrayBuffer());
+  const bridgeSrc = await (await fetch(BRIDGE)).text();
+  py.FS.writeFile("/mapf_zoo.whl", wheelBuf);
+  py.FS.writeFile("/bridge.py", bridgeSrc);
+  await py.runPythonAsync(`
+import sys, zipfile
+zipfile.ZipFile("/mapf_zoo.whl").extractall("/site")
+for p in ("/site", "/"):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+import bridge
+`);
+  $("solve").disabled = false; $("solve").textContent = "Solve";
+  $("play").disabled = false;
+  setStatus("Ready — pick an instance and a solver, then <b>Solve</b>.");
+  solve();
+}
+
+async function solve() {
+  if (!py) return;
+  const preset = $("preset").value, solver = $("solver").value;
+  $("solve").disabled = true; $("solve").textContent = "Solving…";
+  setStatus(`Running <b>${solver}</b> on <b>${preset}</b>…`);
+  // let the UI paint the "Solving…" state before the (sync) solve blocks
+  await new Promise(r => setTimeout(r, 16));
+  let res;
+  try {
+    const fn = py.globals.get("bridge").solve;
+    res = JSON.parse(fn(preset, solver));
+    fn.destroy && fn.destroy();
+  } catch (e) {
+    setStatus("Error: " + e, true);
+    $("solve").disabled = false; $("solve").textContent = "Solve";
+    return;
+  }
+  $("solve").disabled = false; $("solve").textContent = "Solve";
+  if (!res.ok) { setStatus(res.error, true); current = null; draw(); return; }
+  current = res;
+  setStatus(`<b>${solver}</b> on <b>${preset}</b>: sum-of-costs <b>${res.cost}</b>, `
+            + `makespan <b>${res.makespan}</b>, ${Object.keys(res.paths).length} agents, collision-free.`);
+  t0 = performance.now(); playing = true; $("play").textContent = "Pause";
+  loop();
+}
+
+function cellPx(s) {
+  const n = Math.max(s.width, s.height);
+  return Math.floor((cv.width - 2) / n);
+}
+
+function draw(frac=0) {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!current) return;
+  const s = current, px = cellPx(s);
+  const ox = (cv.width - px * s.width) / 2, oy = (cv.height - px * s.height) / 2;
+  const X = x => ox + x * px, Y = y => oy + (s.height - 1 - y) * px; // flip y
+
+  // grid
+  ctx.strokeStyle = "#1d2440"; ctx.lineWidth = 1;
+  for (let x = 0; x <= s.width; x++) { ctx.beginPath(); ctx.moveTo(ox+x*px, oy); ctx.lineTo(ox+x*px, oy+px*s.height); ctx.stroke(); }
+  for (let y = 0; y <= s.height; y++) { ctx.beginPath(); ctx.moveTo(ox, oy+y*px); ctx.lineTo(ox+px*s.width, oy+y*px); ctx.stroke(); }
+  // blocked
+  ctx.fillStyle = "#2b3357";
+  for (const [bx, by] of s.blocked) ctx.fillRect(X(bx)+1, Y(by)+1, px-2, px-2);
+
+  const ids = Object.keys(s.paths);
+  // starts (faint) + goals (rings)
+  ids.forEach((id, i) => {
+    const c = PALETTE[i % PALETTE.length];
+    const [st, gl] = s.agents[id];
+    ctx.globalAlpha = 0.22; ctx.fillStyle = c;
+    ctx.beginPath(); ctx.arc(X(st[0])+px/2, Y(st[1])+px/2, px*0.30, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1; ctx.strokeStyle = c; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(X(gl[0])+px/2, Y(gl[1])+px/2, px*0.34, 0, 7); ctx.stroke();
+  });
+  // agents (interpolated)
+  const mk = s.makespan, t = Math.min(Math.floor(frac), mk), nt = Math.min(t+1, mk);
+  const f = frac - t;
+  ids.forEach((id, i) => {
+    const p = s.paths[id];
+    const a = p[Math.min(t, p.length-1)], b = p[Math.min(nt, p.length-1)];
+    const cx = X(a[0] + (b[0]-a[0])*f) + px/2, cy = Y(a[1] + (b[1]-a[1])*f) + px/2;
+    ctx.fillStyle = PALETTE[i % PALETTE.length];
+    ctx.beginPath(); ctx.arc(cx, cy, px*0.30, 0, 7); ctx.fill();
+    ctx.fillStyle = "#0b0f1c"; ctx.font = `bold ${Math.floor(px*0.32)}px system-ui`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(id, cx, cy);
+  });
+}
+
+const STEP_MS = 600; // ms per timestep
+function loop() {
+  cancelAnimationFrame(raf);
+  const tick = now => {
+    if (!current) return;
+    const mk = current.makespan;
+    if (playing) {
+      let frac = ((now - t0) / STEP_MS);
+      const total = mk + 0.8; // small pause at the end
+      frac = frac % total;
+      draw(Math.min(frac, mk));
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+}
+
+$("solve").addEventListener("click", solve);
+$("preset").addEventListener("change", solve);
+$("solver").addEventListener("change", solve);
+$("play").addEventListener("click", () => {
+  playing = !playing; $("play").textContent = playing ? "Pause" : "Play";
+  if (playing) { t0 = performance.now(); }
+});
+boot().catch(e => setStatus("Failed to start: " + e, true));
+</script>
+</body>
+</html>

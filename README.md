@@ -42,6 +42,11 @@ Swap `cbs` for `ecbs`, `lacam`, `mapf_lns`, `pbs`, `mstar`, … — they share t
 same `(grid, agents)` interface. The core has **zero required dependencies**
 (only the LP-based `bcp` needs `pip install "...[bcp]"` for numpy/scipy).
 
+> **Try it without installing anything** — [`docs/demo/`](docs/demo/) runs these
+> same pure-Python solvers *in your browser* via Pyodide: pick an instance and a
+> solver, watch the collision-free paths animate. Serve it with
+> `python3 -m http.server` from `docs/demo/` (or host `docs/` on GitHub Pages).
+
 ### A taste of the catalogue
 
 A representative slice — the full paper-by-paper catalogue with every solver's
