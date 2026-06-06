@@ -5613,6 +5613,94 @@ def _run_kajita_stabilizer() -> dict:
     }
 
 
+def _run_push_recovery() -> dict:
+    import math
+
+    from mrn_coord.mapf.capture_point import (
+        capture_point as cp_capture_point,
+        recover_step as cp_recover_step,
+    )
+    from mrn_coord.mapf import push_recovery as pr
+
+    p = pr.StrategyParams()
+    w = p.omega
+
+    # (1) the ankle decision surface is exactly "capture point in the foot"
+    # (eq. 4): sweep a grid and check classify=='ankle' iff δ⁻ <= ξ <= δ⁺.
+    ankle_surface_ok = True
+    for xi_x in (-0.05, 0.0, 0.05):
+        for j in range(-60, 61):
+            v = j * 0.01
+            xi = pr.capture_point(xi_x, v, p)
+            is_ankle = (p.delta_back <= xi <= p.delta_front)
+            if (pr.classify(xi_x, v, p) == "ankle") != is_ankle:
+                ankle_surface_ok = False
+
+    # (2) HEADLINE: the closed-form hip widening matches the exact bang-bang
+    # LIPPF simulation to machine precision, and the paper's printed eq. (15)
+    # form does NOT (documenting the typo).
+    sim_boundary = pr.hip_recovery_boundary(p)
+    closed = p.delta_front + p.delta_hip
+    printed = p.delta_front + p.cmp_shift * (math.exp(w * p.t_max) - 1.0) ** 2
+
+    # (3) the bang-bang flywheel returns to rest and respects the joint limit
+    rh = pr.simulate_hip(0.0, 0.38, p)
+    n_pulse = 2 * int(round(p.t_max / 0.002))
+    rest_theta = rh.theta[n_pulse:]
+    flywheel_at_rest = (max(rest_theta) - min(rest_theta)) < 1e-9 if rest_theta else False
+
+    # (4) ankle recovers a push inside the foot, fails just beyond it
+    ankle_in = pr.simulate_ankle(0.0, 0.25, p)    # ξ≈0.080, in foot
+    ankle_out = pr.simulate_ankle(0.0, 0.38, p)   # ξ≈0.121, hip band
+
+    # (5) the SAME push the ankle fails, the hip recovers (flywheel within limit)
+    hip_mid = pr.simulate_hip(0.0, 0.38, p)
+    # (6) a push past the hip band: the hip strategy fails -> must step
+    hip_beyond = pr.simulate_hip(0.0, 0.55, p)    # ξ≈0.176, step region
+
+    # (7) step region defers to capture_point: the capture point and the planned
+    # foot agree with the standalone capture_point module.
+    x_s, v_s = 0.0, 0.30 * w                       # ξ = 0.30, in step region
+    xi_pr = pr.capture_point(x_s, v_s, p)
+    xi_cp = cp_capture_point(x_s, v_s, p.z_com, g=p.g)
+    step = cp_recover_step(x_s, v_s, p.z_com, max_step=p.max_step, g=p.g)
+    step_defers_to_capture_point = (abs(xi_pr - xi_cp) < 1e-9
+                                    and pr.classify(x_s, v_s, p) == "step"
+                                    and abs(step.foot - xi_cp) < 1e-9)
+
+    # determinism
+    rh_b = pr.simulate_hip(0.0, 0.38, p)
+
+    return {
+        "case": "push_recovery",
+        "omega": round(w, 3),
+        # (1) ankle = CoP balancing = capture point in the foot (eq. 4)
+        "ankle_surface_is_capture_in_foot": ankle_surface_ok,
+        # (2) hip widening: closed form == exact bang-bang sim; printed eq. (15)
+        # is a typo
+        "hip_widens_capturable": p.delta_hip > 0.0,
+        "hip_boundary_matches_simulation": abs(sim_boundary - closed) < 1e-6,
+        "printed_eq15_is_typo": abs(sim_boundary - printed) > 1e-3,
+        # (3) the flywheel bang-bang is feasible: back to rest, within θ_max
+        "flywheel_returns_to_rest": flywheel_at_rest,
+        "flywheel_respects_joint_limit": hip_mid.theta_within_limit(),
+        # (4) ankle recovers inside the foot, fails just beyond
+        "ankle_recovers_in_foot": ankle_in.captured(),
+        "ankle_fails_beyond_foot": not ankle_out.captured(),
+        # (5) the hip recovers a push the ankle cannot (same state)
+        "hip_recovers_beyond_foot": hip_mid.captured(),
+        # (6) past the hip band the hip strategy fails -> step needed
+        "hip_fails_beyond_band": not hip_beyond.captured(),
+        # (7) the step region defers to capture_point (shared capture point)
+        "step_defers_to_capture_point": step_defers_to_capture_point,
+        # (8) the three strategies nest with strictly ordered boundaries
+        "strategies_nested": (p.delta_front < p.delta_front + p.delta_hip
+                              < p.max_step),
+        "classify_covers_fall": pr.classify(0.0, 0.80 * w, p) == "fall",
+        "deterministic": rh.x == rh_b.x,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5848,6 +5936,10 @@ SUITE = [
     # perturbations the open-loop pattern generators above cannot -- LIPM
     # tracking with the ZMP saturated to the foot (ankle strategy)
     ("kajita_stabilizer", _run_kajita_stabilizer),
+    # the unifying push-recovery analysis: ankle/hip/step decision surfaces,
+    # the flywheel (hip) widening the capturable interval, step defers to
+    # capture_point
+    ("push_recovery", _run_push_recovery),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

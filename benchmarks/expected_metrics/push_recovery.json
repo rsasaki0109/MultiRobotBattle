@@ -1,0 +1,18 @@
+{
+  "ankle_fails_beyond_foot": true,
+  "ankle_recovers_in_foot": true,
+  "ankle_surface_is_capture_in_foot": true,
+  "case": "push_recovery",
+  "classify_covers_fall": true,
+  "deterministic": true,
+  "flywheel_respects_joint_limit": true,
+  "flywheel_returns_to_rest": true,
+  "hip_boundary_matches_simulation": true,
+  "hip_fails_beyond_band": true,
+  "hip_recovers_beyond_foot": true,
+  "hip_widens_capturable": true,
+  "omega": 3.132,
+  "printed_eq15_is_typo": true,
+  "step_defers_to_capture_point": true,
+  "strategies_nested": true
+}

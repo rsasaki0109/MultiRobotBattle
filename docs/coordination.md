@@ -2086,6 +2086,55 @@ rejects the planner/plant model mismatch), sagittal (1-D point-mass) like the re
 of the thread — the full paper also runs a foot-force/torque ZMP-realisation loop
 and lateral balance.
 
+### Push recovery: ankle / hip / step decision surfaces (`push_recovery.py`)
+
+The humanoid thread has built the push-recovery family piecewise — `capture_point`
+plans *where to step*, `kajita_stabilizer` is the *ankle* feedback that saturates
+and then needs a step. `push_recovery` reproduces Benjamin Stephens, *"Humanoid
+Push Recovery"* (IEEE-RAS Humanoids 2007), the paper that ties the three classical
+balance strategies — **ankle**, **hip**, **step** — into a single picture and
+derives the **decision surfaces** in the CoM phase plane that predict *which*
+strategy can still avert a fall. All three are read off one number, the
+instantaneous capture point `ξ = x + ẋ/ω`:
+
+- **Ankle (CoP balancing)** — ankle torque only, so the CoP stays in the foot
+  `[δ⁻, δ⁺]`. The CoM can be stopped **iff the capture point is in the foot**
+  (eq. 4, `δ⁻ < ξ < δ⁺`). `simulate_ankle` realises it by placing the CoP at the
+  (clamped) capture point, which freezes ξ and lets the CoM converge to it.
+- **Hip (CMP balancing)** — internal joints, modelled as a **flywheel** at the CoM
+  (the *Linear Inverted Pendulum Plus Flywheel*), apply a bounded torque `τ_max`
+  for a bounded angle `θ_max`. A momentum-generating torque pushes the effective
+  pivot — the Centroidal Moment Point — *beyond* the foot by `τ/(mg)`. A bang-bang
+  pulse (`+τ_max` then `−τ_max`, each for `T_max = √(I θ_max/τ_max)`) spins the
+  flywheel up and back to rest within the angle budget, widening the capturable
+  interval to `δ⁻ − Δ_hip < ξ < δ⁺ + Δ_hip` with `Δ_hip = (τ_max/mg)(1 − e^{−ωT_max})²`.
+- **Step** — past the hip interval the support must move; the foot goes to the
+  capture point, which is exactly `capture_point`'s job.
+
+The `push_recovery` gate pins it. **(1) The ankle surface** *is* "capture point in
+the foot" — swept over a phase-plane grid, `classify` returns `"ankle"` exactly
+when `δ⁻ ≤ ξ ≤ δ⁺` (`ankle_surface_is_capture_in_foot`). **(2) The headline** —
+the closed-form hip widening `Δ_hip` matches an **exact** integration of the
+bang-bang LIPPF dynamics to machine precision (`hip_boundary_matches_simulation`).
+*A reproduction find:* the paper's printed eq. (15) writes the widening as
+`(e^{ωT_max} − 1)²`; re-deriving from its own eq. (13) and confirming against the
+simulation gives `(1 − e^{−ωT_max})²` (the two differ by `e^{2ωT_max}`), so the
+printed form is a typo (`printed_eq15_is_typo` — the simulation refutes it).
+**(3) The flywheel pulse is feasible** — it returns to rest (`θ̇ = 0`,
+`flywheel_returns_to_rest`) within the joint limit (`flywheel_respects_joint_limit`,
+`θ ≤ θ_max`). **(4) Ankle** recovers a push inside the foot
+(`ankle_recovers_in_foot`) and fails just beyond (`ankle_fails_beyond_foot`).
+**(5) Hip** recovers the *same* push the ankle cannot
+(`hip_recovers_beyond_foot`), and **(6)** fails past its own band
+(`hip_fails_beyond_band`) — where a step is needed. **(7)** The step region
+**defers to `capture_point`** (shared capture point and planned foot,
+`step_defers_to_capture_point`). **(8)** The three strategies **nest** with
+strictly ordered boundaries `δ⁺ < δ⁺ + Δ_hip < max_step` (`strategies_nested`),
+and beyond a leg's reach `classify` returns `"fall"` (`classify_covers_fall`).
+Pure Python, no numpy; reuses `kajita_stabilizer`'s exact LIPM integrator and
+defers the step geometry to `capture_point`. Sagittal (1-D point-mass) like the
+rest of the thread.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

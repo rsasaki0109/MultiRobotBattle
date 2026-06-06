@@ -265,6 +265,14 @@ The pieces compose bottom-up:
   capturable margin is rejected with the ZMP inside the foot; a larger push
   saturates and the robot must *step* — the escalation to :mod:`capture_point` /
   :mod:`herdt_walk`. Pure Python, no numpy.
+- :mod:`push_recovery` — **ankle / hip / step decision surfaces** (Stephens,
+  Humanoids 2007): the unifying analysis of the push-recovery family. All three
+  are read off the capture point ``ξ = x + ẋ/ω`` — ankle recovers iff ξ is in the
+  foot, the *hip* strategy (a flywheel at the CoM) widens that interval by
+  ``Δ_hip = (τ_max/mg)(1 − e^{−ωT_max})²`` via a bang-bang momentum pulse, and
+  past that a *step* is required (deferred to :mod:`capture_point`). The closed
+  form matches an exact bang-bang LIPPF simulation to machine precision (the
+  paper's printed eq. (15) is a typo). Pure Python, no numpy.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -368,6 +376,14 @@ from .kajita_stabilizer import (
     reference_trajectory,
     simulate_stabilizer,
     stabilizer_params,
+)
+from .push_recovery import (
+    RecoveryResult,
+    StrategyParams,
+    classify,
+    hip_recovery_boundary,
+    simulate_ankle,
+    simulate_hip,
 )
 from .conflicts import (
     EdgeConflict,
@@ -479,6 +495,12 @@ __all__ = [
     "gains_for_poles",
     "StabilizerParams",
     "StabilizerResult",
+    "classify",
+    "simulate_ankle",
+    "simulate_hip",
+    "hip_recovery_boundary",
+    "StrategyParams",
+    "RecoveryResult",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",
