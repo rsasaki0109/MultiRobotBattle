@@ -2294,6 +2294,41 @@ contribution. **Continuous geometry:** a 2-robot swap that must route around a
 central disc is solved with continuous (non-grid) waypoints, every pair `≥ 2r` and
 the obstacle cleared. Pure Python, no numpy.
 
+#### Asymptotically-optimal dRRT\* (same module)
+
+The same `drrt.py` carries **dRRT\*** (`drrt_star`), the asymptotically-*optimal*
+successor — Shome, Solovey, Dobson, Halperin & Bekris, *"dRRT\*: Scalable and
+Informed Asymptotically-Optimal Multi-Robot Motion Planning"* (Autonomous Robots
+2020). Plain dRRT returns the **first** path its tree reaches — arbitrarily far
+from optimal. dRRT\* fixes that with one structural change: it keeps the explored
+part of the implicit composite roadmap as a **graph**, not a tree. Every new
+vertex is wired to *all* explored vertices it is implicitly adjacent to
+(`_implicit_adjacent`), and the solution is the **shortest path in that graph**
+(Dijkstra), not a chain of parent pointers. As exploration densifies the graph the
+cost descends *monotonically* toward the optimum of the (fixed) implicit roadmap —
+**anytime** (`StarSolution.cost_history`) and **asymptotically optimal**.
+**Informed sampling** (`_informed_reject`) focuses the search once a solution of
+cost `c` is known: a sample survives only if the sum over robots of its
+straight-line `start→sample→goal` lower bound stays below `c` (admissible, so no
+improving path is ever discarded).
+
+The gate certifies convergence against `composite_optimum` — the **ground-truth**
+shortest path computed by *explicit* Dijkstra over the **entire** implicit
+composite roadmap (every collision-free implicit edge enumerated; feasible only for
+the small 2-robot instances, guarded by `max_product`). This is the same
+brute-force-oracle discipline the walking gates use. On a 10-seed battery every
+dRRT\* cost is within **2 %** of that optimum (`all_near_optimal`) and **9/10** hit
+it exactly (`most_exact_optimal`); every `cost_history` is monotone non-increasing
+(`all_cost_monotone`); every plan beats plain dRRT's first solution
+(`all_beat_plain_drrt`) and is collision-free. A 2-robot swap around a central disc
+converges to the brute optimum (`swap_reaches_optimum`), beats plain dRRT, and
+clears the obstacle. With informed sampling **on**, the explored graph is **34**
+vertices versus **186** with it **off** (`informed_focuses_search`) at the same
+near-optimal cost. **Honest scope:** with a *fixed finite* roadmap and a finite
+budget dRRT\* is near-optimal (~1 %), exact for most — true asymptotic optimality
+needs the roadmap density to grow; the gate pins near-optimal-for-all plus
+exact-for-most, not exact-for-all.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

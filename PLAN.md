@@ -44,7 +44,7 @@ simulator emits them; that repo consumes them.
 - [x] CI: build + `colcon test` over all packages + coordination CLI demos.
 - [x] **MAPF algorithm zoo** (`mrn_coord.mapf`): 45+ algorithms faithfully
   reproduced from their papers in pure Python, each *benchmark-gated* in
-  `scripts/benchmark_gate.py` (full gate **96/96**). CBS family (CBSH, ECBS,
+  `scripts/benchmark_gate.py` (full gate **97/97**). CBS family (CBSH, ECBS,
   EECBS, FECBS, ICBS/bypass, MA-CBS, disjoint, BCP, rectangle/corridor/mutex
   symmetry), optimal joint-space search (M\*, rM\*, EPEA\*, ICTS, Standley
   OD/ID), declarative (MDD-SAT), constructive (Push-and-Rotate/Swap, TSWAP,
@@ -60,7 +60,9 @@ simulator emits them; that repo consumes them.
   surfaces (Stephens) + N-step capturability analysis (Koolen et al.) +
   whole-body resolved momentum control (Kajita et al.)**, continuous-space
   multi-robot motion planning (**discrete RRT / dRRT over an implicit
-  tensor-product roadmap, Solovey, Salzman & Halperin**), and
+  tensor-product roadmap, Solovey, Salzman & Halperin; asymptotically-optimal
+  dRRT\* with Dijkstra-over-the-explored-graph + informed sampling, Shome et
+  al.**), and
   the low
   levels (space-time A\*,
   SIPP/SIPPS, Multi-Label A\*). Each documented algorithm-by-algorithm with its

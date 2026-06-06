@@ -301,7 +301,12 @@ The pieces compose bottom-up:
   **direction oracle** ``O_d`` (per robot, the one roadmap edge best aligned with
   the heading to a random sample). Collision checking is exact and continuous
   (quadratic disc/disc closest-approach + swept-disc/obstacle). Feasibility /
-  probabilistically-complete, not cost-optimal. Pure Python, no numpy.
+  probabilistically-complete, not cost-optimal. The same module carries
+  **dRRT\\*** (Shome, Solovey, Dobson, Halperin & Bekris, AuRo 2020): the
+  asymptotically-*optimal* successor that keeps the explored implicit roadmap as
+  a **graph** and returns its Dijkstra shortest path (anytime, informed
+  sampling), certified to converge to ``composite_optimum`` — the brute optimum
+  over the full implicit roadmap. Pure Python, no numpy.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -436,9 +441,12 @@ from .resolved_momentum import (
 from .drrt import (
     Obstacle,
     Roadmap,
+    StarSolution,
     build_roadmap,
+    composite_optimum,
     direction_oracle,
     drrt,
+    drrt_star,
     solution_clearance,
     tensor_product_size,
 )
@@ -574,12 +582,15 @@ __all__ = [
     "MomentumTask",
     "MomentumTrajectory",
     "drrt",
+    "drrt_star",
+    "composite_optimum",
     "build_roadmap",
     "direction_oracle",
     "solution_clearance",
     "tensor_product_size",
     "Roadmap",
     "Obstacle",
+    "StarSolution",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

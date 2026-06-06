@@ -56,9 +56,12 @@ __all__ = [
     "Obstacle",
     "Roadmap",
     "Solution",
+    "StarSolution",
     "build_roadmap",
+    "composite_optimum",
     "direction_oracle",
     "drrt",
+    "drrt_star",
     "moving_min_distance",
     "segment_point_distance",
     "solution_clearance",
@@ -392,3 +395,224 @@ def drrt(roadmaps, obstacles, r, *, width=1.0, height=1.0, max_iters=4000,
             paths, makespan, total = _reconstruct(roadmaps, parents, goal_node)
             return Solution(paths, len(nodes), it, makespan, total)
     return None
+
+
+# --------------------------------------------------------------------------- #
+# dRRT*  — asymptotically-optimal multi-robot motion planning
+#   Shome, Solovey, Dobson, Halperin & Bekris, "dRRT*: Scalable and Informed
+#   Asymptotically-Optimal Multi-Robot Motion Planning" (Autonomous Robots 2020).
+#
+# Plain dRRT returns the FIRST path its tree reaches — arbitrarily far from
+# optimal.  dRRT* keeps exploring and, crucially, maintains the explored part of
+# the implicit composite roadmap as a GRAPH (not a tree): every new vertex is
+# wired to *all* explored vertices it is implicitly adjacent to, and the solution
+# is the SHORTEST PATH in that explored graph (Dijkstra), not a chain of parent
+# pointers.  As exploration densifies the graph the shortest path descends
+# monotonically toward the optimum of the (fixed) implicit roadmap — anytime and
+# asymptotically optimal.  Informed sampling focuses the search once a solution
+# of cost ``c`` is known (admissible per-robot lower bounds must sum below ``c``).
+# --------------------------------------------------------------------------- #
+def _composite_edge_weight(roadmaps, u, v):
+    """Sum-of-costs weight of one composite edge: total robot travel."""
+    return sum(_dist(roadmaps[i].points[u[i]], roadmaps[i].points[v[i]])
+               for i in range(len(roadmaps)))
+
+
+def _implicit_adjacent(roadmaps, u, v):
+    """True iff ``u``/``v`` are adjacent in the implicit composite roadmap.
+
+    Every robot must either stay (``u[i] == v[i]``) or traverse one of its own
+    roadmap edges (``v[i] in adj[u[i]]``); they cannot all stay.
+    """
+    moved = False
+    for i, rm in enumerate(roadmaps):
+        if u[i] == v[i]:
+            continue
+        if v[i] not in rm.adj[u[i]]:
+            return False
+        moved = True
+    return moved
+
+
+def _dijkstra(graph, source, target):
+    """Shortest path ``source -> target`` over a weighted adjacency dict."""
+    import heapq
+
+    dist = {source: 0.0}
+    prev = {source: None}
+    pq = [(0.0, source)]
+    while pq:
+        d, u = heapq.heappop(pq)
+        if u == target:
+            break
+        if d > dist.get(u, math.inf):
+            continue
+        for v, w in graph[u].items():
+            nd = d + w
+            if nd < dist.get(v, math.inf):
+                dist[v] = nd
+                prev[v] = u
+                heapq.heappush(pq, (nd, v))
+    if target not in dist:
+        return math.inf, None
+    chain = [target]
+    while prev[chain[-1]] is not None:
+        chain.append(prev[chain[-1]])
+    chain.reverse()
+    return dist[target], chain
+
+
+def composite_optimum(roadmaps, obstacles, r, *, max_product=200000):
+    """Ground-truth optimum: shortest path over the FULL implicit roadmap.
+
+    Builds the entire composite graph (every collision-free implicit edge) and
+    runs Dijkstra — feasible only for small instances (guarded by
+    ``max_product``).  This is the independent optimum the gate certifies dRRT*
+    converges to.  Returns ``(cost, path_nodes)`` or ``(inf, None)``.
+    """
+    if tensor_product_size(roadmaps) > max_product:
+        raise ValueError("composite roadmap too large for brute optimum")
+    n = len(roadmaps)
+    start_node = tuple(rm.start for rm in roadmaps)
+    goal_node = tuple(rm.goal for rm in roadmaps)
+
+    # enumerate all composite vertices
+    def _all_nodes():
+        stack = [()]
+        for rm in roadmaps:
+            stack = [node + (v,) for node in stack for v in range(len(rm))]
+        return stack
+
+    verts = [nd for nd in _all_nodes()
+             if all(_dist(roadmaps[i].points[nd[i]],
+                          (o.x, o.y)) >= o.radius + r - 1e-12
+                    for i in range(n) for o in obstacles)
+             and all(_dist(roadmaps[i].points[nd[i]],
+                           roadmaps[j].points[nd[j]]) >= 2 * r - 1e-9
+                     for i in range(n) for j in range(i + 1, n))]
+    vset = set(verts)
+    graph = {v: {} for v in verts}
+    for u in verts:
+        # neighbours: each robot stays or steps one roadmap edge
+        choices = [[u[i]] + list(roadmaps[i].adj[u[i]]) for i in range(n)]
+        stack = [()]
+        for opt in choices:
+            stack = [c + (x,) for c in stack for x in opt]
+        for v in stack:
+            if v == u or v not in vset or v in graph[u]:
+                continue
+            if _edge_collision_free(roadmaps, u, v, obstacles, r):
+                graph[u][v] = _composite_edge_weight(roadmaps, u, v)
+    cost, chain = _dijkstra(graph, start_node, goal_node)
+    return cost, chain
+
+
+@dataclass
+class StarSolution:
+    paths: dict
+    graph_size: int
+    iterations: int
+    cost: float            # sum-of-costs (total robot travel) of the best path
+    first_cost: float      # cost of the first path found (dRRT-like)
+    cost_history: list = field(default_factory=list)  # best cost over iters
+
+    def waypoint_count(self):
+        return len(next(iter(self.paths.values())))
+
+
+def _informed_reject(roadmaps, target, c_best):
+    """Admissible informed-sampling test for sum-of-costs.
+
+    A sample can only lie on an improving solution if the sum over robots of
+    (straight start->sample + straight sample->goal) stays below the incumbent
+    cost — a valid lower bound, so rejecting violators never discards an
+    improving path.
+    """
+    bound = 0.0
+    for i, rm in enumerate(roadmaps):
+        s = rm.points[rm.start]
+        g = rm.points[rm.goal]
+        bound += _dist(s, target[i]) + _dist(target[i], g)
+    return bound > c_best
+
+
+def drrt_star(roadmaps, obstacles, r, *, width=1.0, height=1.0, max_iters=4000,
+              goal_bias=0.1, rng=None, informed=True):
+    """Asymptotically-optimal dRRT*: explore, maintain a graph, extract the
+    Dijkstra shortest path; refine until the budget runs out.
+
+    Returns a :class:`StarSolution` (with the anytime ``cost_history``) or
+    ``None`` if no path is found.
+    """
+    rng = rng or random.Random(0)
+    n = len(roadmaps)
+    start_node = tuple(rm.start for rm in roadmaps)
+    goal_node = tuple(rm.goal for rm in roadmaps)
+    goal_points = [rm.points[rm.goal] for rm in roadmaps]
+
+    graph = {start_node: {}}
+    nodes = [start_node]
+    best_cost = math.inf
+    first_cost = math.inf
+    history = []
+
+    def _add_vertex(v):
+        """Insert ``v`` and wire it to every explored implicit neighbour."""
+        if v in graph:
+            return False
+        graph[v] = {}
+        for u in nodes:
+            if _implicit_adjacent(roadmaps, u, v) and \
+                    _edge_collision_free(roadmaps, u, v, obstacles, r):
+                w = _composite_edge_weight(roadmaps, u, v)
+                graph[u][v] = w
+                graph[v][u] = w
+        nodes.append(v)
+        return True
+
+    for it in range(1, max_iters + 1):
+        if rng.random() < goal_bias:
+            target = goal_points
+        else:
+            target = []
+            for rm in roadmaps:
+                while True:
+                    p = (rng.uniform(0.0, width), rng.uniform(0.0, height))
+                    if not _point_clear(p, obstacles, r, width, height):
+                        continue
+                    target.append(p)
+                    break
+            if informed and best_cost < math.inf and \
+                    _informed_reject(roadmaps, target, best_cost):
+                history.append(best_cost)
+                continue
+        near = min(nodes, key=lambda nd: sum(
+            _dist(roadmaps[i].points[nd[i]], target[i]) for i in range(n)))
+        new = direction_oracle(roadmaps, near, target)
+        if new != near:
+            _add_vertex(new)
+        # greedy connect toward the goal densifies the path corridor
+        cur = new
+        for _ in range(4 * max(len(rm) for rm in roadmaps)):
+            if cur == goal_node:
+                break
+            nxt = direction_oracle(roadmaps, cur, goal_points)
+            if nxt == cur:
+                break
+            _add_vertex(nxt)
+            cur = nxt
+        if goal_node in graph:
+            cost, chain = _dijkstra(graph, start_node, goal_node)
+            if chain is not None and cost < best_cost - 1e-12:
+                if first_cost == math.inf:
+                    first_cost = cost
+                best_cost = cost
+                best_chain = chain
+        history.append(best_cost)
+
+    if best_cost == math.inf:
+        return None
+    paths = {i: [roadmaps[i].points[node[i]] for node in best_chain]
+             for i in range(n)}
+    return StarSolution(paths, len(nodes), max_iters, best_cost, first_cost,
+                        history)

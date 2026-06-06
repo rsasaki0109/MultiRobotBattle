@@ -7,8 +7,10 @@ import unittest
 from mrn_coord.mapf.drrt import (
     Obstacle,
     build_roadmap,
+    composite_optimum,
     direction_oracle,
     drrt,
+    drrt_star,
     moving_min_distance,
     segment_point_distance,
     solution_clearance,
@@ -153,6 +155,75 @@ class TestSearch(unittest.TestCase):
                  max_iters=3000, rng=random.Random(99))
         self.assertEqual(a.tree_size, b.tree_size)
         self.assertAlmostEqual(a.makespan, b.makespan, places=9)
+
+
+class TestStar(unittest.TestCase):
+    def _roadmaps(self, starts, goals, obstacles, seed, n_samples=12):
+        rng = random.Random(seed)
+        return [build_roadmap(s, g, obstacles, 0.05, 1.0, 1.0,
+                              n_samples=n_samples, k=8, rng=rng)
+                for s, g in zip(starts, goals)]
+
+    def test_converges_to_brute_optimum(self):
+        # dRRT* must reach (or get within 2% of) the shortest path over the FULL
+        # implicit composite roadmap, computed independently by brute Dijkstra.
+        starts, goals = [(0.15, 0.2), (0.85, 0.8)], [(0.85, 0.8), (0.15, 0.2)]
+        rms = self._roadmaps(starts, goals, [], 5)
+        opt, _ = composite_optimum(rms, [], 0.05)
+        star = drrt_star(rms, [], 0.05, max_iters=1200, rng=random.Random(5))
+        self.assertIsNotNone(star)
+        self.assertLessEqual(star.cost, opt * 1.02 + 1e-9)
+
+    def test_beats_plain_drrt_first_solution(self):
+        starts, goals = [(0.15, 0.2), (0.85, 0.8)], [(0.85, 0.8), (0.15, 0.2)]
+        rms = self._roadmaps(starts, goals, [], 6)
+        star = drrt_star(rms, [], 0.05, max_iters=1000, rng=random.Random(6))
+        rms = self._roadmaps(starts, goals, [], 6)
+        plain = drrt(rms, [], 0.05, max_iters=1000, rng=random.Random(6))
+        self.assertIsNotNone(star)
+        self.assertIsNotNone(plain)
+        self.assertLessEqual(star.cost, plain.total_length + 1e-9)
+
+    def test_cost_history_monotone_non_increasing(self):
+        starts, goals = [(0.15, 0.2), (0.85, 0.8)], [(0.85, 0.8), (0.15, 0.2)]
+        rms = self._roadmaps(starts, goals, [], 5)
+        star = drrt_star(rms, [], 0.05, max_iters=800, rng=random.Random(5))
+        hist = [c for c in star.cost_history if c != float("inf")]
+        for i in range(len(hist) - 1):
+            self.assertGreaterEqual(hist[i], hist[i + 1] - 1e-9)
+
+    def test_informed_focuses_search(self):
+        starts = [(0.05, 0.5), (0.95, 0.5)]
+        goals = [(0.95, 0.5), (0.05, 0.5)]
+        s_inf = drrt_star(self._roadmaps(starts, goals, [], 11, n_samples=14),
+                          [], 0.05, max_iters=600, rng=random.Random(11),
+                          informed=True)
+        s_uninf = drrt_star(self._roadmaps(starts, goals, [], 11, n_samples=14),
+                            [], 0.05, max_iters=600, rng=random.Random(11),
+                            informed=False)
+        self.assertLess(s_inf.graph_size, s_uninf.graph_size)
+
+    def test_swap_around_obstacle_optimal_and_clear(self):
+        obs = [Obstacle(0.5, 0.5, 0.12)]
+        starts, goals = [(0.1, 0.5), (0.9, 0.5)], [(0.9, 0.5), (0.1, 0.5)]
+        rms = self._roadmaps(starts, goals, obs, 3)
+        opt, _ = composite_optimum(rms, obs, 0.05)
+        star = drrt_star(rms, obs, 0.05, max_iters=1200, rng=random.Random(7))
+        self.assertIsNotNone(star)
+        self.assertAlmostEqual(star.cost, opt, places=6)
+        mp, mo = solution_clearance(star.paths, obs, 0.05)
+        self.assertGreaterEqual(mp, 2 * 0.05 - 1e-6)
+        self.assertGreaterEqual(mo, -1e-6)
+
+    def test_deterministic(self):
+        obs = [Obstacle(0.5, 0.5, 0.12)]
+        starts, goals = [(0.1, 0.5), (0.9, 0.5)], [(0.9, 0.5), (0.1, 0.5)]
+        a = drrt_star(self._roadmaps(starts, goals, obs, 3), obs, 0.05,
+                      max_iters=800, rng=random.Random(99))
+        b = drrt_star(self._roadmaps(starts, goals, obs, 3), obs, 0.05,
+                      max_iters=800, rng=random.Random(99))
+        self.assertEqual(a.graph_size, b.graph_size)
+        self.assertAlmostEqual(a.cost, b.cost, places=9)
 
 
 if __name__ == "__main__":

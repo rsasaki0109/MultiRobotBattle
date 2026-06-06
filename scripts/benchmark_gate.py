@@ -6144,6 +6144,160 @@ def _run_drrt() -> dict:
     }
 
 
+def _run_drrt_star() -> dict:
+    # dRRT* (drrt.py) reproduces Shome, Solovey, Dobson, Halperin & Bekris's
+    # "dRRT*: Scalable and Informed Asymptotically-Optimal Multi-Robot Motion
+    # Planning" (Autonomous Robots 2020) -- the asymptotically-OPTIMAL successor
+    # to dRRT. Plain dRRT (_run_drrt) returns the FIRST path its tree reaches,
+    # arbitrarily far from optimal. dRRT* keeps the explored part of the implicit
+    # composite roadmap as a GRAPH (not a tree): every new vertex is wired to all
+    # explored vertices it is implicitly adjacent to, and the solution is the
+    # SHORTEST PATH in that graph (Dijkstra), not a chain of parent pointers. As
+    # exploration densifies the graph the cost descends monotonically toward the
+    # optimum of the (fixed) implicit roadmap -- anytime and asymptotically
+    # optimal. Informed sampling focuses the search once a solution is known.
+    #
+    # The gate certifies convergence against composite_optimum -- the GROUND
+    # TRUTH shortest path over the FULL implicit composite roadmap (explicit
+    # Dijkstra over the whole product graph, feasible only for the small 2-robot
+    # instances here). This is the independent optimum, like the closed-form /
+    # brute-force oracles the walking gates certify against.
+    # (1) ASYMPTOTIC OPTIMALITY: on a 10-seed 2-robot battery (first 10 seeds, no
+    #     cherry-picking), every dRRT* cost is within 2% of the brute optimum
+    #     (near-optimal) and most hit it exactly. Every cost_history is monotone
+    #     non-increasing (anytime). Every plan is collision-free (>= 2r).
+    # (2) IT BEATS PLAIN dRRT: on the same instances dRRT*'s optimal-in-graph cost
+    #     is below plain dRRT's first-solution cost (all of them).
+    # (3) OBSTACLE SWAP: a 2-robot swap routing around a central disc converges to
+    #     the brute optimum, beats plain dRRT, clears the obstacle, stays >= 2r.
+    # (4) INFORMED SAMPLING FOCUSES: with informed sampling on, the explored graph
+    #     is far smaller than with it off (same near-optimal cost) -- the
+    #     informed admissible pruning at work.
+    # HONEST SCOPE (docs): with a FIXED finite roadmap and a finite budget dRRT*
+    # is near-optimal (~1%), exact for most -- true asymptotic optimality needs
+    # roadmap density -> inf; the gate pins near-optimal-for-all + exact-for-most.
+    import math
+    import random
+
+    from mrn_coord.mapf.drrt import (
+        Obstacle, build_roadmap, composite_optimum, drrt, drrt_star,
+        solution_clearance,
+    )
+
+    W = H = 1.0
+    r = 0.05
+    twor = 2.0 * r
+
+    def _roadmaps(starts, goals, obstacles, seed, n_samples=12, k=8):
+        rng = random.Random(seed)
+        return [build_roadmap(s, g, obstacles, r, W, H,
+                              n_samples=n_samples, k=k, rng=rng)
+                for s, g in zip(starts, goals)]
+
+    def _spread(n, rng, lo=0.1, hi=0.9, gap=3 * r):
+        pts = []
+        while len(pts) < n:
+            p = (rng.uniform(lo, hi), rng.uniform(lo, hi))
+            if all(math.hypot(p[0] - q[0], p[1] - q[1]) >= gap for q in pts):
+                pts.append(p)
+        return pts
+
+    # (1)+(2) convergence battery vs the brute composite optimum.
+    insts = near_opt = exact_opt = beat_drrt = monotone = cfree = 0
+    for seed in range(10):
+        rng = random.Random(5000 + seed)
+        pool = _spread(4, rng)
+        starts, goals = pool[:2], pool[2:]
+        rms = _roadmaps(starts, goals, [], seed)
+        opt, _ = composite_optimum(rms, [], r)
+        if opt == math.inf:
+            continue
+        insts += 1
+        star = drrt_star(rms, [], r, max_iters=1200, rng=random.Random(seed))
+        dr = drrt(rms, [], r, max_iters=1200, rng=random.Random(seed))
+        if star is None:
+            continue
+        if star.cost <= opt * 1.02 + 1e-9:
+            near_opt += 1
+        if abs(star.cost - opt) <= 1e-6:
+            exact_opt += 1
+        if dr is not None and star.cost <= dr.total_length + 1e-9:
+            beat_drrt += 1
+        hist = [c for c in star.cost_history if c < math.inf]
+        if all(hist[i] >= hist[i + 1] - 1e-9 for i in range(len(hist) - 1)):
+            monotone += 1
+        mp, _ = solution_clearance(star.paths, [], r)
+        if mp >= twor - 1e-6:
+            cfree += 1
+
+    # (3) obstacle swap: converge to optimum, beat plain dRRT, clear obstacle.
+    obs = [Obstacle(0.5, 0.5, 0.12)]
+    rms = _roadmaps([(0.1, 0.5), (0.9, 0.5)], [(0.9, 0.5), (0.1, 0.5)], obs, 3)
+    opt_swap, _ = composite_optimum(rms, obs, r)
+    star_swap = drrt_star(rms, obs, r, max_iters=1200, rng=random.Random(7))
+    dr_swap = drrt(rms, obs, r, max_iters=1200, rng=random.Random(7))
+    swap_optimal = (star_swap is not None
+                    and abs(star_swap.cost - opt_swap) <= 1e-6)
+    swap_beats_drrt = (star_swap is not None and dr_swap is not None
+                       and star_swap.cost <= dr_swap.total_length + 1e-9)
+    if star_swap is not None:
+        sp, so = solution_clearance(star_swap.paths, obs, r)
+        swap_cfree = sp >= twor - 1e-6
+        swap_obs_clear = so >= -1e-6
+    else:
+        swap_cfree = swap_obs_clear = False
+
+    # (4) informed sampling focuses the explored graph.
+    rms_i = _roadmaps([(0.05, 0.5), (0.95, 0.5)], [(0.95, 0.5), (0.05, 0.5)],
+                      [], 11, n_samples=14)
+    s_inf = drrt_star(rms_i, [], r, max_iters=600, rng=random.Random(11),
+                      informed=True)
+    rms_u = _roadmaps([(0.05, 0.5), (0.95, 0.5)], [(0.95, 0.5), (0.05, 0.5)],
+                      [], 11, n_samples=14)
+    s_uninf = drrt_star(rms_u, [], r, max_iters=600, rng=random.Random(11),
+                        informed=False)
+    informed_focuses = (s_inf is not None and s_uninf is not None
+                        and s_inf.graph_size < s_uninf.graph_size)
+    if s_inf is not None:
+        ip, _ = solution_clearance(s_inf.paths, [], r)
+        informed_cfree = ip >= twor - 1e-6
+    else:
+        informed_cfree = False
+
+    # (5) determinism.
+    a = drrt_star(_roadmaps([(0.1, 0.5), (0.9, 0.5)], [(0.9, 0.5), (0.1, 0.5)],
+                            obs, 3), obs, r, max_iters=800, rng=random.Random(99))
+    b = drrt_star(_roadmaps([(0.1, 0.5), (0.9, 0.5)], [(0.9, 0.5), (0.1, 0.5)],
+                            obs, 3), obs, r, max_iters=800, rng=random.Random(99))
+    deterministic = (a is not None and b is not None
+                     and a.graph_size == b.graph_size
+                     and round(a.cost, 9) == round(b.cost, 9))
+
+    return {
+        # (1) asymptotic optimality vs the brute composite optimum
+        "all_near_optimal": near_opt == insts,
+        "most_exact_optimal": exact_opt >= insts - 1,
+        "all_cost_monotone": monotone == insts,
+        "all_collision_free": cfree == insts,
+        "instances": insts,
+        "exact_optimal_count": exact_opt,
+        # (2) beats plain dRRT's first solution
+        "all_beat_plain_drrt": beat_drrt == insts,
+        # (3) obstacle swap
+        "swap_reaches_optimum": swap_optimal,
+        "swap_beats_plain_drrt": swap_beats_drrt,
+        "swap_collision_free": swap_cfree,
+        "swap_obstacle_clear": swap_obs_clear,
+        # (4) informed sampling focuses the search
+        "informed_focuses_search": informed_focuses,
+        "informed_collision_free": informed_cfree,
+        "informed_graph_size": s_inf.graph_size if s_inf else 0,
+        "uninformed_graph_size": s_uninf.graph_size if s_uninf else 0,
+        # (5)
+        "deterministic": deterministic,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -6386,6 +6540,7 @@ SUITE = [
     ("capturability", _run_capturability),
     ("resolved_momentum", _run_resolved_momentum),
     ("drrt", _run_drrt),
+    ("drrt_star", _run_drrt_star),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

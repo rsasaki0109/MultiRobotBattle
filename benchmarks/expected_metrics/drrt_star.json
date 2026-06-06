@@ -1,0 +1,18 @@
+{
+  "all_beat_plain_drrt": true,
+  "all_collision_free": true,
+  "all_cost_monotone": true,
+  "all_near_optimal": true,
+  "deterministic": true,
+  "exact_optimal_count": 9,
+  "informed_collision_free": true,
+  "informed_focuses_search": true,
+  "informed_graph_size": 34,
+  "instances": 10,
+  "most_exact_optimal": true,
+  "swap_beats_plain_drrt": true,
+  "swap_collision_free": true,
+  "swap_obstacle_clear": true,
+  "swap_reaches_optimum": true,
+  "uninformed_graph_size": 186
+}
