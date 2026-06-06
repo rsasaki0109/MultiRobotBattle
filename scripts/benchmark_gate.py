@@ -5248,6 +5248,134 @@ def _run_dcm_walk() -> dict:
     }
 
 
+def _run_mpc_walk() -> dict:
+    from mrn_coord.mapf.mpc_walk import (
+        MPCParams,
+        build_condensed,
+        simulate_mpc,
+        solve_box_qp,
+        standing_support,
+        stepping_support,
+    )
+    from mrn_coord.mapf.mpc_walk import _dot, _matvec
+
+    p = MPCParams(z_h=0.8, dt=0.1, horizon=16, alpha=1e-5, beta=1.0)
+    cm = build_condensed(p)
+    w = p.omega
+
+    # (1) the condensed model is exact: Z = Pzs x + Pzu U matches a direct
+    # cart-table rollout; Pzu is lower-triangular with diagonal c.b (invertible)
+    import random
+    rng = random.Random(2)
+    x0 = [0.05, 0.3, -0.1]
+    U = [rng.uniform(-1, 1) for _ in range(16)]
+    A, b, c = cm.A, cm.b, cm.c
+    x = list(x0)
+    z_dir = []
+    for u in U:
+        x = [A[0][0] * x[0] + A[0][1] * x[1] + A[0][2] * x[2] + b[0] * u,
+             A[1][1] * x[1] + A[1][2] * x[2] + b[1] * u,
+             A[2][2] * x[2] + b[2] * u]
+        z_dir.append(_dot(c, x))
+    s = _matvec(cm.Pzs, x0)
+    z_con = [s[i] + sum(cm.Pzu[i][j] * U[j] for j in range(16)) for i in range(16)]
+    condensed_exact = max(abs(a - b2) for a, b2 in zip(z_dir, z_con)) < 1e-12
+    pzu_lower = all(cm.Pzu[i][j] == 0.0
+                    for i in range(16) for j in range(16) if j > i)
+    pzu_diag = abs(cm.Pzu[0][0] - _dot(c, b)) < 1e-15
+
+    # the box QP is solved exactly (KKT to machine precision), independent of the
+    # Hessian conditioning that makes plain coordinate descent crawl
+    xb = [0.0, 0.16, 0.0]
+    sb = _matvec(cm.Pzs, xb)
+    r0 = [_matvec(cm.Pvs, xb)[i] for i in range(16)]
+    gb = [-_matvec(cm.HZ, sb)[i] + p.beta * _matvec(cm.Wt, r0)[i]
+          for i in range(16)]
+    lo, hi = [-0.08] * 16, [0.08] * 16
+    Z = solve_box_qp(cm.HZ, gb, lo, hi)
+    grad = [sum(cm.HZ[i][j] * Z[j] for j in range(16)) + gb[i] for i in range(16)]
+    kkt = 0.0
+    for i in range(16):
+        if lo[i] + 1e-9 < Z[i] < hi[i] - 1e-9:
+            kkt = max(kkt, abs(grad[i]))
+        elif Z[i] <= lo[i] + 1e-9:
+            kkt = max(kkt, max(0.0, -grad[i]))
+        else:
+            kkt = max(kkt, max(0.0, grad[i]))
+
+    # (2) standing push recovery: the hard ZMP constraint is load-bearing. A
+    # capturable push (xi = dv/omega < foot half) is recovered by BOTH the
+    # constrained and unconstrained controllers -- but only the constrained one
+    # keeps the ZMP inside the support foot; the unconstrained (LQR-like) cousin
+    # drives the ZMP well outside the foot (it would physically tip over).
+    half = 0.08
+    cen, hal = standing_support(half, 90, horizon=16)
+    vr = [0.0] * len(cen)
+    con = simulate_mpc([0, 0, 0], cen, hal, vr, condensed=cm, n_steps=90,
+                       push_tick=5, push_dv=0.16, constrained=True)
+    unc = simulate_mpc([0, 0, 0], cen, hal, vr, condensed=cm, n_steps=90,
+                       push_tick=5, push_dv=0.16, constrained=False)
+    con_max_z = max(abs(z) for z in con.zmp)
+    unc_max_z = max(abs(z) for z in unc.zmp)
+
+    # (3) capturability limit: a push beyond the in-place capturable margin
+    # (xi > foot half) keeps the ZMP legal -- the QP never violates the box --
+    # yet the CoM still falls, because fixed-foot MPC cannot stop it without a
+    # step. ZMP-feasibility is necessary but not sufficient: ties to the Capture
+    # Point's N-step capturability.
+    strong = simulate_mpc([0, 0, 0], cen, hal, vr, condensed=cm, n_steps=60,
+                          push_tick=5, push_dv=0.30, constrained=True)
+
+    # (4) forward walking: with a reference velocity and a stepping support
+    # schedule the CoM advances the full footstep span while the ZMP stays in
+    # the moving support polygon (a dynamically stable walk).
+    step_len = 0.20
+    cen2, hal2, ns = stepping_support(step_len, 8, 12, 0.07, horizon=16)
+    vref = step_len / (8 * 0.1)
+    vr2 = [vref] * len(cen2)
+    walk = simulate_mpc([0, vref, 0], cen2, hal2, vr2, condensed=cm,
+                        n_steps=ns, constrained=True)
+    foot_span = (12 - 1) * step_len
+
+    # (5) with no push the box never binds: constrained == unconstrained, so the
+    # constraint -- not the objective -- is what produces the recovery contrast.
+    c0 = simulate_mpc([0, 0, 0], cen, hal, vr, condensed=cm, n_steps=40,
+                      constrained=True)
+    u0 = simulate_mpc([0, 0, 0], cen, hal, vr, condensed=cm, n_steps=40,
+                      constrained=False)
+    no_push_match = max(abs(a - b2) for a, b2 in zip(c0.zmp, u0.zmp))
+
+    # determinism
+    con_b = simulate_mpc([0, 0, 0], cen, hal, vr, condensed=cm, n_steps=90,
+                         push_tick=5, push_dv=0.16, constrained=True)
+
+    return {
+        "case": "mpc_walk",
+        "omega": round(w, 3),
+        "condensed_model_exact": condensed_exact,
+        "pzu_lower_triangular": pzu_lower,
+        "pzu_diag_is_cb": pzu_diag,
+        "qp_kkt_exact": kkt < 1e-8,
+        # constrained MPC: recovers AND keeps the ZMP inside the support foot
+        "constrained_zmp_in_support": con.zmp_feasible() and con_max_z <= half + 1e-6,
+        "constrained_recovers": con.recovered(),
+        # unconstrained cousin: recovers too, but the ZMP leaves the foot
+        "unconstrained_zmp_violates": (not unc.zmp_feasible()) and unc_max_z > half,
+        "constraint_load_bearing": unc_max_z > 1.5 * con_max_z,
+        # capturability limit: ZMP stays legal but the CoM falls (needs a step)
+        "strong_push_zmp_legal": strong.zmp_feasible(),
+        "strong_push_falls": not strong.recovered(0.05),
+        "strong_push_beyond_capturable": (0.30 / w) > half,
+        # forward walking is dynamically stable and tracks the reference velocity
+        "walk_zmp_in_support": walk.zmp_feasible(),
+        "walk_advances_full_span": walk.com_advance() >= 0.98 * foot_span,
+        "walk_tracks_vref": abs(walk.mean_vel() - vref) < 0.05,
+        # the constraint, not the objective, drives the contrast
+        "no_push_constrained_equals_free": no_push_match < 1e-12,
+        "deterministic": con.zmp == con_b.zmp,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5464,6 +5592,14 @@ SUITE = [
     # the DCM error to zero at the chosen rate k, while open-loop (no feedback)
     # blows up at exactly rate omega -- the one feedback term stabilises the walk
     ("dcm_walk", _run_dcm_walk),
+    # Trajectory-free MPC walking (Wieber, Humanoids 2006): the constrained-QP
+    # counterpart of lipm_walk's preview control. No tracked trajectory -- the
+    # ZMP is held in the support polygon by a HARD inequality while a jerk +
+    # reference-velocity objective picks the smoothest walk. Solving that box QP
+    # exactly each tick (change variables to the ZMP -> box-constrained active
+    # set) is what keeps the ZMP legal under a strong push, where the
+    # unconstrained LQR-like cousin would carry it out of the foot (tip over)
+    ("mpc_walk", _run_mpc_walk),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

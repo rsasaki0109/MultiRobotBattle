@@ -1920,6 +1920,64 @@ does not pull back); and with the feedback term removed the error blows up at
 feedback term is what stabilises the open-loop-unstable LIPM. Pure point-mass
 LIPM, exact `e^{±ωt}` rollouts, the same honest scope as `capture_point`.
 
+### Trajectory-free MPC walking (`mpc_walk.py`)
+
+`lipm_walk` (Kajita preview control) and `mpc_walk` (Wieber) solve the *same*
+cart-table LIPM, but from opposite ends. Preview control is an **unconstrained**
+infinite-horizon LQR that *tracks a precomputed ZMP trajectory* under the feet.
+`mpc_walk` reproduces Wieber, *"Trajectory Free Linear Model Predictive Control
+for Stable Walking in the Presence of Strong Perturbations"* (IEEE-RAS Humanoids
+2006), which turns the problem inside out: there is **no trajectory to track**.
+The ZMP is kept in the support polygon by a **hard inequality constraint**, and a
+small jerk + reference-velocity objective picks the smoothest forward walk that
+satisfies it — re-solved every control tick (receding horizon). That is what buys
+robustness: under a strong push the controller saturates the ZMP at the *edge* of
+the foot (the most it can legally do) instead of tracking a reference that would
+carry the ZMP out of the support polygon and tip the robot over.
+
+**Condensed MPC.** State `x = [pos, vel, acc]`, control `u` = CoM jerk,
+`x_{k+1} = A x_k + b u_k`, ZMP `z = c x` with `c = [1, 0, −z_h/g]` — the same
+cart-table as `lipm_walk`. Stacking the jerks `U` over an `N`-sample horizon, the
+future ZMP and CoM velocity are affine in `U`: `Z = P_zs x + P_zu U`,
+`V = P_vs x + P_vu U`. Wieber's QP is
+`min (α/2)‖U‖² + (β/2)‖V − v_ref‖²` s.t. `z_min ≤ Z ≤ z_max`.
+
+**Why the constraint is tractable (the key trick).** `P_zu` is lower-triangular
+with diagonal `c·b ≠ 0`, hence **invertible**, so change variables to the ZMP
+itself: `U = P_zu⁻¹(Z − P_zs x)`. The support-polygon constraint becomes a plain
+**box** `z_min ≤ Z ≤ z_max`, and the objective stays strictly convex in `Z`. The
+QP is then solved *exactly* by a small box-constrained **active-set** method —
+solve the free block by Gaussian elimination, clamp the worst box violation, free
+any clamped coordinate whose multiplier points back inside — reaching KKT to
+machine precision in a handful of iterations regardless of the Hessian's
+conditioning (which is ~1e5 here, so plain coordinate descent crawls). No numpy,
+no external QP solver. The Hessian is state-independent, so it is built once and
+reused across the whole run.
+
+The `mpc_walk` gate pins it. **(1) The condensed model** is exact —
+`Z = P_zs x + P_zu U` matches a direct rollout (`condensed_model_exact`), `P_zu`
+is lower-triangular (`pzu_lower_triangular`) with diagonal `c·b`
+(`pzu_diag_is_cb`) — and the box QP hits KKT to machine precision
+(`qp_kkt_exact`). **(2) Standing push recovery** — the hard constraint is
+*load-bearing*: a capturable push is recovered by **both** the constrained and
+unconstrained controllers (`constrained_recovers`), but only the constrained one
+keeps the ZMP inside the foot (`constrained_zmp_in_support`), while the
+unconstrained LQR-like cousin drives the ZMP well outside it
+(`unconstrained_zmp_violates`, `constraint_load_bearing` — over 1.5× the foot's
+half-width). **(3) The capturability limit** (honest scope) — a push beyond the
+in-place capturable margin (`ξ = dv/ω > foot half`, `strong_push_beyond_capturable`)
+keeps the ZMP *legal the whole time* (`strong_push_zmp_legal`) yet the CoM still
+falls (`strong_push_falls`): ZMP-feasibility is necessary but not sufficient for
+balance — beyond that margin a fixed-foot MPC needs a *step*, tying back to the
+Capture Point's N-step capturability. **(4) Forward walking** — with a reference
+velocity and a stepping support schedule the CoM advances the full footstep span
+(`walk_advances_full_span`) at the reference speed (`walk_tracks_vref`) while the
+ZMP stays in the moving support polygon (`walk_zmp_in_support`). **(5) Isolation**
+— with no push the box never binds, so constrained ≡ unconstrained
+(`no_push_constrained_equals_free`): the *constraint*, not the objective, is what
+produces the recovery contrast. Pure Python, same point-mass LIPM scope as
+`lipm_walk` / `capture_point`.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

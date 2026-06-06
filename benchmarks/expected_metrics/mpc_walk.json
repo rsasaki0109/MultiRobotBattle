@@ -1,0 +1,20 @@
+{
+  "case": "mpc_walk",
+  "omega": 3.5,
+  "condensed_model_exact": true,
+  "pzu_lower_triangular": true,
+  "pzu_diag_is_cb": true,
+  "qp_kkt_exact": true,
+  "constrained_zmp_in_support": true,
+  "constrained_recovers": true,
+  "unconstrained_zmp_violates": true,
+  "constraint_load_bearing": true,
+  "strong_push_zmp_legal": true,
+  "strong_push_falls": true,
+  "strong_push_beyond_capturable": true,
+  "walk_zmp_in_support": true,
+  "walk_advances_full_span": true,
+  "walk_tracks_vref": true,
+  "no_push_constrained_equals_free": true,
+  "deterministic": true
+}

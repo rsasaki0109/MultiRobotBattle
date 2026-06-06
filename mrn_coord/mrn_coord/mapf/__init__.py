@@ -238,6 +238,14 @@ The pieces compose bottom-up:
   tracking law ``r_cmd = r_ref + (1 + k_ξ/ω)(ξ − ξ_ref)`` drives the DCM error to
   zero at the chosen rate ``k_ξ`` — while open-loop (no feedback) blows up at
   exactly rate ``ω``. Exact closed-form LIPM, pure Python.
+- :mod:`mpc_walk` — **trajectory-free MPC walking** (Wieber, Humanoids 2006):
+  the constrained-QP counterpart of :mod:`lipm_walk`'s preview control. No
+  tracked trajectory — the ZMP is held in the support polygon by a *hard*
+  inequality while a jerk + reference-velocity objective picks the smoothest
+  walk. Changing variables to the ZMP makes the support constraint a box, solved
+  exactly each tick by a small active-set QP. The hard constraint keeps the ZMP
+  legal under a strong push, where the unconstrained LQR-like cousin carries it
+  out of the foot. Pure Python, no numpy.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -318,6 +326,14 @@ from .dcm_walk import (
     plan_dcm_reference,
     track_dcm,
     vrp_command,
+)
+from .mpc_walk import (
+    CondensedMPC,
+    MPCParams,
+    MPCWalkResult,
+    build_condensed,
+    simulate_mpc,
+    solve_box_qp,
 )
 from .conflicts import (
     EdgeConflict,
@@ -412,6 +428,12 @@ __all__ = [
     "track_dcm",
     "vrp_command",
     "DCMPlan",
+    "build_condensed",
+    "simulate_mpc",
+    "solve_box_qp",
+    "MPCParams",
+    "CondensedMPC",
+    "MPCWalkResult",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

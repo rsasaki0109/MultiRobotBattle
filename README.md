@@ -73,6 +73,7 @@ honest gated result is in [`docs/coordination.md`](docs/coordination.md):
 | **ZMP preview-control walking** | Kajita et al. 2003 | footstep plan → dynamically stable CoM trajectory | ZMP stays in the support foot (preview ~100× tighter) |
 | **Capture Point push recovery** | Pratt et al. 2006 | step to ξ = x + ẋ/ω₀ to absorb a push | step there captures; short/long falls; big push N-step |
 | **DCM walking control** | Englsberger et al. 2015 | backward-recursion DCM reference + tracking law over a footstep plan | error → 0 at chosen rate k; open-loop blows up at ω |
+| **Trajectory-free MPC walking** | Wieber 2006 | constrained-QP MPC: hard ZMP-in-support box + jerk/velocity objective | hard constraint keeps ZMP legal under a push where unconstrained tips over |
 
 ---
 
