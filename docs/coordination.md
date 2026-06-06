@@ -1838,6 +1838,36 @@ Deterministic** (`deterministic`). *Scope:* a point-mass LIPM pattern generator,
 not a full whole-body/multi-contact controller — the planning-to-stable-CoM
 seam, kept pure-Python and gated.
 
+### Capture Point — humanoid push recovery (`capture_point.py`)
+
+If `lipm_walk` is how a humanoid walks, `capture_point` is how it *doesn't fall
+over when shoved*. It reproduces Pratt, Carff, Drakunov & Goswami, *"Capture
+Point: A Step toward Humanoid Push Recovery"* (IEEE-RAS Humanoids 2006), on the
+same Linear Inverted Pendulum as the walking generator.
+
+**The idea.** Over a support point `p`, the LIPM obeys `ẍ = ω₀²(x − p)` with
+`ω₀ = √(g/z_h)`. Split the motion through the **Divergent Component of Motion**
+`ξ = x + ẋ/ω₀`; then `ξ̇ = ω₀(ξ − p)`. So `ξ` is the unstable part — it runs away
+from the foot exponentially and *is* the fall — while the CoM trails behind it.
+To stop, freeze `ξ`: step the foot **to** `ξ`. Then `ξ̇ = 0` and the CoM converges
+onto the foot. That point, `ξ = x + ẋ/ω₀`, is the **Capture Point**: step there
+and the push is absorbed. The LIPM has a closed form (`cosh`/`sinh`), so the
+rollouts are exact, not integrated.
+
+The `capture_point` gate pins the theory. **(1) The formula** — the capture point
+is exactly `x + v/ω₀` (`icp_formula`, with `ω₀ = 3.5` at `z_h = 0.8`).
+**(2) Stepping there captures** — after a push, placing the foot at `ξ` brings the
+CoM to rest over it (`step_to_cp_captures`, `captured_excursion_small`).
+**(3) Short or long falls** — stepping to `0.6 ξ` or `1.4 ξ` does *not* capture;
+the LIPM diverges and the CoM runs away (`short_step_falls`, `long_step_falls`,
+excursion > 1 m). **(4) One-step reach** — a small push is one-step capturable
+(`small_push_one_step`), but a big one whose capture point is past the longest
+step is not (`big_push_not_one_step`), and the foot clamps to its reach
+(`big_push_foot_clamped`). **(5) N-step capturability** — bigger pushes need
+monotonically more steps (`nstep_small = 1`, `nstep_mid = 2`, `nstep_big = 4`,
+`nstep_monotone`) — the capturability margin. Pure point-mass LIPM, the same
+honest scope as `lipm_walk`.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

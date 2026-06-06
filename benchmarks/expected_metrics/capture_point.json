@@ -1,0 +1,17 @@
+{
+  "big_push_foot_clamped": true,
+  "big_push_not_one_step": true,
+  "captured_excursion_small": true,
+  "case": "capture_point",
+  "deterministic": true,
+  "icp_formula": true,
+  "long_step_falls": true,
+  "nstep_big": 4,
+  "nstep_mid": 2,
+  "nstep_small": 1,
+  "nstep_monotone": true,
+  "omega0": 3.5,
+  "short_step_falls": true,
+  "small_push_one_step": true,
+  "step_to_cp_captures": true
+}

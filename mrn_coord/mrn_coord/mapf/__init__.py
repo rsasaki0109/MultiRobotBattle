@@ -226,6 +226,11 @@ The pieces compose bottom-up:
   drives the CoM so the induced Zero-Moment Point stays under the support foot.
   The Riccati gains are solved in pure Python (no numpy). This is the *dynamics*
   companion to :mod:`footstep`'s kinematic planning.
+- :mod:`capture_point` — **humanoid push recovery** (Pratt et al., Humanoids
+  2006) on the same LIPM: the **Capture Point** ``ξ = x + ẋ/ω₀`` is where the
+  foot must step to bring the CoM to rest after a push. Stepping there captures
+  the fall; stepping short or long does not. A big push beyond one step's reach
+  is only *N-step capturable*. Exact closed-form LIPM, pure Python.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -293,6 +298,13 @@ from .lipm_walk import (
     lipm_track,
     preview_gains,
     zmp_stability,
+)
+from .capture_point import (
+    capture_point,
+    n_step_capture,
+    omega0,
+    recover_step,
+    simulate_lipm,
 )
 from .conflicts import (
     EdgeConflict,
@@ -378,6 +390,11 @@ __all__ = [
     "zmp_stability",
     "WalkPattern",
     "PreviewGains",
+    "capture_point",
+    "simulate_lipm",
+    "recover_step",
+    "n_step_capture",
+    "omega0",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

@@ -44,7 +44,7 @@ simulator emits them; that repo consumes them.
 - [x] CI: build + `colcon test` over all packages + coordination CLI demos.
 - [x] **MAPF algorithm zoo** (`mrn_coord.mapf`): 45+ algorithms faithfully
   reproduced from their papers in pure Python, each *benchmark-gated* in
-  `scripts/benchmark_gate.py` (full gate **87/87**). CBS family (CBSH, ECBS,
+  `scripts/benchmark_gate.py` (full gate **88/88**). CBS family (CBSH, ECBS,
   EECBS, FECBS, ICBS/bypass, MA-CBS, disjoint, BCP, rectangle/corridor/mutex
   symmetry), optimal joint-space search (M\*, rM\*, EPEA\*, ICTS, Standley
   OD/ID), declarative (MDD-SAT), constructive (Push-and-Rotate/Swap, TSWAP,
@@ -52,9 +52,10 @@ simulator emits them; that repo consumes them.
   LaCAM/PIBT line, assignment (CBS-TA, CBM/TAPF, flow), lifelong (RHCR, Token
   Passing, TPTS, online-LNS), execution (switchable-ADG, k-robust, TPG),
   **humanoid footstep planning (Hornung et al.) + multi-humanoid footstep MAPF
-  + ZMP-preview-control walking pattern generation (Kajita et al.)**, and the
-  low levels (space-time A\*, SIPP/SIPPS, Multi-Label A\*). Each documented
-  algorithm-by-algorithm with its honest gated result in `docs/coordination.md`.
+  + ZMP-preview-control walking pattern generation (Kajita et al.) + Capture
+  Point push recovery (Pratt et al.)**, and the low levels (space-time A\*,
+  SIPP/SIPPS, Multi-Label A\*). Each documented algorithm-by-algorithm with its
+  honest gated result in `docs/coordination.md`.
 - [x] `scripts/animate_mapf.py` — render any solver's solution (or a side-by-side
   gallery) as a GIF; the comparison visual now leads the README.
 - [x] Repository published (public) with a simplified description and

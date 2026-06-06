@@ -5127,6 +5127,50 @@ def _run_lipm_walk() -> dict:
     }
 
 
+def _run_capture_point() -> dict:
+    from mrn_coord.mapf.capture_point import (
+        capture_point,
+        n_step_capture,
+        omega0,
+        recover_step,
+        simulate_lipm,
+    )
+
+    z = 0.8
+    w = omega0(z)
+    v = 0.5
+    xi = capture_point(0.0, v, z)
+
+    to_cp = simulate_lipm(0.0, v, xi, z)
+    short = simulate_lipm(0.0, v, 0.6 * xi, z)
+    long_ = simulate_lipm(0.0, v, 1.4 * xi, z)
+
+    big = recover_step(0.0, 2.0, z, max_step=0.4)
+    small = recover_step(0.0, v, z, max_step=0.4)
+
+    n_small = n_step_capture(0.0, 0.5, z, max_step=0.4, step_time=0.3)[0]
+    n_mid = n_step_capture(0.0, 1.5, z, max_step=0.4, step_time=0.3)[0]
+    n_big = n_step_capture(0.0, 2.5, z, max_step=0.4, step_time=0.3)[0]
+
+    return {
+        "case": "capture_point",
+        "omega0": round(w, 3),
+        "icp_formula": abs(xi - v / w) < 1e-9,
+        "step_to_cp_captures": to_cp.captured(),
+        "captured_excursion_small": to_cp.max_excursion() < 0.2,
+        "short_step_falls": (not short.captured()) and short.max_excursion() > 1.0,
+        "long_step_falls": (not long_.captured()) and long_.max_excursion() > 1.0,
+        "small_push_one_step": small.one_step_capturable,
+        "big_push_not_one_step": not big.one_step_capturable,
+        "big_push_foot_clamped": abs(big.foot - 0.4) < 1e-9,
+        "nstep_small": n_small,
+        "nstep_mid": n_mid,
+        "nstep_big": n_big,
+        "nstep_monotone": n_small <= n_mid <= n_big,
+        "deterministic": (capture_point(0.0, v, z) == xi),
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5331,6 +5375,11 @@ SUITE = [
     # it -- the preview term keeps the induced ZMP under the support foot (without
     # it, feedback alone lags ~100x worse and leaves the support polygon)
     ("lipm_walk", _run_lipm_walk),
+    # Capture Point push recovery (Pratt et al. Humanoids'06): on the same LIPM,
+    # the foot must step to xi = x + v/omega0 to stop after a push; stepping
+    # there captures the fall, short/long does not, and a big push is only
+    # N-step capturable (bigger push -> more steps)
+    ("capture_point", _run_capture_point),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

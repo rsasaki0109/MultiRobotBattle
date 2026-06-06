@@ -71,6 +71,7 @@ honest gated result is in [`docs/coordination.md`](docs/coordination.md):
 | **RHCR** | Li et al. 2021 | rolling-horizon lifelong MAPF | sustained warehouse throughput |
 | **Footstep + multi-humanoid MAPF** | Hornung et al. 2012 | anytime footstep A\* + body-deconflicted teams | bounded-suboptimal; team body-collision-free |
 | **ZMP preview-control walking** | Kajita et al. 2003 | footstep plan → dynamically stable CoM trajectory | ZMP stays in the support foot (preview ~100× tighter) |
+| **Capture Point push recovery** | Pratt et al. 2006 | step to ξ = x + ẋ/ω₀ to absorb a push | step there captures; short/long falls; big push N-step |
 
 ---
 
@@ -224,6 +225,15 @@ cross a shared area without touching — a lower-priority humanoid waits or deto
 
 <p align="center">
   <img src="docs/media/footstep_mapf.gif" alt="Three humanoids on a shared floor, each with its own colour, plan footsteps from their starts to their goal rings; their zigzagging footstep trails cross in the middle while their translucent body discs slide along without ever overlapping, a lower-priority humanoid detouring around the others." width="560">
+</p>
+
+And when a standing humanoid is **pushed**, where should it step to not fall? The
+**Capture Point** xi = x + v/omega0 (Pratt et al. 2006), on the same inverted
+pendulum: step there and the push is absorbed; step short or long and it topples
+(`python3 scripts/make_capture_point_gif.py`):
+
+<p align="center">
+  <img src="docs/media/capture_point.gif" alt="Three side-by-side inverted-pendulum humanoids take the same push. The left steps short of the capture point and topples, the middle steps exactly to the capture point marked on the ground and rights itself, the right steps past it and topples the other way." width="720">
 </p>
 
 **Coordination** — MAPF (Conflict-Based Search / prioritized), formation
