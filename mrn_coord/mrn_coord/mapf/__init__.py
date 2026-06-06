@@ -205,6 +205,19 @@ The pieces compose bottom-up:
 - :mod:`pbs` — Priority-Based Search: searches over priority *orderings* (PP at
   the low level), resolving the head-on deadlocks fixed-order PP cannot; the
   windowed solver behind lifelong RHCR.
+- :mod:`footstep` — search-based **footstep planning** for a humanoid (Hornung
+  et al., Humanoids 2012): the robot's state is its stance-foot pose plus which
+  foot is the stance (the feet alternate), and a step is a displacement of the
+  swing foot from a small discrete footstep set. Weighted A* (``w = 1`` optimal,
+  ``w > 1`` bounded-suboptimal with far fewer expansions) plus an anytime
+  decreasing-``w`` schedule, over a rectangular-footprint collision check.
+- :mod:`footstep_mapf` — **multi-humanoid footstep MAPF**: lifts the footstep
+  planner to a team whose *bodies* must not collide, synchronised by step index,
+  resolved by prioritized planning (each humanoid avoids the higher-priority
+  bodies as tick-indexed obstacles, with a stand-still *wait* primitive).
+  Collision-free by construction; incomplete (fails on symmetric head-on cases,
+  like any fixed priority order). A kinematic planning/coordination reproduction
+  — no whole-body dynamics.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -253,6 +266,18 @@ from .rmstar import rmstar
 from .satmdd import satmdd
 from .standley import independence_detection, od_astar
 from .pbs import pbs, pbs_paths
+from .footstep import (
+    FootstepPlan,
+    FootstepState,
+    FootstepWorld,
+    ara_star,
+    plan_footsteps,
+)
+from .footstep_mapf import (
+    bodies_collision_free,
+    plan_footsteps_reserved,
+    prioritized_footstep_mapf,
+)
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -323,6 +348,14 @@ __all__ = [
     "pbs",
     "pbs_paths",
     "prioritized_planning",
+    "FootstepWorld",
+    "FootstepState",
+    "FootstepPlan",
+    "plan_footsteps",
+    "ara_star",
+    "plan_footsteps_reserved",
+    "prioritized_footstep_mapf",
+    "bodies_collision_free",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

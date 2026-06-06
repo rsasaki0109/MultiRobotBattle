@@ -1723,6 +1723,70 @@ priority-ordering search — suboptimal, but reorders past the head-on deadlocks
 fixed-order prioritized planning hits; see RHCR below), or the prioritized solver
 (fast, incomplete).
 
+### Humanoid footstep planning + multi-humanoid footstep MAPF (`footstep.py`, `footstep_mapf.py`)
+
+Every solver above plans on a coarse grid, one cell per move. `footstep` drops to
+the **footstep** resolution of a walking humanoid, reproducing the planning
+framework of Hornung, Dornbush, Likhachev & Bennewitz, *"Anytime Search-Based
+Footstep Planning with Suboptimality Bounds"* (IEEE-RAS Humanoids 2012; building
+on Garimort/Hornung/Bennewitz, ICRA 2011, and the ROS `footstep_planner`).
+
+**The lattice.** The robot's state is its **stance foot** pose `(x, y, θ)` plus
+*which* foot is the stance; the feet **alternate**. A footstep action is the
+displacement of the *swing* foot in the stance-foot frame, `a = (Δx, Δy, Δθ)`,
+drawn from a small discrete **footstep set** (Fig. 2: `Δx ∈ [-10,22] cm`,
+`Δy ∈ [12,28] cm`, `Δθ ∈ [-0.23,40]°` for a large humanoid; mirrored for the
+other leg). Expanding a state applies every action and keeps the end-foot pose
+only if its **rectangular footprint** is collision-free — only the *end* location
+is checked, since a humanoid may step *over* shallow obstacles. Transition cost is
+Eq. (1), `c = ‖(x,y),(x',y')‖ + k`: the distance the stance travels plus a
+constant `k` per step that penalises step count. Obstacles are rasterised once
+into an occupancy set so each foot check is O(footprint) cell lookups (the paper's
+distance-map idea), which is what keeps the team search tractable in pure Python.
+
+**Searches.** `plan_footsteps` is weighted A* (`wA*`): `w = 1` is optimal,
+`w > 1` inflates the heuristic for a `w`-suboptimal path found by expanding far
+fewer states. The heuristic is straight-line Euclidean distance — but the paper's
+*bare* Euclidean ignores the per-step cost and expands large areas, so the default
+is a slightly stronger **still-admissible** bound, Euclidean plus `k ×` the
+minimum remaining step count (pass `heuristic="euclid"` for the paper's exact,
+weaker one). `ara_star` is the **anytime** decreasing-`w` schedule: a fast cheap
+first solution at large `w`, refined to the optimum as `w` falls. *(Scope: this is
+the anytime schedule, not the full ARA* incremental-reuse engine — each weight
+re-plans from scratch; the bounded-suboptimality and cost/expansion-vs-`w`
+results it reproduces hold exactly, the `INCONS`-reuse optimisation is omitted, an
+honest simplification like the basic-M\* / detector-only choices elsewhere.)*
+
+**Multi-humanoid MAPF.** `footstep_mapf` lifts the planner to a *team* whose
+**bodies** must not collide. Time is the **step index** (tick): at tick `t` every
+humanoid has taken `t` steps, as in grid MAPF. A humanoid's body is approximated
+by a disc of radius `body_radius` at its stance foot; two bodies conflict at a
+tick when the discs overlap. The high level is **prioritized planning**: plan
+humanoids in priority order, each treating the already-planned higher-priority
+bodies as tick-indexed forbidden discs, with a **STAY** (stand still one tick)
+primitive for the waits MAPF needs and a finished humanoid holding its goal.
+Collision-free **by construction**; incomplete (it can return `None` for a
+humanoid on the symmetric cases any fixed priority order fails). **Honest scope:**
+this is a *kinematic planning/coordination* reproduction — footstep lattice + body
+deconfliction — not a whole-body controller (no dynamics, ZMP, or contact).
+
+The `footstep_mapf` gate pins the framework end-to-end. **(1) Bounded
+suboptimality** — on a metric instance, `w ∈ {1.5, 2, 3}` all satisfy
+`cost ≤ w · opt` (`wa_bound_holds`) and `w = 2` expands strictly fewer states than
+optimal A* (`wa2_expands_fewer`); the optimal cost is pinned (`opt_cost`).
+**(2) Heuristic informedness** — the stronger admissible bound finds the *same*
+optimum as bare Euclidean (`steps_same_optimum`) while expanding fewer states
+(`steps_fewer_expansions`). **(3) Anytime** — across the decreasing-`w` schedule
+the cost is non-increasing (`ara_monotone`) and the final pass is optimal
+(`ara_final_optimal`). **(4) Body-collision-free coordination** — a 2-humanoid
+perpendicular crossing and a 3-humanoid fan are both fully solved and body-clear
+(`crossing_solved == 2`, `crossing_cf`, `threeway_solved == 3`, `threeway_cf`),
+and the lower-priority humanoid demonstrably *yields* — paying more than its solo
+cost (`crossing_yields`). **(5) Honest failure** — a symmetric head-on in a 1-wide
+corridor defeats the fixed priority order: a humanoid maps to `None`
+(`headon_some_unsolved`) while whatever is planned stays collision-free
+(`headon_planned_cf`) — the limitation of prioritized planning, shown not hidden.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

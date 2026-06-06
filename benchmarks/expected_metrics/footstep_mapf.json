@@ -1,0 +1,17 @@
+{
+  "ara_final_optimal": true,
+  "ara_monotone": true,
+  "case": "footstep_mapf",
+  "crossing_cf": true,
+  "crossing_solved": 2,
+  "crossing_yields": true,
+  "headon_planned_cf": true,
+  "headon_some_unsolved": true,
+  "opt_cost": 2.362,
+  "steps_fewer_expansions": true,
+  "steps_same_optimum": true,
+  "threeway_cf": true,
+  "threeway_solved": 3,
+  "wa2_expands_fewer": true,
+  "wa_bound_holds": true
+}

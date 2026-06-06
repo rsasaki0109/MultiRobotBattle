@@ -4964,6 +4964,103 @@ def _run_rhc_reorder() -> dict:
     }
 
 
+def _run_footstep_mapf() -> dict:
+    import math
+
+    from mrn_coord.mapf.footstep import (
+        FootstepState,
+        FootstepWorld,
+        ara_star,
+        plan_footsteps,
+    )
+    from mrn_coord.mapf.footstep_mapf import (
+        bodies_collision_free,
+        prioritized_footstep_mapf,
+    )
+
+    R = "R"
+    # --- single humanoid: optimal A* and bounded-suboptimal weighted A* ------
+    world = FootstepWorld(2.0, 1.5)
+    start = FootstepState(0.4, 0.75, 0.0, R)
+    goal = (1.4, 0.75)
+    popt, aopt = plan_footsteps(world, start, goal, w=1.0, return_stats=True)
+    opt = popt.cost
+    bound_holds = True
+    wa2_fewer = False
+    for w in (1.5, 2.0, 3.0):
+        p, a = plan_footsteps(world, start, goal, w=w, return_stats=True)
+        bound_holds = bound_holds and (p.cost <= w * opt + 1e-6)
+        if w == 2.0:
+            wa2_fewer = a["expansions"] < aopt["expansions"]
+
+    # --- heuristic informedness: the stronger admissible bound expands fewer -
+    ps, as_ = plan_footsteps(world, start, goal, w=1.0, heuristic="steps",
+                             return_stats=True)
+    pe, ae = plan_footsteps(world, start, goal, w=1.0, heuristic="euclid",
+                            return_stats=True)
+
+    # --- anytime: cost falls toward the optimum as w falls; final is optimal -
+    aplans = ara_star(world, start, goal, weights=(3.0, 2.0, 1.5, 1.0))
+    acosts = [p.cost for p in aplans]
+    ara_monotone = all(acosts[i] >= acosts[i + 1] - 1e-9
+                       for i in range(len(acosts) - 1))
+    ara_final_opt = abs(acosts[-1] - opt) < 1e-6
+
+    # --- multi-humanoid prioritized MAPF: bodies stay clear -----------------
+    w3 = FootstepWorld(3.0, 3.0)
+    crossing = {
+        "A": (FootstepState(0.4, 1.5, 0.0, R), (2.6, 1.5)),
+        "B": (FootstepState(1.5, 0.4, math.pi / 2, R), (1.5, 2.6)),
+    }
+    cp = prioritized_footstep_mapf(w3, crossing, w=2.0)
+    cross_solved = sum(p is not None for p in cp.values())
+    cross_cf = bodies_collision_free(cp)
+    solo = {k: plan_footsteps(w3, s, g, w=2.0).cost
+            for k, (s, g) in crossing.items()}
+    cross_yields = any(cp[k] is not None and cp[k].cost > solo[k] + 1e-6
+                       for k in crossing)
+
+    threeway = {
+        "A": (FootstepState(0.4, 1.5, 0.0, R), (2.6, 1.5)),
+        "B": (FootstepState(1.5, 0.4, math.pi / 2, R), (1.5, 2.6)),
+        "C": (FootstepState(0.4, 0.4, math.pi / 4, R), (2.6, 2.6)),
+    }
+    tp = prioritized_footstep_mapf(w3, threeway, w=2.0)
+    threeway_solved = sum(p is not None for p in tp.values())
+    threeway_cf = bodies_collision_free(tp)
+
+    # --- prioritized's honest failure: head-on in a 1-wide corridor ---------
+    walls = (tuple((x * 0.25, 0.0, x * 0.25 + 0.25, 0.5) for x in range(12))
+             + tuple((x * 0.25, 1.0, x * 0.25 + 0.25, 1.5) for x in range(12)))
+    corr = FootstepWorld(3.0, 1.5, obstacles=walls)
+    headon = {
+        "A": (FootstepState(0.4, 0.75, 0.0, R), (2.6, 0.75)),
+        "B": (FootstepState(2.6, 0.75, math.pi, R), (0.4, 0.75)),
+    }
+    hp = prioritized_footstep_mapf(corr, headon, w=2.0, max_tick=30,
+                                   max_expansions=5000)
+    headon_unsolved = any(p is None for p in hp.values())
+    headon_cf = bodies_collision_free(hp)
+
+    return {
+        "case": "footstep_mapf",
+        "opt_cost": round(opt, 3),
+        "wa_bound_holds": bound_holds,
+        "wa2_expands_fewer": wa2_fewer,
+        "steps_same_optimum": abs(ps.cost - pe.cost) < 1e-6,
+        "steps_fewer_expansions": as_["expansions"] < ae["expansions"],
+        "ara_monotone": ara_monotone,
+        "ara_final_optimal": ara_final_opt,
+        "crossing_solved": cross_solved,
+        "crossing_cf": cross_cf,
+        "crossing_yields": cross_yields,
+        "threeway_solved": threeway_solved,
+        "threeway_cf": threeway_cf,
+        "headon_some_unsolved": headon_unsolved,
+        "headon_planned_cf": headon_cf,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -5157,6 +5254,12 @@ SUITE = [
     # open ear decomposition (solve ears in reverse by cycle rotation, then the
     # basic cycle); valid by construction, solves packed formations CBS busts on
     ("mapf_bibox", _run_bibox),
+    # Footstep planning (Hornung et al. Humanoids'12) + multi-humanoid MAPF:
+    # weighted A* over stance-foot poses (w=1 optimal, w>1 bounded-suboptimal
+    # with far fewer expansions; stronger admissible heuristic beats bare
+    # Euclidean), an anytime decreasing-w schedule, and prioritized footstep
+    # MAPF keeping humanoid bodies collision-free (incomplete: head-on fails)
+    ("footstep_mapf", _run_footstep_mapf),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

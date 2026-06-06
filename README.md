@@ -69,6 +69,7 @@ honest gated result is in [`docs/coordination.md`](docs/coordination.md):
 | **Push-and-Rotate** | de Wilde et al. 2014 | constructive push/swap/rotate primitives | solves packed grids search blows up on |
 | **flow** | Yu & LaValle 2013 | anonymous makespan as integer max-flow | polynomial, self-certified optimum |
 | **RHCR** | Li et al. 2021 | rolling-horizon lifelong MAPF | sustained warehouse throughput |
+| **Footstep + multi-humanoid MAPF** | Hornung et al. 2012 | anytime footstep A\* + body-deconflicted teams | bounded-suboptimal; team body-collision-free |
 
 ---
 
