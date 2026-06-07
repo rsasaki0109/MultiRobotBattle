@@ -1,11 +1,21 @@
 # Plan — multirobot-battle
 
-Scope: **multi-robot simulation, navigation, and coordination**. A deterministic
-2D world plus the planning/control/swarm algorithms that move robots through it,
-all as pure, CI-tested cores with thin ROS/CLI wiring.
+Scope: **multi-robot swarm battle** — two or more flocking armies that seek,
+maneuver, and fight — standing on a deterministic 2D world and the full
+planning / control / coordination stack that moves robots through it (including a
+50-paper MAPF / motion-planning **algorithm zoo**). Everything is pure, CI-tested
+algorithm cores with thin ROS / CLI wiring; every demo is deterministic and
+driven by the real algorithms.
 
-Cooperative **localization** is out of scope here — it lives in the companion
-repo [`multirobot-localization`](https://github.com/rsasaki0109/multirobot-localization)
+**The throughline.** The battle is not a toy renderer bolted on top — it is built
+from the same primitives as the rest of the repo (decentralized Boids flocking
+today; the MAPF planners, formation control, and coordination diagrams next), so
+each combat behaviour is a *real algorithm*, measured the same way the solvers
+are. The roadmap below is mostly about closing that loop: making the fight a
+living showcase of the zoo rather than a thing beside it.
+
+Cooperative **localization** stays out of scope — it lives in the companion repo
+[`multirobot-localization`](https://github.com/rsasaki0109/multirobot-localization)
 (rosbag-centric, real-data benchmarks). The two meet only at the message
 contract (`mrn_msgs/AgentState`, `RelativePoseConstraint`): this repo's
 simulator emits them; that repo consumes them.
@@ -16,8 +26,9 @@ simulator emits them; that repo consumes them.
 - `mrn_sim` — deterministic 2D world (unicycle kinematics, obstacles, collision,
   V2V/GNSS/range sensors), point-to-point navigation, and the swarm driver; a
   thin `mrn_sim_world` ROS node.
-- `mrn_coord` — coordination: MAPF (CBS / prioritized), formation control,
-  coverage (frontier + greedy/Hungarian), swarm flocking.
+- `mrn_coord` — coordination: **swarm battle** (`battle.py`), swarm flocking,
+  MAPF (CBS / prioritized + the 50-paper zoo in `mrn_coord.mapf`), formation
+  control, coverage (frontier + greedy/Hungarian).
 - `mrn_gazebo` — optional Gazebo (`gz sim`) adapter (requires Gazebo; not in CI).
 
 ## Done
@@ -93,6 +104,89 @@ simulator emits them; that repo consumes them.
 - [x] Repository published (public) with a simplified description and
   discoverability topics (`mapf`, `multi-agent-pathfinding`, `pibt`, `cbs`, …).
 
+## Battle roadmap — where the fight goes next
+
+The battle today is the honest minimum: decentralized flocking + advance-to-
+contact + continuous in-range damage, with unit classes, N-army free-for-all, and
+terrain. It already produces **emergent focus fire** (per-attacker damage means a
+locally-outnumbered robot melts) and a clean quality-vs-quantity result (5 tanks
+beat 16 scouts). The roadmap deepens the **combat model**, adds a **tactics / AI
+layer**, and — the whole point of this repo — **drives the battle with the MAPF
+zoo's own planners** so the fight becomes a showcase of the algorithms rather than
+a thing beside them. Same cadence as the solvers: build → measure (win-rate /
+invariants) → gate → record the honest result.
+
+### Combat model depth
+- [ ] **Line of sight & cover** — obstacles (and optionally other bodies) block
+  fire: a shot lands only if the segment to the target is clear; partial cover
+  scales damage down. Reuses the segment/obstacle geometry already in the sim.
+- [ ] **Projectiles & ballistics** — discrete shots with travel time and accuracy
+  that falls off with range (vs today's instant hitscan): real misses, friendly
+  fire, and splash / area effects for an "artillery" class.
+- [ ] **Typed damage & armor** — a small rock-paper-scissors (e.g. AP vs shield)
+  so composition matters beyond raw dps; plus cooldown / reload / finite ammo so
+  positioning and timing count.
+- [ ] **Support roles & morale** — a medic that heals nearby allies, shields /
+  buffs, so non-damage units earn their place; and a principled **morale / rout**
+  model (a squad whose strength collapses retreats *off the field* and is removed)
+  to replace the stalemating wounded-retreat with something that stays decisive.
+
+### Tactics & team AI
+- [ ] **Formations** — line / wedge / screen / square via the existing
+  `mrn_coord.formation` displacement consensus: tanks screen the front, snipers
+  hold the back, the army advances as a shape instead of a blob.
+- [ ] **Smarter target selection** — focus the weakest-in-range or highest-threat
+  enemy (not just the nearest), and **kite** with ranged units (fire while backing
+  out of melee). Both are local policies, still no central commander required.
+- [ ] **Per-team strategy** — a selectable commander policy (aggressive /
+  defensive / flank / turtle) as a small utility or finite-state AI; *strategy-vs-
+  strategy* matchups become the interesting experiment.
+- [ ] **Win conditions beyond annihilation** — king-of-the-hill, capture-the-flag,
+  base assault, escort / payload: each a small objective module over the same
+  engine, with its own success metric.
+- [ ] **Fog of war** — units only sense enemies within range (reuse the `mrn_sim`
+  V2V / range sensor models), so scouting, ambush, and surprise become real.
+
+### Drive the battle with the MAPF zoo (the synergy)
+The repo's rare asset is 50 faithfully-reproduced, benchmark-gated planners. The
+battle is exactly where they should *do work*:
+- [ ] **Planned maneuver** — route squads to objectives with grid A\* / CBS /
+  PIBT instead of greedy pursuit, so armies flank around terrain intelligently and
+  move collision-free; use the coordination diagram / velocity scheduling to push
+  a column through a chokepoint without jamming.
+- [ ] **Optimal target assignment** — Hungarian / CBS-TA to assign shooters to
+  targets (who engages whom) for a measurably better volley than greedy-nearest.
+- [ ] **Collision-free charges** — ORCA / Buffered Voronoi Cells / flocking for
+  the advance; switchable-ADG-style execution when the maneuver is pre-planned and
+  someone is delayed.
+- [ ] **The headline demo** — swap *only* the movement layer (greedy ↔ A\* ↔ CBS)
+  and show the win-rate difference. That single experiment turns the zoo from a
+  museum into the battle's brain, and is the strongest story this repo can tell.
+
+### Scale, balance & evaluation
+- [ ] **Balance harness + `battle_gate`** — run K seeds of each matchup, report
+  win-rate / ELO, and tune `CLASSES` toward ~50/50 so no class is strictly
+  dominant. Gate it like the MAPF suite: regress win-rates and invariants
+  (collision-free where claimed, decisive outcome, bot-count conserved) against
+  `benchmarks/expected_metrics/`, so balance is *measured*, not vibes.
+- [ ] **Tournaments** — round-robin / bracket between compositions or strategies,
+  an ELO ladder, and a small results page.
+- [ ] **Scale to hundreds** — spatial hashing for the O(n²) neighbour / nearest-
+  enemy queries so battles of 100s of robots stay fast *and* deterministic.
+- [ ] **Auto-balance / find-the-meta** — hill-climb / CMA-ES over class stats or
+  steering weights against a fixed opponent to discover the strongest composition
+  (optional; a pure-Python optimizer, no heavyweight deps).
+
+### Presentation & reach
+- [ ] **Battle in the browser** — extend the Pyodide demo (`docs/demo/`): pick two
+  armies, press go, watch them fight on the canvas. The battle is pure-Python and
+  already runs under Pyodide.
+- [ ] **Battle in the sim / Gazebo** — drive the real diff-drive robots as
+  combatants through the existing `mrn_sim` / `mrn_gazebo` wiring (closed-loop,
+  real-machine — not CI).
+- [ ] **More GIFs + a one-line hook** — each new feature gets a GIF driven by the
+  real engine, plus a short "how it works" writeup for sharing.
+
 ## Next ideas
 
 - [x] reusable benchmark environment (`mrn_sim.benchmark`): `Scenario`
@@ -119,13 +213,15 @@ simulator emits them; that repo consumes them.
 
 ## Growth & outreach (now that the repo is public)
 
-The MAPF algorithm zoo is the repo's rare asset; the work now is to make its
-value land in **30 seconds** and to be found. Leverage order:
+The **swarm battle** is the 5-second hook; the **MAPF zoo** is the rare technical
+asset underneath. The work now is to land both in **30 seconds** and to be found.
+Leverage order:
 
-- [ ] **Distribution** (highest immediate leverage; topics already set): post the
-  `mapf_gallery.gif` comparison to r/robotics, Hacker News (*Show HN*), and X
-  with a one-line hook ("45 MAPF algorithms, faithfully reproduced and
-  benchmarked"); open a PR adding the repo to *Awesome-MAPF* / *Awesome-Robotics*.
+- [ ] **Distribution** (highest immediate leverage; topics already set): lead with
+  the `battle.gif` / `battle_gallery.gif` eye-catcher (r/robotics, Hacker News
+  *Show HN*, X) and the one-line hook ("swarm robot battles, driven by a 50-paper
+  MAPF zoo"), then land the substance — the benchmarked solver collection; open a
+  PR adding the repo to *Awesome-MAPF* / *Awesome-Robotics*.
 - [x] **README refresh**: leads with the MAPF zoo — the `mapf_gallery.gif` hero,
   a 5-line `pip install` + solve quickstart, and a representative comparison
   table (algorithm | paper | one-line idea | gated result) linking the full
