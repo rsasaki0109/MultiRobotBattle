@@ -190,8 +190,9 @@ class TransformerPolicy:
     def default(cls, path=_DEFAULT_WEIGHTS):
         return cls(TransformerWeights.load(path))
 
-    def decide(self, live, index, cfg):
-        obs = build_observation(live, index, perception=cfg.perception)
+    def decide(self, live, index, cfg, *, spatial=None):
+        obs = build_observation(live, index, perception=cfg.perception,
+                                spatial=spatial)
         if not obs.enemy_tokens:
             return None
         self_feat, allies, enemies, enemy_indices = encode_features(

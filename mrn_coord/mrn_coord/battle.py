@@ -56,6 +56,7 @@ import random
 from dataclasses import dataclass, field
 
 from .battle_assignment import apply_assignments, AssignmentState
+from .spatial_hash import SpatialHash
 from .battle_formations import formation_commands
 from .battle_maneuver import ManeuverState, maneuver_direction, maneuver_for_team, replan_paths
 from .battle_policy.count_aware import policy_for_name
@@ -152,6 +153,9 @@ class BattleConfig:
     w_sep: float = 1.4
     w_retreat: float = 2.6
     w_obstacle: float = 1.4
+    # scale-out — spatial hash when alive count >= spatial_min_bots
+    spatial_min_bots: int = 36
+    spatial_cell: float = 4.0
     # optional terrain: circular obstacles (x, y, radius) the robots flow around
     obstacles: tuple = ()
 
@@ -198,6 +202,46 @@ def make_company(cfg, team, center, roster, rng, *, jitter=2.6):
             y = center[1] + rng.uniform(-jitter, jitter)
             bots.append(make_unit(x, y, team, kind))
     return bots
+
+
+def make_grand_army(cfg, team, front_center, *, rows, cols, kind="soldier",
+                    spacing=2.1, rng=None, face_right=True):
+    """Rectangular block deployment — Total War / Kingdom-style battle lines.
+
+    ``front_center`` is the midpoint of the front rank; ``face_right`` means +x
+    is forward (red attacking right, blue attacking left when placed on flanks).
+    """
+    rng = rng or random.Random(0)
+    sign = 1.0 if face_right else -1.0
+    bots = []
+    for r in range(rows):
+        for c in range(cols):
+            lateral = (c - (cols - 1) / 2.0) * spacing
+            back = -r * spacing * sign
+            x = front_center[0] + back + rng.uniform(-0.15, 0.15)
+            y = front_center[1] + lateral + rng.uniform(-0.15, 0.15)
+            bots.append(make_unit(x, y, team, kind))
+    return bots
+
+
+def kingdom_config(**overrides):
+    """Wide arena defaults for hundred-bot clashes."""
+    base = dict(
+        width=100.0,
+        height=56.0,
+        perception=5.0,
+        separation=1.4,
+        sep_radius=1.8,
+        formation="line",
+        tactics="count_aware:aggressive",
+        assignment="none",
+        maneuver="greedy",
+        dps=28.0,
+        spatial_min_bots=30,
+        spatial_cell=4.5,
+    )
+    base.update(overrides)
+    return BattleConfig(**base)
 
 
 def make_free_for_all(n_per_team, cfg, *, seed=0, num_teams=3, kind="soldier"):
@@ -285,6 +329,11 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0
         assignment_state = AssignmentState()
     live = [b for b in bots if b.alive]
     n = len(live)
+    spatial = None
+    if n >= cfg.spatial_min_bots:
+        positions = [(b.x, b.y) for b in live]
+        spatial = SpatialHash(cfg.spatial_cell)
+        spatial.build(positions)
     desired = [[0.0, 0.0] for _ in range(n)]
     damage = [0.0] * n
     shots = []
@@ -297,7 +346,8 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0
             policy_cache[name] = policy_for_name(name)
         return policy_cache[name]
 
-    decisions = [_policy_for(live[i].team).decide(live, i, cfg) for i in range(n)]
+    decisions = [_policy_for(live[i].team).decide(live, i, cfg, spatial=spatial)
+                 for i in range(n)]
     decisions = apply_assignments(decisions, live, cfg,
                                   assignment_state=assignment_state, tick=tick)
     replan_paths(bots, live, decisions, cfg, maneuver_state, tick)
@@ -312,8 +362,13 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0
             continue
         pos = [(live[i].x, live[i].y) for i in idx]
         vel = [(live[i].vx, live[i].vy) for i in idx]
+        team_spatial = None
+        if spatial is not None and len(idx) >= cfg.spatial_min_bots:
+            team_spatial = SpatialHash(cfg.spatial_cell)
+            team_spatial.build(pos)
         fv = flock_velocities(pos, vel, perception=cfg.perception,
-                              separation=cfg.separation, max_speed=cfg.max_speed)
+                              separation=cfg.separation, max_speed=cfg.max_speed,
+                              spatial=team_spatial)
         for k, i in enumerate(idx):
             flock_scale = decisions[i].flock_scale if decisions[i] else 1.0
             desired[i][0] += cfg.w_flock * flock_scale * fv[k][0]
@@ -372,7 +427,7 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0
 
     # 4) keep spacing — mutual repulsion across everyone (reuse flocking)
     sep = mutual_avoidance([(b.x, b.y) for b in live], radius=cfg.sep_radius,
-                           strength=cfg.sep_strength)
+                           strength=cfg.sep_strength, spatial=spatial)
     for i in range(n):
         desired[i][0] += cfg.w_sep * sep[i][0]
         desired[i][1] += cfg.w_sep * sep[i][1]
@@ -416,33 +471,40 @@ def _snapshot(bots):
              b.kind) for b in bots]
 
 
-def simulate(bots, cfg=None, *, max_ticks=800):
+def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     """Play a whole engagement from a prepared list of bots (any teams/classes).
 
     Records the per-tick snapshots and firing lines, stops as soon as at most one
     team has living robots (or ``max_ticks``), and reports the winning team id
     (or ``None`` for a draw). Deterministic given the inputs.
+
+    ``frame_stride`` subsamples recorded frames (and shots) for large battles.
     """
     cfg = cfg or BattleConfig()
+    frame_stride = max(1, frame_stride)
     teams = sorted({b.team for b in bots})
     result = BattleResult(teams=teams)
     maneuver_state = ManeuverState()
     assignment_state = AssignmentState()
     for tick in range(max_ticks):
-        result.frames.append(_snapshot(bots))
+        record = (tick % frame_stride == 0)
+        if record:
+            result.frames.append(_snapshot(bots))
+            result.counts.append(_counts(bots, teams))
         c = _counts(bots, teams)
-        result.counts.append(c)
         if sum(1 for n in c if n > 0) <= 1:   # one (or zero) team left standing
-            result.shots.append([])
+            if record:
+                result.shots.append([])
             break
-        result.shots.append(battle_step(bots, cfg, maneuver_state=maneuver_state,
-                                        assignment_state=assignment_state,
-                                        tick=tick))
+        shots = battle_step(bots, cfg, maneuver_state=maneuver_state,
+                            assignment_state=assignment_state, tick=tick)
+        if record:
+            result.shots.append(shots)
     else:
-        # ran out of ticks without a wipeout: record the final state
-        result.frames.append(_snapshot(bots))
-        result.counts.append(_counts(bots, teams))
-        result.shots.append([])
+        if tick % frame_stride == 0:
+            result.frames.append(_snapshot(bots))
+            result.counts.append(_counts(bots, teams))
+            result.shots.append([])
 
     c = _counts(bots, teams)
     result.survivors = {t: n for t, n in zip(teams, c)}
@@ -471,7 +533,7 @@ def run_battle(n_per_team=14, cfg=None, *, seed=0, max_ticks=800, num_teams=2):
 # reproducible. Each returns ``(bots, cfg, title)``; render them with
 # ``scripts/make_battle_gallery_gif.py``.
 SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
-                  "maneuver_duel", "mapf_stack_duel")
+                  "maneuver_duel", "mapf_stack_duel", "kingdom")
 
 
 def battle_scenario(name):
@@ -539,4 +601,13 @@ def battle_scenario(name):
                             [("soldier", 10)], rng, jitter=2.8)
         return (red + blue, cfg,
                 "MAPF stack — CBS-TA assignment + planned maneuver")
+    if name == "kingdom":
+        cfg = kingdom_config(formation_by_team={RED: "line", BLUE: "line"})
+        rng = random.Random(42)
+        red = make_grand_army(cfg, RED, (cfg.width * 0.28, cfg.height * 0.5),
+                              rows=8, cols=10, rng=rng, face_right=True)
+        blue = make_grand_army(cfg, BLUE, (cfg.width * 0.72, cfg.height * 0.5),
+                               rows=8, cols=10, rng=random.Random(43),
+                               face_right=False)
+        return (red + blue, cfg, "Kingdom clash — 80 vs 80 battle lines")
     raise KeyError(name)

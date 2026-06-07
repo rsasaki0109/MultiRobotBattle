@@ -188,6 +188,8 @@ battle is exactly where they should *do work*:
   an ELO ladder, and a small results page.
 - [ ] **Scale to hundreds** — spatial hashing for the O(n²) neighbour / nearest-
   enemy queries so battles of 100s of robots stay fast *and* deterministic.
+  *(partial: ``mrn_coord.spatial_hash`` + ``make_grand_army`` / ``kingdom``
+  scenario — 80 vs 80 line clash on a 100×56 field; ``make_kingdom_gif.py``.)*
 - [ ] **Auto-balance / find-the-meta** — hill-climb / CMA-ES over class stats or
   steering weights against a fixed opponent to discover the strongest composition
   (optional; a pure-Python optimizer, no heavyweight deps).

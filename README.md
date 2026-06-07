@@ -91,6 +91,17 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
   <code>python3 scripts/make_mapf_stack_gif.py</code>.</em>
 </p>
 
+<p align="center">
+  <img src="docs/media/kingdom_clash.gif" alt="A wide battlefield viewed from above: two dense rectangular formations of red and blue dots — eighty per side — advance in battle lines from opposite flanks, collide in the centre in a chaotic melee of laser fire, and one army is wiped out." width="820">
+</p>
+
+<p align="center">
+  <em>Kingdom-scale clash — <strong>80 vs 80</strong> soldiers in opposing battle
+  lines on a 100×56 field (spatial-hash accelerated). Render with
+  <code>python3 scripts/make_kingdom_gif.py</code> or
+  <code>battle_scenario("kingdom")</code>.</em>
+</p>
+
 And under the hood, that battlefield is the same multi-robot stack that hosts a
 pip-installable, benchmark-gated MAPF algorithm zoo:
 

@@ -9,6 +9,7 @@ algorithms** — regenerate any of them with the matching script:
 | `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid: duel / FFA / quality vs quantity / chokepoint |
 | `maneuver_duel.gif` | `make_maneuver_gif.py` | greedy vs MAPF maneuver on the chokepoint |
 | `mapf_stack_duel.gif` | `make_mapf_stack_gif.py` | Hungarian+greedy vs CBS-TA+prioritized MAPF |
+| `kingdom_clash.gif` | `make_kingdom_gif.py` | 80 vs 80 battle lines on a wide field |
 | `sim_demo.gif` | `make_sim_gif.py` | the 2D world: robots, obstacles, V2V links |
 | `swarm_demo.gif` | `make_swarm_gif.py` | Boids flocking (70 agents) |
 | `swarm_sim_demo.gif` | `make_swarm_sim_gif.py` | flock migrating to a goal through obstacles |

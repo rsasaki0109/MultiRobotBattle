@@ -64,23 +64,25 @@ def goal_seek(positions, goal, *, gain: float = 1.0, max_speed: float = 2.0) -> 
 
 
 def mutual_avoidance(
-    positions, *, radius: float = 1.5, strength: float = 2.0, max_accel: float = 6.0
+    positions, *, radius: float = 1.5, strength: float = 2.0, max_accel: float = 6.0,
+    spatial=None,
 ) -> list:
     """Per-agent repulsion from the *other agents* within ``radius``.
 
-    The reciprocal collision-avoidance term for multi-robot navigation: each
-    robot is pushed away from peers that get too close (``strength / dist**2``),
-    clamped to ``max_accel``. Like :func:`obstacle_avoidance` but the obstacles
-    are the other robots. Returns ``(ax, ay)`` per agent.
+    Pass a built :class:`~mrn_coord.spatial_hash.SpatialHash` as ``spatial`` for
+    O(n) scaling on large battles; otherwise falls back to an O(n^2) scan.
     """
     n = len(positions)
     out = []
     for i in range(n):
         px, py = positions[i]
         ax = ay = 0.0
-        for j in range(n):
-            if j == i:
-                continue
+        if spatial is not None:
+            neighbors = spatial.query_disk(px, py, radius, positions)
+            js = (j for j in neighbors if j != i)
+        else:
+            js = (j for j in range(n) if j != i)
+        for j in js:
             dx, dy = px - positions[j][0], py - positions[j][1]
             d = math.hypot(dx, dy)
             if 0.0 < d < radius:
@@ -206,6 +208,7 @@ def flock_velocities(
     w_coh: float = 1.0,
     inertia: float = 0.85,
     max_speed: float = 2.0,
+    spatial=None,
 ) -> list:
     """One reactive Boids step → each agent's new velocity.
 
@@ -223,9 +226,12 @@ def flock_velocities(
         ali_x = ali_y = 0.0
         coh_x = coh_y = 0.0
         count = 0
-        for j in range(n):
-            if j == i:
-                continue
+        if spatial is not None:
+            neighbors = spatial.query_disk(px, py, perception, positions)
+            js = (j for j in neighbors if j != i)
+        else:
+            js = (j for j in range(n) if j != i)
+        for j in js:
             qx, qy = positions[j]
             dx, dy = px - qx, py - qy
             dist = math.hypot(dx, dy)

@@ -68,19 +68,32 @@ def _make_token(observer, other, heading, live_index):
                       math.hypot(dx, dy), live_index)
 
 
-def build_observation(live, index, *, perception=6.0, max_tokens=8):
+def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None):
     """Build a :class:`BattleObservation` for ``live[index]``."""
     me = live[index]
+    positions = [(b.x, b.y) for b in live]
     enemies = []
     allies = []
-    for j, other in enumerate(live):
-        if j == index:
-            continue
-        d = math.hypot(me.x - other.x, me.y - other.y)
-        if other.team == me.team:
-            allies.append((d, other, j))
-        else:
-            enemies.append((d, other, j))
+    if spatial is not None:
+        cand = spatial.query_disk(me.x, me.y, perception * 2.5, positions)
+        for j in cand:
+            if j == index:
+                continue
+            other = live[j]
+            d = math.hypot(me.x - other.x, me.y - other.y)
+            if other.team == me.team:
+                allies.append((d, other, j))
+            else:
+                enemies.append((d, other, j))
+    else:
+        for j, other in enumerate(live):
+            if j == index:
+                continue
+            d = math.hypot(me.x - other.x, me.y - other.y)
+            if other.team == me.team:
+                allies.append((d, other, j))
+            else:
+                enemies.append((d, other, j))
 
     allies.sort(key=lambda t: t[0])
     enemies.sort(key=lambda t: t[0])

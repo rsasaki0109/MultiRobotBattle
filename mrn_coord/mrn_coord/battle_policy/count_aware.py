@@ -27,10 +27,17 @@ class TacticalDecision:
 class NearestPolicy:
     """Original behaviour: nearest enemy, fixed config weights."""
 
-    def decide(self, live, index, cfg):
+    def decide(self, live, index, cfg, *, spatial=None):
         me = live[index]
+        positions = [(b.x, b.y) for b in live]
         best, bd = -1, float("inf")
-        for j, other in enumerate(live):
+        scan = (spatial.query_disk(me.x, me.y,
+                                  math.hypot(cfg.width, cfg.height), positions)
+                if spatial is not None else range(len(live)))
+        for j in scan:
+            if j == index:
+                continue
+            other = live[j]
             if other.team == me.team:
                 continue
             d = math.hypot(me.x - other.x, me.y - other.y)
@@ -55,8 +62,9 @@ class CountAwarePolicy:
             raise ValueError(f"unknown stance {stance!r}; choose from {self.STANCES}")
         self.stance = stance
 
-    def decide(self, live, index, cfg):
-        obs = build_observation(live, index, perception=cfg.perception)
+    def decide(self, live, index, cfg, *, spatial=None):
+        obs = build_observation(live, index, perception=cfg.perception,
+                                spatial=spatial)
         if not obs.enemy_tokens:
             return None
         target = self._pick_target(live, index, obs, cfg)
