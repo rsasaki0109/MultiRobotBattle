@@ -1,0 +1,18 @@
+{
+  "bfs_busts_where_closed_form_solves": true,
+  "complete_construction_valid": true,
+  "complete_instances": 150,
+  "complete_opt_equals_n_minus_cycles": true,
+  "complete_scale_swaps": 10,
+  "complete_scale_valid": true,
+  "descent_stalls_on_reversal": true,
+  "descent_stalls_on_ring": true,
+  "deterministic": true,
+  "lower_bound_instances": 300,
+  "optimum_meets_lower_bound": true,
+  "path_construction_valid": true,
+  "path_instances": 150,
+  "path_opt_equals_inversions": true,
+  "path_scale_swaps": 55,
+  "path_scale_valid": true
+}

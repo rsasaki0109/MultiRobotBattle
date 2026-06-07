@@ -2479,6 +2479,49 @@ small margin folded into the barrier, so the guarantee holds up to discretizatio
 like every reactive filter it is **not complete** — a perfectly opposed head-on
 deadlocks safely (both robots decelerate to a stop). Deterministic, pure Python.
 
+### Token Swapping (`token_swapping.py`)
+
+A reproduction of Yamanaka, Demaine, Ito, Kawahara, Kiyomi, Okamoto, Saitoh, Suzuki,
+Uchizawa & Uno's *"Swapping Labeled Tokens on Graphs"* (FUN 2014; TCS 2015), with the
+hardness/approximation picture from Miltzow, Narins, Okamoto, Rote, Thomas & Uno (ESA
+2016). This is the **minimum-swap-count** reconfiguration paradigm, and it is
+deliberately *unlike* the zoo's other permutation-on-a-graph solvers (`tswap`,
+`push_and_swap`, `bibox`, `push_and_rotate`): those slide tokens through **blank**
+vertices and minimise makespan/moves. Token swapping has **no blanks** — every vertex
+holds a token, the only operation is an adjacent **swap** (two tokens on an edge
+exchange), and the objective is the **total number of swaps**. It is the graph
+generalisation of "sort a permutation by transpositions".
+
+The exact optimum is a breadth-first search over the `n!` token placements
+(`optimal_swaps`) — ground truth on small instances, and the foil that two
+closed-form solvers beat by orders of magnitude on their structured graph classes:
+
+- **Path `P_n`** — only *adjacent* transpositions are legal, so the optimum is the
+  **inversion count** of the permutation (`path_inversions`), and `path_swaps`
+  constructs that optimal sequence by bubble sort. Reversing `0..n−1` costs exactly
+  `C(n,2)` swaps.
+- **Complete graph `K_n`** — *every* transposition is legal, so the optimum is
+  `n − c` where `c` is the number of cycles of the permutation (`complete_min_swaps`),
+  the classic "minimum transpositions to sort"; `complete_swaps` builds it by selection
+  sort.
+
+Two certificates frame the optimum. A **lower bound** `⌈D/2⌉` with
+`D = Σ_t dist(pos(t), target(t))` follows because one swap moves two tokens one edge
+each and so lowers `D` by at most 2 (`lower_bound`). And an **honest negative**:
+`descent_swaps`, a naive best-improving descent that only takes swaps strictly reducing
+`D`, **stalls** on a ring rotation *and* a path reversal — real progress requires
+temporarily pushing a token *further* from its target, which a pure descent will never
+do. That stall is exactly the obstacle the paper's non-trivial algorithms exist to
+defeat.
+
+The gate (`token_swapping`) certifies, against the BFS ground truth: the path optimum
+equals the inversion count and the complete-graph optimum equals `n − cycles` over
+random batteries (with both constructions replaying exactly to the target); the
+`⌈D/2⌉` lower bound holds over a random connected-graph battery; at `n = 11` both closed
+forms solve a path reversal and a `K_n` rotation instantly while the BFS busts its state
+cap (the `n!` blow-up); and the naive descent stalls on the ring and reversal.
+Deterministic, pure Python.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

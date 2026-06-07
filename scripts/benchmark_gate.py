@@ -6887,6 +6887,156 @@ def _run_cbf() -> dict:
     }
 
 
+def _run_token_swapping() -> dict:
+    # token_swapping.py reproduces Yamanaka et al., "Swapping Labeled Tokens on
+    # Graphs" (FUN 2014 / TCS 2015), with the hardness/approximation picture from
+    # Miltzow et al. (ESA 2016). This is the MIN-SWAP-COUNT reconfiguration
+    # paradigm: every vertex holds a token, the only move is an adjacent SWAP (two
+    # tokens exchange), and the objective is the total number of swaps -- distinct
+    # from the zoo's blank-vertex movers (tswap / push_and_swap / bibox), which
+    # minimise makespan by sliding tokens into empty cells.
+    #
+    # The reproduction is anchored by an exact BFS over the n! placements (ground
+    # truth) and the two graph classes with closed forms, certified == BFS:
+    # (1) PATH P_n: only adjacent transpositions are legal -> optimum is the
+    #     INVERSION COUNT (bubble sort is tight); the constructed swap list
+    #     replays exactly to the target.
+    # (2) COMPLETE K_n: every transposition is legal -> optimum is n - cycles
+    #     (minimum transpositions to sort); the constructed list replays exactly.
+    # (3) LOWER BOUND: opt >= ceil(D/2) with D = sum_t dist(pos, target) -- one
+    #     swap lowers D by at most 2 -- holds over a random-graph battery.
+    # (4) SCALABILITY: at n=11 the closed forms solve a path reversal and a K_n
+    #     rotation instantly, while BFS busts its state cap (n! blow-up).
+    # (5) HONEST NEGATIVE: a naive best-improving descent (only swaps strictly
+    #     reducing D) STALLS on a ring rotation and a path reversal -- progress
+    #     needs temporarily increasing a token's distance -- which is exactly why
+    #     the paper's non-trivial algorithms exist.
+    import random
+
+    from mrn_coord.mapf import token_swapping as ts
+
+    rng = random.Random(11)
+
+    # (1) PATH: opt == inversions == len(path_swaps), replay valid
+    path_insts = path_ok = path_valid = 0
+    for _ in range(150):
+        n = rng.randint(2, 7)
+        g = ts.make_path_graph(n)
+        init = {i: i for i in range(n)}
+        perm = list(range(n))
+        rng.shuffle(perm)
+        tgt = {i: perm[i] for i in range(n)}
+        opt = ts.optimal_swaps(g, init, tgt)
+        if opt is None:
+            continue
+        path_insts += 1
+        inv = ts.path_inversions(init, tgt)
+        sw = ts.path_swaps(init, tgt)
+        if opt.num_swaps == inv == len(sw):
+            path_ok += 1
+        if ts.is_solved(ts.replay(g, init, sw), tgt):
+            path_valid += 1
+
+    # (2) COMPLETE: opt == n - cycles == len(complete_swaps), replay valid
+    comp_insts = comp_ok = comp_valid = 0
+    for _ in range(150):
+        n = rng.randint(2, 6)
+        g = ts.make_complete_graph(n)
+        init = {i: i for i in range(n)}
+        perm = list(range(n))
+        rng.shuffle(perm)
+        tgt = {i: perm[i] for i in range(n)}
+        opt = ts.optimal_swaps(g, init, tgt)
+        if opt is None:
+            continue
+        comp_insts += 1
+        f = ts.complete_min_swaps(init, tgt)
+        sw = ts.complete_swaps(init, tgt)
+        if opt.num_swaps == f == len(sw):
+            comp_ok += 1
+        if ts.is_solved(ts.replay(g, init, sw), tgt):
+            comp_valid += 1
+
+    # (3) LOWER BOUND over a random connected-graph battery
+    lb_insts = lb_ok = 0
+    for _ in range(300):
+        n = rng.randint(2, 6)
+        g = ts.make_path_graph(n)  # spanning path guarantees connectivity
+        for _ in range(rng.randint(0, n)):
+            a, b = rng.sample(range(n), 2)
+            g[a].add(b)
+            g[b].add(a)
+        init = {i: i for i in range(n)}
+        perm = list(range(n))
+        rng.shuffle(perm)
+        tgt = {i: perm[i] for i in range(n)}
+        opt = ts.optimal_swaps(g, init, tgt)
+        if opt is None:
+            continue
+        lb_insts += 1
+        if opt.num_swaps >= ts.lower_bound(g, init, tgt):
+            lb_ok += 1
+
+    # (4) SCALABILITY at n=11: closed forms instant, BFS busts
+    n = 11
+    gp = ts.make_path_graph(n)
+    init = {i: i for i in range(n)}
+    tgt = {i: n - 1 - i for i in range(n)}
+    psw = ts.path_swaps(init, tgt)
+    path_scale_valid = ts.is_solved(ts.replay(gp, init, psw), tgt)
+    path_scale_len = len(psw)
+    bfs_busts_path = ts.optimal_swaps(gp, init, tgt, max_states=60_000) is None
+
+    gc = ts.make_complete_graph(n)
+    tgt = {i: (i + 3) % n for i in range(n)}
+    csw = ts.complete_swaps(init, tgt)
+    comp_scale_valid = ts.is_solved(ts.replay(gc, init, csw), tgt)
+    comp_scale_len = len(csw)
+    bfs_busts_comp = ts.optimal_swaps(gc, init, tgt, max_states=60_000) is None
+
+    # (5) HONEST NEGATIVE: best-improving descent stalls
+    init4 = {i: i for i in range(4)}
+    _, ring_solved = ts.descent_swaps(
+        ts.make_cycle_graph(4), init4, {i: (i - 1) % 4 for i in range(4)})
+    _, rev_solved = ts.descent_swaps(
+        ts.make_path_graph(4), init4, {i: 3 - i for i in range(4)})
+
+    # determinism
+    g5 = ts.make_path_graph(5)
+    init5 = {i: i for i in range(5)}
+    tgt5 = {i: 4 - i for i in range(5)}
+    deterministic = (
+        ts.optimal_swaps(g5, init5, tgt5).swaps
+        == ts.optimal_swaps(g5, init5, tgt5).swaps
+    )
+
+    return {
+        # (1) path closed form == BFS optimum, constructive valid
+        "path_opt_equals_inversions": path_ok == path_insts and path_insts > 0,
+        "path_construction_valid": path_valid == path_insts,
+        "path_instances": path_insts,
+        # (2) complete closed form == BFS optimum, constructive valid
+        "complete_opt_equals_n_minus_cycles": comp_ok == comp_insts
+        and comp_insts > 0,
+        "complete_construction_valid": comp_valid == comp_insts,
+        "complete_instances": comp_insts,
+        # (3) lower bound certificate
+        "optimum_meets_lower_bound": lb_ok == lb_insts and lb_insts > 0,
+        "lower_bound_instances": lb_insts,
+        # (4) scalability: closed forms beat the n! BFS blow-up
+        "path_scale_valid": path_scale_valid,
+        "complete_scale_valid": comp_scale_valid,
+        "bfs_busts_where_closed_form_solves": bfs_busts_path and bfs_busts_comp,
+        "path_scale_swaps": path_scale_len,
+        "complete_scale_swaps": comp_scale_len,
+        # (5) honest negative: naive descent stalls
+        "descent_stalls_on_ring": not ring_solved,
+        "descent_stalls_on_reversal": not rev_solved,
+        # determinism
+        "deterministic": deterministic,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -7134,6 +7284,7 @@ SUITE = [
     ("coordination_space", _run_coordination_space),
     ("bvc", _run_bvc),
     ("cbf", _run_cbf),
+    ("token_swapping", _run_token_swapping),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

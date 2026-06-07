@@ -342,6 +342,16 @@ The pieces compose bottom-up:
   it is the **Euclidean projection** of the nominal control onto the safe
   polyhedron (Dykstra). Collision-free by forward invariance; inactive when no
   conflict; symmetric standoffs deadlock safely. Pure Python.
+- :mod:`token_swapping` — **Token Swapping** (Yamanaka et al., FUN 2014 / TCS
+  2015): the **min-swap-count** reconfiguration paradigm — no blank vertices,
+  every vertex holds a token and the only move is an adjacent **swap**; minimise
+  the total number of swaps. Exact BFS over the ``n!`` placements (ground truth)
+  plus two closed forms it beats by orders of magnitude: a **path** optimum is
+  the inversion count, a **complete-graph** optimum is ``n − cycles``. A
+  ``ceil(D/2)`` lower bound certifies the optimum, and a naive best-improving
+  descent is shipped as an honest negative (it stalls on a ring rotation / path
+  reversal). Distinct from the blank-mover reconfigurers (:mod:`tswap`,
+  :mod:`push_and_swap`, :mod:`bibox`). Pure Python.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -516,6 +526,16 @@ from .cbf import (
     safe_control,
     simulate as cbf_simulate,
 )
+from .token_swapping import (
+    SwapSolution,
+    complete_min_swaps,
+    complete_swaps,
+    descent_swaps,
+    lower_bound as token_swap_lower_bound,
+    optimal_swaps,
+    path_inversions,
+    path_swaps,
+)
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -680,6 +700,14 @@ __all__ = [
     "nominal_control",
     "barrier_constraints",
     "CBFResult",
+    "optimal_swaps",
+    "path_inversions",
+    "path_swaps",
+    "complete_min_swaps",
+    "complete_swaps",
+    "descent_swaps",
+    "token_swap_lower_bound",
+    "SwapSolution",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",
