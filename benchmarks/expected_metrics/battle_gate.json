@@ -1,0 +1,23 @@
+{
+  "astar_maneuver_vs_greedy_decisive_rate": 1.0,
+  "astar_maneuver_vs_greedy_rate": 1.0,
+  "astar_maneuver_vs_greedy_red_win_rate": 0.4166666666666667,
+  "cbs_ta_vs_hungarian_chokepoint_decisive_rate": 1.0,
+  "cbs_ta_vs_hungarian_chokepoint_rate": 1.0,
+  "cbs_ta_vs_hungarian_chokepoint_red_win_rate": 0.08333333333333333,
+  "count_aware_vs_nearest_decisive_rate": 1.0,
+  "count_aware_vs_nearest_rate": 1.0,
+  "count_aware_vs_nearest_red_win_rate": 0.75,
+  "decisive_count_aware_rate": 1.0,
+  "decisive_nearest_rate": 1.0,
+  "decisive_transformer_rate": 1.0,
+  "hungarian_vs_local_decisive_rate": 1.0,
+  "hungarian_vs_local_rate": 1.0,
+  "hungarian_vs_local_red_win_rate": 0.0,
+  "prioritized_maneuver_vs_greedy_decisive_rate": 1.0,
+  "prioritized_maneuver_vs_greedy_rate": 1.0,
+  "prioritized_maneuver_vs_greedy_red_win_rate": 0.4166666666666667,
+  "transformer_vs_nearest_decisive_rate": 1.0,
+  "transformer_vs_nearest_rate": 1.0,
+  "transformer_vs_nearest_red_win_rate": 0.4166666666666667
+}

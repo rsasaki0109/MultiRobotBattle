@@ -6,12 +6,14 @@ watch the collision-free paths animate. No install, no server-side compute.
 
 ## Files
 
-- `index.html` — the page (Pyodide loader + UI + canvas animator).
-- `bridge.py` — pure-Python glue: builds a small instance, runs the chosen
-  solver, returns JSON for the animator. Imports only the `mapf-zoo` public API
-  (no numpy/scipy), so it runs identically under CPython and Pyodide.
-- `mapf_zoo-0.1.0-py3-none-any.whl` — the packaged MAPF core, fetched and
-  unpacked onto Pyodide's `sys.path` at load time.
+- `index.html` — MAPF zoo page (Pyodide loader + UI + canvas animator).
+- `battle.html` — swarm battle page (same wheel, different bridge).
+- `bridge.py` — MAPF glue: builds a small instance, runs the chosen solver,
+  returns JSON for the animator.
+- `battle_bridge.py` — battle glue: runs a showcase scenario via
+  ``mrn_coord.battle``, returns subsampled frames + laser lines as JSON.
+- `mapf_zoo-0.1.0-py3-none-any.whl` — the packaged core (MAPF + battle stack),
+  fetched and unpacked onto Pyodide's `sys.path` at load time.
 
 ## Run it locally
 
@@ -23,12 +25,15 @@ python3 -m http.server 8000
 # open http://localhost:8000/
 ```
 
-On GitHub Pages (serve `docs/`) it works as-is at `/<repo>/demo/`.
+On GitHub Pages it is live at
+[rsasaki0109.github.io/multirobot-battle/demo/](https://rsasaki0109.github.io/multirobot-battle/demo/)
+and […/demo/battle.html](https://rsasaki0109.github.io/multirobot-battle/demo/battle.html)
+(deployed by ``.github/workflows/pages.yaml`` on push to ``main``).
 
 ## Refresh the wheel after changing the core
 
 The wheel is a build artifact checked in so the page is self-contained. After
-editing `mrn_coord/mapf` (or the packaging), rebuild it from the repo root:
+editing `mrn_coord/` (MAPF, battle, or packaging), rebuild from the repo root:
 
 ```bash
 python3 -m build --wheel
@@ -39,8 +44,11 @@ cp dist/mapf_zoo-0.1.0-py3-none-any.whl docs/demo/
 
 ## How it's verified
 
-The Python side is exercised headlessly under the same Pyodide interpreter the
-browser uses: a node harness unpacks the wheel, imports `mrn_coord.mapf`, and
-runs the full `bridge.solve(preset, solver)` matrix (27 solving combos + the one
-deliberately-skipped `ring × M*`, M*'s honest blow-up case). Only the canvas
-rendering is browser-only.
+The Python side is exercised headlessly under CPython:
+
+- MAPF: `bridge.solve(preset, solver)` — 27 solving combos + the deliberately
+  skipped `ring × M*` blow-up case.
+- Battle: `mrn_coord/test_mrn_coord/test_demo_battle_bridge.py` runs every
+  `battle_bridge.run(scenario)` combo.
+
+Only the canvas rendering is browser-only.

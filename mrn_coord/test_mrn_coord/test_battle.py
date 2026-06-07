@@ -177,6 +177,48 @@ class TestScenarios(unittest.TestCase):
             self.assertTrue(title)
 
 
+class TestLineOfSight(unittest.TestCase):
+    def test_obstacle_blocks_fire(self):
+        # pillar between two bots — no damage despite being in range
+        cfg = BattleConfig(attack_range=5.0, dps=10.0, dt=0.1, max_speed=0.0,
+                           obstacles=((5.0, 0.0, 2.0),))
+        bots = [Bot(0.0, 0.0, 0, 0, RED, 100, 100),
+                Bot(10.0, 0.0, 0, 0, BLUE, 100, 100)]
+        battle_step(bots, cfg)
+        self.assertTrue(all(b.hp == 100 for b in bots))
+
+    def test_partial_cover_scales_damage(self):
+        base = dict(attack_range=5.0, dps=10.0, dt=0.1, max_speed=0.0)
+        clear_cfg = BattleConfig(**base)
+        partial_cfg = BattleConfig(**base, cover_margin=1.0,
+                                   obstacles=((2.5, 1.5, 1.0),))
+        clear = [Bot(0.0, 0.0, 0, 0, RED, 100, 100),
+                 Bot(5.0, 0.0, 0, 0, BLUE, 100, 100)]
+        battle_step(clear, clear_cfg)
+        full_dmg = 100 - clear[1].hp
+        partial = [Bot(0.0, 0.0, 0, 0, RED, 100, 100),
+                   Bot(5.0, 0.0, 0, 0, BLUE, 100, 100)]
+        battle_step(partial, partial_cfg)
+        partial_dmg = 100 - partial[1].hp
+        self.assertAlmostEqual(partial_dmg, 0.5 * full_dmg, places=6)
+
+    def test_open_field_without_obstacles_unchanged(self):
+        cfg = BattleConfig(attack_range=3.0, dps=10.0, dt=0.1, require_los=True)
+        near = [Bot(0.0, 0.0, 0, 0, RED, 100, 100),
+                Bot(1.0, 0.0, 0, 0, BLUE, 100, 100)]
+        battle_step(near, cfg)
+        self.assertTrue(all(b.hp < 100 for b in near))
+
+    def test_body_can_block_fire(self):
+        cfg = BattleConfig(attack_range=5.0, dps=10.0, dt=0.1, max_speed=0.0,
+                           body_blocks_fire=True, body_radius=0.8)
+        blocked = [Bot(0.0, 0.0, 0, 0, RED, 100, 100),
+                   Bot(2.5, 0.0, 0, 0, GREEN, 100, 100),   # body in the way
+                   Bot(5.0, 0.0, 0, 0, BLUE, 100, 100)]
+        battle_step(blocked, cfg)
+        self.assertEqual(blocked[2].hp, 100)
+
+
 class TestRetreatOption(unittest.TestCase):
     def test_retreat_pulls_wounded_away(self):
         # a wounded red bot with retreat enabled should steer away from its enemy

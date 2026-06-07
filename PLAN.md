@@ -117,7 +117,7 @@ a thing beside them. Same cadence as the solvers: build → measure (win-rate /
 invariants) → gate → record the honest result.
 
 ### Combat model depth
-- [ ] **Line of sight & cover** — obstacles (and optionally other bodies) block
+- [x] **Line of sight & cover** — obstacles (and optionally other bodies) block
   fire: a shot lands only if the segment to the target is clear; partial cover
   scales damage down. Reuses the segment/obstacle geometry already in the sim.
 - [ ] **Projectiles & ballistics** — discrete shots with travel time and accuracy
@@ -132,15 +132,20 @@ invariants) → gate → record the honest result.
   to replace the stalemating wounded-retreat with something that stays decisive.
 
 ### Tactics & team AI
-- [ ] **Formations** — line / wedge / screen / square via the existing
+- [x] **Formations** — line / wedge / screen / square via the existing
   `mrn_coord.formation` displacement consensus: tanks screen the front, snipers
   hold the back, the army advances as a shape instead of a blob.
 - [ ] **Smarter target selection** — focus the weakest-in-range or highest-threat
   enemy (not just the nearest), and **kite** with ranged units (fire while backing
   out of melee). Both are local policies, still no central commander required.
+  *(partial: ``CountAwarePolicy`` in ``mrn_coord.battle_policy`` — focus fire +
+  sniper kite; ``TransformerPolicy`` distills the teacher — Phase B landed.)*
 - [ ] **Per-team strategy** — a selectable commander policy (aggressive /
   defensive / flank / turtle) as a small utility or finite-state AI; *strategy-vs-
   strategy* matchups become the interesting experiment.
+  *(partial: ``count_aware:aggressive`` / ``defensive`` / ``balanced`` stances;
+  ``auto`` adapts to ally/enemy counts TeamHOI-style; ``tactics_by_team`` +
+  ``scripts/battle_gate.py`` for strategy-vs-strategy win-rates.)*
 - [ ] **Win conditions beyond annihilation** — king-of-the-hill, capture-the-flag,
   base assault, escort / payload: each a small objective module over the same
   engine, with its own success metric.
@@ -154,14 +159,22 @@ battle is exactly where they should *do work*:
   PIBT instead of greedy pursuit, so armies flank around terrain intelligently and
   move collision-free; use the coordination diagram / velocity scheduling to push
   a column through a chokepoint without jamming.
+  *(partial: ``mrn_coord.battle_maneuver`` — ``maneuver=astar|prioritized|cbs|pibt``,
+  per-team via ``maneuver_by_team``; headline matchups in ``battle_gate``.)*
 - [ ] **Optimal target assignment** — Hungarian / CBS-TA to assign shooters to
   targets (who engages whom) for a measurably better volley than greedy-nearest.
+  *(partial: ``mrn_coord.battle_assignment`` — ``hungarian`` combat matching and
+  ``cbs_ta`` Murty-on-BFS path-aware matching; ``battle_gate`` chokepoint
+  ``cbs_ta`` vs ``hungarian``; full joint CBS-TA path search still TODO for
+  small-team maneuver coupling.)*
 - [ ] **Collision-free charges** — ORCA / Buffered Voronoi Cells / flocking for
   the advance; switchable-ADG-style execution when the maneuver is pre-planned and
   someone is delayed.
 - [ ] **The headline demo** — swap *only* the movement layer (greedy ↔ A\* ↔ CBS)
   and show the win-rate difference. That single experiment turns the zoo from a
   museum into the battle's brain, and is the strongest story this repo can tell.
+  *(partial: ``scripts/make_maneuver_gif.py`` → ``docs/media/maneuver_duel.gif``;
+  ``battle_gate`` astar/prioritized vs greedy matchups.)*
 
 ### Scale, balance & evaluation
 - [ ] **Balance harness + `battle_gate`** — run K seeds of each matchup, report
@@ -169,6 +182,8 @@ battle is exactly where they should *do work*:
   dominant. Gate it like the MAPF suite: regress win-rates and invariants
   (collision-free where claimed, decisive outcome, bot-count conserved) against
   `benchmarks/expected_metrics/`, so balance is *measured*, not vibes.
+  *(partial: ``scripts/battle_gate.py`` + ``benchmarks/expected_metrics/battle_gate.json``
+  — decisive rates + red win-rates for count_aware/transformer vs nearest.)*
 - [ ] **Tournaments** — round-robin / bracket between compositions or strategies,
   an ELO ladder, and a small results page.
 - [ ] **Scale to hundreds** — spatial hashing for the O(n²) neighbour / nearest-
@@ -181,11 +196,14 @@ battle is exactly where they should *do work*:
 - [ ] **Battle in the browser** — extend the Pyodide demo (`docs/demo/`): pick two
   armies, press go, watch them fight on the canvas. The battle is pure-Python and
   already runs under Pyodide.
+  *(partial: ``docs/demo/battle.html`` + ``battle_bridge.py`` — duel / chokepoint /
+  maneuver_duel; ``pages.yaml`` deploys ``docs/`` on push to ``main``.)*
 - [ ] **Battle in the sim / Gazebo** — drive the real diff-drive robots as
   combatants through the existing `mrn_sim` / `mrn_gazebo` wiring (closed-loop,
   real-machine — not CI).
 - [ ] **More GIFs + a one-line hook** — each new feature gets a GIF driven by the
   real engine, plus a short "how it works" writeup for sharing.
+  *(partial: ``maneuver_duel.gif`` in README + ``docs/media/README.md``.)*
 
 ## Next ideas
 
@@ -231,7 +249,8 @@ Leverage order:
   distribution — `pip install` and solve without ROS / colcon, zero required
   deps (numpy/scipy gated behind the `[bcp]` extra via a lazy import). Verified
   in a clean venv with ROS *and* numpy unreachable; `docs/pypi.md` is the long
-  description. Still TODO: publish to PyPI; ship Jupyter notebooks.
+  description. PyPI publish is **not planned** — install from git or the checked-in
+  wheel under `docs/demo/`. Still TODO: Jupyter notebooks.
 - [x] **Browser demo (Pyodide)**: [`docs/demo/`](docs/demo/) runs the real
   pure-Python solvers in the browser — pick an instance + solver, watch the
   collision-free paths animate on a canvas, zero backend. `index.html` unpacks
@@ -239,8 +258,9 @@ Leverage order:
   four instances (crossing / swap / doorway / ring) × seven solvers. Verified
   headlessly under the same Pyodide build via a node harness (full
   `bridge.solve` matrix — 27 solving combos + the deliberately-skipped
-  `ring × M*` blow-up). Pages-ready (serve `docs/`); GitHub Pages not enabled
-  here. Still TODO: per-family GIFs, more presets.
+  `ring × M*` blow-up). Live on GitHub Pages via ``.github/workflows/pages.yaml``
+  → [rsasaki0109.github.io/multirobot-battle](https://rsasaki0109.github.io/multirobot-battle/).
+  Still TODO: per-family GIFs, more presets.
 - [ ] **More visuals**: per-family GIFs (rectangle/corridor symmetry, lifelong
   warehouse throughput, execution-layer delay recovery) generated by
   `animate_mapf.py` / the existing `make_*_gif.py`.

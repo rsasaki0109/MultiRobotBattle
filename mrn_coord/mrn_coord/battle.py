@@ -11,11 +11,24 @@ is no central commander — yet coherent battlefield behaviour emerges:
 - **keep spacing** — mutual repulsion so robots do not pile up;
 - **fire when in range** — a robot deals continuous damage to its nearest enemy
   within ``attack_range``; health falls, and at zero the robot is eliminated;
+- **line of sight & cover** (optional) — circular obstacles (and optionally other
+  robot bodies) block or attenuate fire along the segment to the target; partial
+  cover scales damage down instead of a hard on/off hitscan;
 - **fall back when wounded** (optional) — with ``retreat_frac > 0`` a robot below
   that fraction of max health flees its nearest enemy instead of pressing in. It
   is **off by default** (``retreat_frac = 0``): a default battle is fought to the
   death so it always reaches a decisive result; enabling it trades decisiveness
   for skirmishing, since the last wounded survivors may flee indefinitely.
+- **count-aware tactics** (optional) — :mod:`mrn_coord.battle_policy` builds
+  TeamHOI-style teammate/enemy tokens and a decentralized policy that adapts
+  pursue / flock / retreat to ally-vs-enemy counts, focus-fires wounded targets,
+  and kites snipers (``BattleConfig.tactics = "count_aware"``).
+- **formations** (optional) — :mod:`mrn_coord.battle_formations` drives
+  line / wedge / screen / square shapes via displacement consensus
+  (``BattleConfig.formation``); ``auto`` picks from force ratio.
+- **planned maneuver** (optional) — :mod:`mrn_coord.battle_maneuver` swaps the
+  movement layer for grid A* / prioritized / CBS / LaCAM-PIBT
+  (``BattleConfig.maneuver``) while tactics still pick targets.
 
 The one tactically interesting consequence is **focus fire for free**: damage is
 per-attacker, so a robot caught by three enemies at once takes triple damage.
@@ -42,6 +55,10 @@ import math
 import random
 from dataclasses import dataclass, field
 
+from .battle_assignment import apply_assignments, AssignmentState
+from .battle_formations import formation_commands
+from .battle_maneuver import ManeuverState, maneuver_direction, maneuver_for_team, replan_paths
+from .battle_policy.count_aware import policy_for_name
 from .flocking import (
     _clamp_speed,
     flock_velocities,
@@ -103,6 +120,32 @@ class BattleConfig:
     dps: float = 22.0
     max_hp: float = 100.0
     retreat_frac: float = 0.0    # 0 = fight to the death (decisive); >0 = skirmish
+    # line of sight / cover (terrain + optional body blocking)
+    require_los: bool = True
+    body_blocks_fire: bool = False   # other robots attenuate fire along the ray
+    body_radius: float = 0.55        # effective disc radius for body LoS
+    cover_margin: float = 0.75       # partial-cover band beyond obstacle/body surface
+    # tactics — ``nearest`` (default), ``count_aware``, ``transformer``, or per-team
+    tactics: str = "nearest"
+    tactics_by_team: dict = None   # e.g. {RED: "count_aware", BLUE: "nearest"}
+    # formations — ``none`` (default), ``auto``, ``line``, ``wedge``, ``screen``, ``square``
+    formation: str = "none"
+    formation_by_team: dict = None
+    formation_spacing: float = 2.0
+    formation_gain: float = 0.45
+    w_formation: float = 0.9
+    # planned maneuver — ``greedy`` (default) or ``astar`` / ``prioritized`` / ``cbs`` / ``pibt``
+    maneuver: str = "greedy"
+    maneuver_by_team: dict = None
+    maneuver_cell_size: float = 1.0
+    maneuver_replan_ticks: int = 20
+    maneuver_lookahead: float = 1.4
+    maneuver_goal_tol: float = 1.2
+    # target assignment — ``none``, ``hungarian``, or ``cbs_ta`` (grid CBS-TA)
+    assignment: str = "none"
+    assignment_by_team: dict = None
+    assignment_replan_ticks: int = 15
+    assignment_cell_size: float = 2.0
     # steering weights
     w_flock: float = 1.0
     w_pursue: float = 1.8
@@ -173,6 +216,51 @@ def make_free_for_all(n_per_team, cfg, *, seed=0, num_teams=3, kind="soldier"):
     return bots
 
 
+def _segment_point_distance(a0, a1, c):
+    """Minimum distance from the segment ``a0->a1`` to the point ``c``."""
+    dx, dy = a1[0] - a0[0], a1[1] - a0[1]
+    dd = dx * dx + dy * dy
+    if dd <= 1e-15:
+        return math.hypot(a0[0] - c[0], a0[1] - c[1])
+    t = ((c[0] - a0[0]) * dx + (c[1] - a0[1]) * dy) / dd
+    t = max(0.0, min(1.0, t))
+    px, py = a0[0] + t * dx, a0[1] + t * dy
+    return math.hypot(px - c[0], py - c[1])
+
+
+def _cover_along_segment(ax, ay, tx, ty, ox, oy, radius, cover_margin):
+    """Cover factor for one circular blocker (0 = blocked, 1 = clear).
+
+    A segment that passes through the disc is fully blocked; one that grazes
+    within ``cover_margin`` of the surface scales damage linearly.
+    """
+    d = _segment_point_distance((ax, ay), (tx, ty), (ox, oy))
+    if d >= radius + cover_margin:
+        return 1.0
+    if d <= radius:
+        return 0.0
+    return (d - radius) / cover_margin
+
+
+def _fire_cover(ax, ay, tx, ty, cfg, live, skip):
+    """Combined cover factor along the shot segment (1.0 = clear line of fire)."""
+    if not cfg.require_los:
+        return 1.0
+    factor = 1.0
+    for (ox, oy, r) in cfg.obstacles:
+        factor = min(factor, _cover_along_segment(ax, ay, tx, ty, ox, oy, r,
+                                                  cfg.cover_margin))
+    if cfg.body_blocks_fire:
+        for j, other in enumerate(live):
+            if j in skip:
+                continue
+            factor = min(factor, _cover_along_segment(ax, ay, tx, ty,
+                                                      other.x, other.y,
+                                                      cfg.body_radius,
+                                                      cfg.cover_margin))
+    return factor
+
+
 def _wall_turn(x, y, vx, vy, width, height, margin=2.0, push=2.0):
     if x < margin:
         vx += push
@@ -185,17 +273,37 @@ def _wall_turn(x, y, vx, vy, width, height, margin=2.0, push=2.0):
     return vx, vy
 
 
-def battle_step(bots, cfg):
+def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0):
     """Advance the battle one tick (in place); return this tick's firing lines.
 
     Steering and damage are both computed from the *same* snapshot of living
     bots, so the update is order-independent and deterministic.
     """
+    if maneuver_state is None:
+        maneuver_state = ManeuverState()
+    if assignment_state is None:
+        assignment_state = AssignmentState()
     live = [b for b in bots if b.alive]
     n = len(live)
     desired = [[0.0, 0.0] for _ in range(n)]
     damage = [0.0] * n
     shots = []
+    policy = policy_for_name(cfg.tactics)
+    policy_cache = {cfg.tactics: policy}
+
+    def _policy_for(team):
+        name = (cfg.tactics_by_team or {}).get(team, cfg.tactics)
+        if name not in policy_cache:
+            policy_cache[name] = policy_for_name(name)
+        return policy_cache[name]
+
+    decisions = [_policy_for(live[i].team).decide(live, i, cfg) for i in range(n)]
+    decisions = apply_assignments(decisions, live, cfg,
+                                  assignment_state=assignment_state, tick=tick)
+    replan_paths(bots, live, decisions, cfg, maneuver_state, tick)
+
+    def _formation_for(team):
+        return (cfg.formation_by_team or {}).get(team, cfg.formation)
 
     # 1) flock with living teammates (reuse the Boids step per team)
     for team in sorted({b.team for b in live}):
@@ -207,35 +315,60 @@ def battle_step(bots, cfg):
         fv = flock_velocities(pos, vel, perception=cfg.perception,
                               separation=cfg.separation, max_speed=cfg.max_speed)
         for k, i in enumerate(idx):
-            desired[i][0] += cfg.w_flock * fv[k][0]
-            desired[i][1] += cfg.w_flock * fv[k][1]
+            flock_scale = decisions[i].flock_scale if decisions[i] else 1.0
+            desired[i][0] += cfg.w_flock * flock_scale * fv[k][0]
+            desired[i][1] += cfg.w_flock * flock_scale * fv[k][1]
 
-    # 2) pursue / retreat from the nearest enemy (any other team), 3) fire if in
-    #    range — using each bot's own class stats where set
+    # 1b) optional team formations (displacement consensus toward shape)
+    for team in sorted({b.team for b in live}):
+        mode = _formation_for(team)
+        if mode in (None, "", "none"):
+            continue
+        idx = [i for i in range(n) if live[i].team == team]
+        fcmds = formation_commands(bots, live, idx, mode,
+                                   spacing=cfg.formation_spacing,
+                                   gain=cfg.formation_gain)
+        for i, (ux, uy) in fcmds.items():
+            desired[i][0] += cfg.w_formation * ux
+            desired[i][1] += cfg.w_formation * uy
+
+    # 2) pursue / retreat toward the policy target, 3) fire if in range
     for i in range(n):
         b = live[i]
-        best, bd = -1, float("inf")
-        for j in range(n):
-            if live[j].team == b.team:
-                continue
-            d = math.hypot(b.x - live[j].x, b.y - live[j].y)
-            if d < bd:
-                bd, best = d, j
-        if best < 0:
+        decision = decisions[i]
+        if decision is None:
+            continue
+        best = decision.target_index
+        if best < 0 or best >= n:
             continue
         e = live[best]
+        if e.team == b.team:
+            continue
+        bd = math.hypot(b.x - e.x, b.y - e.y)
         d = max(bd, 1e-9)
         ux, uy = (e.x - b.x) / d, (e.y - b.y) / d
-        if b.hp < cfg.retreat_frac * b.max_hp:
-            desired[i][0] -= cfg.w_retreat * ux
-            desired[i][1] -= cfg.w_retreat * uy
+        mode = maneuver_for_team(b.team, cfg)
+        if mode not in (None, "", "greedy"):
+            path = maneuver_state.paths.get(bots.index(b))
+            directed = maneuver_direction(b, path, e, cfg)
+            if directed is not None:
+                ux, uy = directed
+        wounded = b.hp < cfg.retreat_frac * b.max_hp
+        if wounded or decision.kite:
+            scale = cfg.w_retreat * decision.retreat_scale
+            desired[i][0] -= scale * ux
+            desired[i][1] -= scale * uy
         else:
-            desired[i][0] += cfg.w_pursue * ux
-            desired[i][1] += cfg.w_pursue * uy
+            scale = cfg.w_pursue * decision.pursue_scale
+            desired[i][0] += scale * ux
+            desired[i][1] += scale * uy
         b_range = b.attack_range if b.attack_range is not None else cfg.attack_range
         if bd <= b_range:
-            damage[best] += (b.dps if b.dps is not None else cfg.dps) * cfg.dt
-            shots.append((b.x, b.y, e.x, e.y, b.team))
+            cover = _fire_cover(b.x, b.y, e.x, e.y, cfg, live, {i, best})
+            if cover > 0.0:
+                dps = b.dps if b.dps is not None else cfg.dps
+                damage[best] += dps * cfg.dt * cover
+                shots.append((b.x, b.y, e.x, e.y, b.team))
 
     # 4) keep spacing — mutual repulsion across everyone (reuse flocking)
     sep = mutual_avoidance([(b.x, b.y) for b in live], radius=cfg.sep_radius,
@@ -293,14 +426,18 @@ def simulate(bots, cfg=None, *, max_ticks=800):
     cfg = cfg or BattleConfig()
     teams = sorted({b.team for b in bots})
     result = BattleResult(teams=teams)
-    for _ in range(max_ticks):
+    maneuver_state = ManeuverState()
+    assignment_state = AssignmentState()
+    for tick in range(max_ticks):
         result.frames.append(_snapshot(bots))
         c = _counts(bots, teams)
         result.counts.append(c)
         if sum(1 for n in c if n > 0) <= 1:   # one (or zero) team left standing
             result.shots.append([])
             break
-        result.shots.append(battle_step(bots, cfg))
+        result.shots.append(battle_step(bots, cfg, maneuver_state=maneuver_state,
+                                        assignment_state=assignment_state,
+                                        tick=tick))
     else:
         # ran out of ticks without a wipeout: record the final state
         result.frames.append(_snapshot(bots))
@@ -333,7 +470,8 @@ def run_battle(n_per_team=14, cfg=None, *, seed=0, max_ticks=800, num_teams=2):
 # A handful of distinct showcase battles, each with a baked seed so the result is
 # reproducible. Each returns ``(bots, cfg, title)``; render them with
 # ``scripts/make_battle_gallery_gif.py``.
-SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint")
+SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
+                  "maneuver_duel")
 
 
 def battle_scenario(name):
@@ -355,11 +493,30 @@ def battle_scenario(name):
         return (red + blue, cfg, "Quality vs quantity — 5 tanks vs 16 scouts")
     if name == "chokepoint":
         obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
-        cfg = BattleConfig(obstacles=obstacles)
+        cfg = BattleConfig(obstacles=obstacles, formation="wedge",
+                           tactics="count_aware")
         rng = random.Random(7)
         red = make_company(cfg, RED, (cfg.width * 0.13, cfg.height * 0.5),
                            [("soldier", 13)], rng, jitter=3.2)
         blue = make_company(cfg, BLUE, (cfg.width * 0.87, cfg.height * 0.5),
                             [("soldier", 13)], rng, jitter=3.2)
-        return (red + blue, cfg, "Chokepoint — terrain splits the field")
+        return (red + blue, cfg, "Chokepoint — wedge through terrain")
+    if name == "maneuver_duel":
+        obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
+        cfg = BattleConfig(
+            obstacles=obstacles,
+            tactics="count_aware",
+            assignment="hungarian",
+            formation="wedge",
+            maneuver="greedy",
+            maneuver_by_team={RED: "prioritized", BLUE: "greedy"},
+            maneuver_replan_ticks=15,
+        )
+        rng = random.Random(11)
+        red = make_company(cfg, RED, (cfg.width * 0.13, cfg.height * 0.5),
+                           [("soldier", 10)], rng, jitter=2.8)
+        blue = make_company(cfg, BLUE, (cfg.width * 0.87, cfg.height * 0.5),
+                            [("soldier", 10)], rng, jitter=2.8)
+        return (red + blue, cfg,
+                "Maneuver duel — planned red vs greedy blue")
     raise KeyError(name)

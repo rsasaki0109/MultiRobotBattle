@@ -12,7 +12,8 @@ gate pins each one's honest result (a WIN, a LOSS, or an equivalence against a
 reference solver), so the claims are measured, not asserted.
 
 ```bash
-pip install mapf-zoo          # pure Python, zero required dependencies
+pip install "git+https://github.com/rsasaki0109/multirobot-battle"
+# or: pip install mapf-zoo   # not published — git / docs/demo wheel only
 pip install "mapf-zoo[bcp]"   # + numpy/scipy for the LP-based solver
 ```
 

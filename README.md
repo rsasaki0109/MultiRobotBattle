@@ -10,6 +10,7 @@
 
 [![build-jazzy](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml)
 [![docs](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/docs.yaml)
+[![live demos](https://img.shields.io/badge/live%20demos-GitHub%20Pages-5b8cff)](https://rsasaki0109.github.io/multirobot-battle/)
 [![MAPF zoo](https://img.shields.io/badge/MAPF%20zoo-45%2B%20algorithms%20%C2%B7%20gated-blue)](docs/coordination.md)
 
 ## Swarm battle — two flocking armies, last robot standing
@@ -55,6 +56,30 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
   <code>python3 scripts/make_battle_gallery_gif.py</code>.</em>
 </p>
 
+The battle stack is modular — swap one layer at a time and measure the effect
+with ``scripts/battle_gate.py`` (pinned win-rates in
+``benchmarks/expected_metrics/battle_gate.json``):
+
+| Layer | Config | What it does |
+| --- | --- | --- |
+| **Tactics** | ``tactics`` / ``tactics_by_team`` | nearest, count-aware TeamHOI-lite, or distilled transformer |
+| **Assignment** | ``assignment`` | ``hungarian`` (combat utility) or ``cbs_ta`` (grid BFS + Murty path-aware matching) |
+| **Formation** | ``formation`` | line / wedge / screen / square via displacement consensus |
+| **Maneuver** | ``maneuver`` / ``maneuver_by_team`` | greedy pursuit vs grid A* / prioritized / CBS / LaCAM-PIBT |
+| **LoS & cover** | ``require_los``, ``obstacles`` | terrain blocks or attenuates fire |
+
+<p align="center">
+  <img src="docs/media/maneuver_duel.gif" alt="Side-by-side chokepoint battles: left panel shows greedy straight-line pursuit through three terrain gaps; right panel shows the same soldiers with Hungarian assignment, wedge formation, and prioritized MAPF maneuver — red plans paths around obstacles while blue charges in, lasers flicker, and one side wins." width="820">
+</p>
+
+<p align="center">
+  <em>Headline demo — same soldiers and terrain, two movement layers:
+  <strong>greedy pursuit</strong> (left) vs <strong>prioritized MAPF maneuver</strong>
+  + Hungarian assignment + wedge (right). Render with
+  <code>python3 scripts/make_maneuver_gif.py</code>; try it live in the
+  <a href="https://rsasaki0109.github.io/multirobot-battle/demo/battle.html">browser battle demo</a>.</em>
+</p>
+
 And under the hood, that battlefield is the same multi-robot stack that hosts a
 pip-installable, benchmark-gated MAPF algorithm zoo:
 
@@ -78,7 +103,6 @@ reproduced from its source paper and **benchmark-gated** in CI, so each claim
 (a WIN, a LOSS, or an equivalence vs. a reference solver) is *measured*.
 
 ```bash
-# Works today (PyPI release planned):
 pip install "git+https://github.com/rsasaki0109/multirobot-battle"
 ```
 
@@ -96,10 +120,11 @@ Swap `cbs` for `ecbs`, `lacam`, `mapf_lns`, `pbs`, `mstar`, … — they share t
 same `(grid, agents)` interface. The core has **zero required dependencies**
 (only the LP-based `bcp` needs `pip install "...[bcp]"` for numpy/scipy).
 
-> **Try it without installing anything** — [`docs/demo/`](docs/demo/) runs these
-> same pure-Python solvers *in your browser* via Pyodide: pick an instance and a
-> solver, watch the collision-free paths animate. Serve it with
-> `python3 -m http.server` from `docs/demo/` (or host `docs/` on GitHub Pages).
+> **Try it without installing anything** — **[live browser demos](https://rsasaki0109.github.io/multirobot-battle/)**
+> run the pure-Python engine via Pyodide: the [**swarm battle**](https://rsasaki0109.github.io/multirobot-battle/demo/battle.html)
+> (duel / chokepoint / maneuver duel) and the [**MAPF zoo**](https://rsasaki0109.github.io/multirobot-battle/demo/)
+> (pick instance + solver, watch paths animate). Local fallback:
+> `python3 -m http.server` from `docs/demo/`.
 
 ### A taste of the catalogue
 

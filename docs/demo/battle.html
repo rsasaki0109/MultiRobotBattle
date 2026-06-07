@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Swarm battle — fight in your browser</title>
+<style>
+  :root { --bg:#0f1320; --panel:#1a1f33; --ink:#e8ecf6; --muted:#9aa3bf;
+          --accent:#ff5b5b; --line:#2a3150; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:22px 18px 8px; text-align:center; }
+  h1 { margin:0 0 4px; font-size:22px; }
+  h1 .z { color:var(--accent); }
+  .sub { color:var(--muted); font-size:14px; margin:0 auto; max-width:720px; }
+  .sub a { color:#5b8cff; text-decoration:none; }
+  main { max-width:820px; margin:0 auto; padding:14px 16px 40px; }
+  .controls { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;
+              background:var(--panel); border:1px solid var(--line);
+              border-radius:12px; padding:14px; margin-bottom:14px; }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .field label { font-size:12px; color:var(--muted); }
+  select, button { font:inherit; color:var(--ink); }
+  select { background:#10162a; border:1px solid var(--line); border-radius:8px;
+           padding:8px 10px; min-width:220px; }
+  button { background:var(--accent); border:0; border-radius:8px; padding:9px 16px;
+           color:#fff; font-weight:600; cursor:pointer; }
+  button.ghost { background:#222a45; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .grow { flex:1; }
+  .status { min-height:22px; font-size:13px; color:var(--muted); margin:4px 2px 10px; }
+  .status .err { color:#ff8b8b; }
+  .status b { color:var(--ink); }
+  .canvas-wrap { background:var(--panel); border:1px solid var(--line);
+                 border-radius:12px; padding:12px; }
+  canvas { width:100%; height:auto; display:block; border-radius:8px; background:#0b0f1c; }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:12px;
+            color:var(--muted); }
+  .tally { display:flex; gap:18px; margin-top:8px; font-size:13px; }
+  .tally span { font-weight:600; }
+  .red { color:#ff5b5b; } .blue { color:#5b8cff; }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:0 16px 30px; }
+  footer a { color:#5b8cff; text-decoration:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Swarm <span class="z">battle</span> — fight in your browser</h1>
+  <p class="sub">Two flocking armies, last robot standing — the same pure-Python
+  engine that drives the repo's GIFs, running live via
+  <a href="https://pyodide.org/" target="_blank" rel="noopener">Pyodide</a>.
+  Pick a scenario and watch red vs blue advance, fire, and collapse. Also try the
+  <a href="./index.html">MAPF zoo demo</a>.</p>
+</header>
+
+<main>
+  <div class="controls">
+    <div class="field">
+      <label for="scenario">Scenario</label>
+      <select id="scenario">
+        <option value="duel">duel — 14 vs 14 open field</option>
+        <option value="chokepoint">chokepoint — wedge through terrain</option>
+        <option value="maneuver_duel">maneuver duel — MAPF red vs greedy blue</option>
+      </select>
+    </div>
+    <div class="grow"></div>
+    <button id="fight" disabled>Loading…</button>
+    <button id="play" class="ghost" disabled>Pause</button>
+  </div>
+
+  <div class="status" id="status">Booting Pyodide and the battle engine…</div>
+
+  <div class="canvas-wrap">
+    <canvas id="cv" width="820" height="460"></canvas>
+    <div class="tally" id="tally"></div>
+    <div class="legend">
+      <span class="red">● red</span><span class="blue">● blue</span>
+      <span>— laser line</span><span>▦ terrain</span>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Part of
+  <a href="https://github.com/rsasaki0109/multirobot-navigation" target="_blank" rel="noopener">multirobot-navigation</a>.
+  Deterministic given the scenario seed — computed live in your browser.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
+<script>
+const WHEEL = "./mapf_zoo-0.1.0-py3-none-any.whl";
+const BRIDGE = "./battle_bridge.py";
+const TEAM = {0:"#ff5b5b", 1:"#5b8cff", 2:"#33d6a6", 3:"#ffd166"};
+const TEAM_LABEL = {0:"Red", 1:"Blue", 2:"Green", 3:"Yellow"};
+
+const $ = id => document.getElementById(id);
+const statusEl = $("status"), cv = $("cv"), ctx = cv.getContext("2d");
+const tallyEl = $("tally");
+let py = null, current = null, playing = true, t0 = null, raf = null, fi = 0;
+
+function setStatus(html, isErr=false) {
+  statusEl.innerHTML = isErr ? `<span class="err">${html}</span>` : html;
+}
+
+async function boot() {
+  py = await loadPyodide();
+  const wheelBuf = new Uint8Array(await (await fetch(WHEEL)).arrayBuffer());
+  const bridgeSrc = await (await fetch(BRIDGE)).text();
+  py.FS.writeFile("/mapf_zoo.whl", wheelBuf);
+  py.FS.writeFile("/battle_bridge.py", bridgeSrc);
+  await py.runPythonAsync(`
+import sys, zipfile
+zipfile.ZipFile("/mapf_zoo.whl").extractall("/site")
+for p in ("/site", "/"):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+import battle_bridge
+`);
+  $("fight").disabled = false; $("fight").textContent = "Fight";
+  $("play").disabled = false;
+  setStatus("Ready — pick a scenario and press <b>Fight</b>.");
+  fight();
+}
+
+async function fight() {
+  if (!py) return;
+  const scenario = $("scenario").value;
+  $("fight").disabled = true; $("fight").textContent = "Simulating…";
+  setStatus(`Running <b>${scenario}</b>…`);
+  await new Promise(r => setTimeout(r, 16));
+  let res;
+  try {
+    const fn = py.globals.get("battle_bridge").run;
+    res = JSON.parse(fn(scenario));
+    fn.destroy && fn.destroy();
+  } catch (e) {
+    setStatus("Error: " + e, true);
+    $("fight").disabled = false; $("fight").textContent = "Fight";
+    return;
+  }
+  $("fight").disabled = false; $("fight").textContent = "Fight";
+  if (!res.ok) { setStatus(res.error, true); current = null; draw(); return; }
+  current = res;
+  fi = 0;
+  const w = res.winner ? `<b>${res.winner.toUpperCase()}</b> wins` : "draw";
+  setStatus(`<b>${res.title}</b> — ${res.frames.length} frames (stride ${res.stride}), ${w}.`);
+  t0 = performance.now(); playing = true; $("play").textContent = "Pause";
+  loop();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!current) return;
+  const s = current;
+  const pad = 18;
+  const sx = (cv.width - 2 * pad) / s.width;
+  const sy = (cv.height - 2 * pad) / s.height;
+  const sc = Math.min(sx, sy);
+  const ox = (cv.width - sc * s.width) / 2;
+  const oy = (cv.height - sc * s.height) / 2;
+  const X = x => ox + x * sc;
+  const Y = y => oy + (s.height - y) * sc;
+
+  ctx.fillStyle = "#0b0f1c";
+  ctx.fillRect(0, 0, cv.width, cv.height);
+
+  for (const [ox0, oy0, r] of s.obstacles) {
+    ctx.fillStyle = "#334155";
+    ctx.beginPath();
+    ctx.arc(X(ox0), Y(oy0), r * sc, 0, 7);
+    ctx.fill();
+  }
+
+  const frame = s.frames[Math.min(fi, s.frames.length - 1)] || [];
+  const shots = s.shots[Math.min(fi, s.shots.length - 1)] || [];
+  ctx.strokeStyle = "#8b95a7";
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.35;
+  for (const [x0, y0, x1, y1] of shots) {
+    ctx.beginPath();
+    ctx.moveTo(X(x0), Y(y0));
+    ctx.lineTo(X(x1), Y(y1));
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  for (const [x, y, team, hp] of frame) {
+    const col = TEAM[team] || "#ccc";
+    const rad = 4 + 3 * hp;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(X(x), Y(y), rad, 0, 7);
+    ctx.fill();
+  }
+
+  const counts = s.counts[Math.min(fi, s.counts.length - 1)] || [];
+  tallyEl.innerHTML = s.teams.map((t, i) => {
+    const cls = t === 0 ? "red" : t === 1 ? "blue" : "";
+    return `<span class="${cls}">${TEAM_LABEL[t] || t}: ${counts[i] ?? 0}</span>`;
+  }).join("");
+}
+
+const STEP_MS = 80;
+function loop() {
+  cancelAnimationFrame(raf);
+  const tick = now => {
+    if (!current) return;
+    if (playing) {
+      fi = Math.floor((now - t0) / STEP_MS);
+      if (fi >= current.frames.length) {
+        fi = current.frames.length - 1;
+        playing = false;
+        $("play").textContent = "Replay";
+      }
+      draw();
+    }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+}
+
+$("fight").addEventListener("click", fight);
+$("scenario").addEventListener("change", fight);
+$("play").addEventListener("click", () => {
+  if (current && fi >= current.frames.length - 1 && !playing) {
+    fi = 0; t0 = performance.now(); playing = true;
+    $("play").textContent = "Pause";
+    return;
+  }
+  playing = !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+  if (playing) { t0 = performance.now() - fi * STEP_MS; }
+});
+boot().catch(e => setStatus("Failed to start: " + e, true));
+</script>
+</body>
+</html>

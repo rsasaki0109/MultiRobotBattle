@@ -5,7 +5,9 @@ algorithms** — regenerate any of them with the matching script:
 
 | GIF | Script | Shows |
 | --- | --- | --- |
-| `coordination_demo.gif` | `make_coordination_gif.py` | CBS doorway crossing → formation |
+| `battle.gif` | `make_battle_gif.py` | classic 14 vs 14 duel |
+| `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid: duel / FFA / quality vs quantity / chokepoint |
+| `maneuver_duel.gif` | `make_maneuver_gif.py` | greedy vs MAPF maneuver on the chokepoint |
 | `sim_demo.gif` | `make_sim_gif.py` | the 2D world: robots, obstacles, V2V links |
 | `swarm_demo.gif` | `make_swarm_gif.py` | Boids flocking (70 agents) |
 | `swarm_sim_demo.gif` | `make_swarm_sim_gif.py` | flock migrating to a goal through obstacles |

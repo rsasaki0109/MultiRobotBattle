@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "45+ Multi-Agent Path Finding algorithms, faithfully reproduced from their papers and benchmark-gated — pure Python, ROS-free."
 readme = "docs/pypi.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "Ryohei Sasaki", email = "rsasaki0109@gmail.com" }]
 keywords = [
   "mapf",
@@ -61,4 +61,13 @@ package-dir = { "" = "mrn_coord" }
 # (cbs_ta pulls hungarian/auction from lifelong.allocation). The ROS node
 # modules (planner_node, follower_node, ros_conversion) are present but never
 # imported by these packages, so the wheel needs no rclpy.
-packages = ["mrn_coord", "mrn_coord.mapf", "mrn_coord.lifelong"]
+packages = [
+  "mrn_coord",
+  "mrn_coord.mapf",
+  "mrn_coord.lifelong",
+  "mrn_coord.battle_policy",
+  "mrn_coord.formation",
+]
+
+[tool.setuptools.package-data]
+"mrn_coord.battle_policy" = ["weights/*.json"]

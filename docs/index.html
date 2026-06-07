@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>multirobot-battle — demos</title>
+<style>
+  :root { --bg:#0f1320; --panel:#1a1f33; --ink:#e8ecf6; --muted:#9aa3bf;
+          --red:#ff5b5b; --blue:#5b8cff; --line:#2a3150; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { text-align:center; padding:40px 20px 20px; }
+  h1 { margin:0 0 8px; font-size:26px; }
+  .sub { color:var(--muted); max-width:640px; margin:0 auto; }
+  main { max-width:720px; margin:0 auto; padding:10px 20px 50px; }
+  .cards { display:grid; gap:14px; }
+  a.card { display:block; text-decoration:none; color:inherit;
+           background:var(--panel); border:1px solid var(--line);
+           border-radius:14px; padding:18px 20px; transition:border .15s; }
+  a.card:hover { border-color:var(--blue); }
+  .card h2 { margin:0 0 6px; font-size:18px; }
+  .card p { margin:0; color:var(--muted); font-size:14px; }
+  .tag { display:inline-block; font-size:11px; font-weight:600;
+         padding:2px 8px; border-radius:6px; margin-bottom:8px; }
+  .tag.battle { background:#3a1f1f; color:var(--red); }
+  .tag.mapf { background:#1f2a4a; color:var(--blue); }
+  footer { text-align:center; color:var(--muted); font-size:13px; padding:0 20px 40px; }
+  footer a { color:var(--blue); text-decoration:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>multirobot-battle</h1>
+  <p class="sub">Swarm robot battles on top of a benchmark-gated MAPF zoo — run the
+  real pure-Python engine in your browser, no install.</p>
+</header>
+<main>
+  <div class="cards">
+    <a class="card" href="demo/battle.html">
+      <span class="tag battle">live demo</span>
+      <h2>Swarm battle</h2>
+      <p>Two flocking armies fight to the last robot — duel, chokepoint, or MAPF
+      maneuver duel. Pyodide runs the same code as the repo GIFs.</p>
+    </a>
+    <a class="card" href="demo/index.html">
+      <span class="tag mapf">live demo</span>
+      <h2>MAPF zoo</h2>
+      <p>Pick an instance and a solver (CBS, ECBS, LaCAM, …) and watch
+      collision-free paths animate. 45+ algorithms, one wheel.</p>
+    </a>
+    <a class="card" href="https://github.com/rsasaki0109/multirobot-battle">
+      <h2>Source &amp; docs</h2>
+      <p>GitHub repo — README, <code>pip install git+…</code>, full paper-by-paper
+      catalogue in coordination.md, benchmark gates in CI.</p>
+    </a>
+  </div>
+</main>
+<footer>
+  <a href="https://github.com/rsasaki0109/multirobot-battle">GitHub</a>
+  · Apache-2.0
+</footer>
+</body>
+</html>
