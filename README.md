@@ -247,11 +247,14 @@ same plan, same feet (`python3 scripts/make_zmp_figure.py`):
 
 And it scales to a **team**: several humanoids plan footsteps to their goals and
 **prioritized footstep MAPF** deconflicts their bodies tick by tick, so they
-cross a shared area without touching — a lower-priority humanoid waits or detours
+cross a shared area without touching — a lower-priority humanoid waits or detours.
+Each deconflicted plan is then run through the **same ZMP preview-control walking
+simulator** as above, so every humanoid is a real swaying center of mass with its
+ZMP held over the lit support foot — not a disc sliding along footstep centres
 (`python3 scripts/make_footstep_mapf_gif.py`):
 
 <p align="center">
-  <img src="docs/media/footstep_mapf.gif" alt="Three humanoids on a shared floor, each with its own colour, plan footsteps from their starts to their goal rings; their zigzagging footstep trails cross in the middle while their translucent body discs slide along without ever overlapping, a lower-priority humanoid detouring around the others." width="560">
+  <img src="docs/media/footstep_mapf.gif" alt="Three humanoids on a shared floor, each its own colour, plan footsteps from their starts to their goal rings and walk them with ZMP preview control: each one's center of mass traces a side-to-side swaying trail across the floor while a small ZMP dot stays on the lit support foot, and their translucent torso discs cross in the middle without ever overlapping, a lower-priority humanoid detouring around the others." width="560">
 </p>
 
 And when a standing humanoid is **pushed**, where should it step to not fall? The
