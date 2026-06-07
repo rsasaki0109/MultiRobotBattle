@@ -43,7 +43,12 @@ simulator emits them; that repo consumes them.
   **focus fire emergent**. Pure Python, deterministic, built on
   `mrn_coord.flocking`; the project's headline GIF
   (`scripts/make_battle_gif.py`), unit-tested (`test_battle.py`). Optional
-  wounded-retreat (`retreat_frac`), off by default so battles stay decisive.
+  wounded-retreat (`retreat_frac`), off by default so battles stay decisive. The
+  same engine drives several **kinds** of fight (`battle_scenario`): N-army
+  **free-for-all** (`make_free_for_all`), **unit classes** (scout/soldier/tank/
+  sniper via `CLASSES` + `make_company`, so quality-vs-quantity & combined arms
+  emerge), and **terrain** (circular `obstacles`); `make_battle_gallery_gif.py`
+  renders a 2×2 gallery of duel / free-for-all / quality-vs-quantity / chokepoint.
 - [x] Navigation: occupancy grid + grid A* + pure pursuit; reciprocal
   multi-robot collision avoidance; replanning around dynamic obstacles.
 - [x] Optional Gazebo adapter: validated diff-drive world, `ros_gz_bridge`,

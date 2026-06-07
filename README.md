@@ -38,6 +38,23 @@ from it (`python3 scripts/make_battle_gif.py --seed 19`). A wounded-retreat
 behaviour is available (`BattleConfig(retreat_frac=...)`) but off by default so
 the default battle always reaches a decisive result.
 
+The **same engine, same local rules** drive several different kinds of fight —
+a duel, a three-army free-for-all, **unit classes** (scout / soldier / tank /
+sniper, so quality-vs-quantity falls out), and **terrain** that splits the field:
+
+<p align="center">
+  <img src="docs/media/battle_gallery.gif" alt="A 2x2 grid of four swarm battles running at once. Top-left, a 14-vs-14 duel; top-right, a three-army free-for-all where red, blue and green clusters converge and green wins; bottom-left, quality vs quantity — five big tank discs grind down sixteen small fast scout discs and the tanks win; bottom-right, a chokepoint where a vertical row of obstacles splits red and blue, who funnel through the gaps to fight. Laser lines and elimination flashes flicker across every panel, the per-team tallies count down, and each panel ends on its winner." width="820">
+</p>
+
+<p align="center">
+  <em>Four battles, one engine: a <strong>duel</strong>, a three-army
+  <strong>free-for-all</strong>, <strong>quality vs quantity</strong> (5 tanks vs
+  16 scouts — and the tanks win), and a <strong>chokepoint</strong> where terrain
+  splits the field. Pick one with
+  <code>battle_scenario("free_for_all")</code>; render the grid with
+  <code>python3 scripts/make_battle_gallery_gif.py</code>.</em>
+</p>
+
 And under the hood, that battlefield is the same multi-robot stack that hosts a
 pip-installable, benchmark-gated MAPF algorithm zoo:
 

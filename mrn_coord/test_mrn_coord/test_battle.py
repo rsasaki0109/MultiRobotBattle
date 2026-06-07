@@ -4,12 +4,18 @@ import unittest
 
 from mrn_coord.battle import (
     BLUE,
+    CLASSES,
+    GREEN,
     RED,
+    SCENARIO_NAMES,
     BattleConfig,
     Bot,
+    battle_scenario,
     battle_step,
     make_armies,
+    make_unit,
     run_battle,
+    simulate,
 )
 
 
@@ -106,6 +112,69 @@ class TestEngagement(unittest.TestCase):
         b = run_battle(13, seed=2)
         # different seeds → different engagements (not identical histories)
         self.assertNotEqual(a.frames[5], b.frames[5])
+
+
+class TestUnitClasses(unittest.TestCase):
+    def test_make_unit_applies_class_stats(self):
+        tank = make_unit(0.0, 0.0, RED, "tank")
+        st = CLASSES["tank"]
+        self.assertEqual(tank.kind, "tank")
+        self.assertEqual(tank.hp, st["hp"])
+        self.assertEqual(tank.max_hp, st["hp"])
+        self.assertEqual(tank.dps, st["dps"])
+        self.assertEqual(tank.attack_range, st["attack_range"])
+        self.assertEqual(tank.max_speed, st["max_speed"])
+
+    def test_per_bot_range_is_honoured(self):
+        # a sniper (range 6.5) hits an enemy at distance 5; a soldier (3.5) cannot
+        cfg = BattleConfig(max_speed=0.0)
+        far = 5.0
+        sniper = [make_unit(0.0, 0.0, RED, "sniper"),
+                  Bot(far, 0.0, 0, 0, BLUE, 100, 100)]
+        battle_step(sniper, cfg)
+        self.assertLess(sniper[1].hp, 100)        # sniper reaches it
+        soldier = [make_unit(0.0, 0.0, RED, "soldier"),
+                   Bot(far, 0.0, 0, 0, BLUE, 100, 100)]
+        battle_step(soldier, cfg)
+        self.assertEqual(soldier[1].hp, 100)      # soldier out of range
+
+
+class TestFreeForAll(unittest.TestCase):
+    def test_three_team_battle_has_one_or_no_winner(self):
+        res = run_battle(10, seed=6, num_teams=3)
+        self.assertEqual(res.teams, [0, 1, 2])
+        standing = [t for t in res.teams if res.survivors[t] > 0]
+        self.assertLessEqual(len(standing), 1)
+        if res.winner is not None:
+            self.assertEqual(standing, [res.winner])
+
+    def test_simulate_on_custom_bots(self):
+        bots = [Bot(1.0, 1.0, 0, 0, RED, 100, 100),
+                Bot(2.0, 1.0, 0, 0, BLUE, 100, 100)]
+        res = simulate(bots, BattleConfig(), max_ticks=300)
+        self.assertIn(res.winner, (RED, BLUE, None))
+        self.assertEqual(sorted(res.teams), [0, 1])
+
+
+class TestTerrain(unittest.TestCase):
+    def test_obstacles_are_never_penetrated(self):
+        bots, cfg, _ = battle_scenario("chokepoint")
+        res = simulate(bots, cfg, max_ticks=700)
+        for frame in res.frames:
+            for (x, y, team, hp, alive, kind) in frame:
+                if not alive:
+                    continue
+                for (ox, oy, r) in cfg.obstacles:
+                    self.assertGreater((x - ox) ** 2 + (y - oy) ** 2, (r * 0.7) ** 2)
+
+
+class TestScenarios(unittest.TestCase):
+    def test_all_scenarios_are_decisive(self):
+        for name in SCENARIO_NAMES:
+            bots, cfg, title = battle_scenario(name)
+            res = simulate(bots, cfg, max_ticks=900)
+            self.assertIsNotNone(res.winner, f"{name} stalled")
+            self.assertTrue(title)
 
 
 class TestRetreatOption(unittest.TestCase):
