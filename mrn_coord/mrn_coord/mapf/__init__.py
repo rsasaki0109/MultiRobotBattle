@@ -325,6 +325,14 @@ The pieces compose bottom-up:
   the index lattice, minimising makespan). Resolves *timing* conflicts (crossings,
   merges) by velocity tuning; correctly returns ``None`` when only rerouting would
   help (a shared corridor in opposite directions). Pure Python.
+- :mod:`bvc` — **Buffered Voronoi Cells** (Zhou, Wang, Bandyopadhyay & Schwager,
+  RA-L 2017): decentralized, *position*-space collision avoidance (ORCA's
+  velocity-space cousin). Each robot restricts its next move to its **buffered
+  Voronoi cell** — the Voronoi half-planes vs every neighbour, each retracted
+  inward by the body radius — and steps toward its goal within it. Two robots'
+  buffered cells are ``>= 2r`` apart, so staying inside one's own cell is
+  collision-free **by construction**. Reactive and always safe but not complete:
+  symmetric configurations deadlock (shown honestly). Pure Python.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -485,6 +493,13 @@ from .coordination_space import (
     schedule as coordination_schedule,
     schedule_to_trajectories,
 )
+from .bvc import (
+    BVCResult,
+    buffered_voronoi_cell,
+    project_to_cell,
+    simulate as bvc_simulate,
+    step_bvc,
+)
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -639,6 +654,11 @@ __all__ = [
     "discretize_path",
     "CoordinationProblem",
     "CoordinationSchedule",
+    "bvc_simulate",
+    "buffered_voronoi_cell",
+    "project_to_cell",
+    "step_bvc",
+    "BVCResult",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

@@ -2413,6 +2413,39 @@ coordination space in two) — `schedule` correctly returns `None`; velocity tun
 **cannot reroute**, the paradigm's known limit, not a bug. **Scales:** a 3-robot
 crossing is solved and collision-free. Pure Python, no numpy.
 
+### Buffered Voronoi Cells (`bvc.py`)
+
+A reproduction of Zhou, Wang, Bandyopadhyay & Schwager's *"Fast, On-line Collision
+Avoidance for Dynamic Vehicles using Buffered Voronoi Cells"* (IEEE RA-L 2017). The
+zoo already has ORCA — reciprocal avoidance in **velocity** space; BVC is its
+**position**-space cousin and a distinct mechanism. Each robot, knowing the others'
+positions, restricts its next move to its own **buffered Voronoi cell** and steps
+toward its goal within it.
+
+For each pair the Voronoi boundary is the perpendicular bisector; robot `i`'s side is
+the half-plane of points nearer to `p_i`. Retract that half-plane inward by the body
+radius `r` and you get the **buffered** half-plane; the intersection over all
+neighbours is the BVC (`buffered_voronoi_cell`, returned as half-planes `a·x ≤ b`).
+The key property: two robots' buffered cells are separated by at least `2r`, so **if
+every robot stays inside its own BVC, no two robots ever collide** — collision-free
+*by construction*. And whenever the robots are currently `≥ 2r` apart, each robot's
+*own* position lies in its BVC, so the cell is non-empty and the robot can always at
+least hold still. The controller (`step_bvc` / `simulate`) projects each robot's goal
+into its BVC (`project_to_cell` — the closest point in the convex polygon by Dykstra's
+alternating projection) and steps toward it.
+
+The gate (`bvc`) certifies BVC's actual theorem against an independent oracle
+(`min_separation`). **Working regime:** a 12-seed 4-robot random battery — every run
+reaches all goals **and** stays `≥ 2r` apart; a naive straight-line constant-speed
+baseline collides on **7/12** of them, and on every instance where the baseline
+collides BVC is collision-free and still arrives. **The guarantee holds even in
+deadlock:** a head-on swap, an antipodal 6-robot circle, and a symmetric 4-way
+crossing all keep `≥ 2r` — collision-free even when BVC cannot make progress.
+**Honest deadlock scope:** those symmetric configurations *deadlock* (not all robots
+arrive) — BVC is reactive and always safe but **not complete**; the limitation is
+shown explicitly (the paper resolves it with a separate right-hand-rule maneuver,
+omitted here). Deterministic, pure Python, no numpy.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

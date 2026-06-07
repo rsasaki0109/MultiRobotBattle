@@ -6625,6 +6625,141 @@ def _run_coordination_space() -> dict:
     }
 
 
+def _run_bvc() -> dict:
+    # bvc.py reproduces Zhou, Wang, Bandyopadhyay & Schwager, "Fast, On-line
+    # Collision Avoidance for Dynamic Vehicles using Buffered Voronoi Cells"
+    # (IEEE RA-L 2017). The zoo already has ORCA -- reciprocal avoidance in
+    # VELOCITY space; BVC is its POSITION-space cousin. Each robot restricts its
+    # next move to its own BUFFERED VORONOI CELL (the Voronoi half-planes vs every
+    # neighbour, each retracted inward by the body radius r) and steps toward its
+    # goal within it. Two robots' buffered cells are >= 2r apart, so if every robot
+    # stays in its own BVC no two ever collide -- collision-free BY CONSTRUCTION.
+    #
+    # The gate certifies BVC's actual theorem (always collision-free) against an
+    # INDEPENDENT oracle (min_separation), plus the working regime and the honest
+    # deadlock scope:
+    # (1) WORKING REGIME: a 12-seed 4-robot random battery -- every run reaches all
+    #     goals AND stays >= 2r apart. A naive straight-line constant-speed baseline
+    #     COLLIDES on some of these (proving the avoidance is non-trivial), and on
+    #     every instance where the baseline collides BVC is collision-free and still
+    #     arrives.
+    # (2) THE GUARANTEE HOLDS EVEN IN DEADLOCK: a head-on swap, an antipodal circle,
+    #     and a symmetric 4-way crossing all keep >= 2r -- collision-free even when
+    #     BVC cannot make progress.
+    # (3) HONEST DEADLOCK SCOPE: those symmetric configurations deadlock (not all
+    #     robots arrive) -- shown explicitly, the paradigm's known limitation.
+    # If the cell construction or projection regressed, robots would dip below 2r
+    # and the collision-free guarantee would trip.
+    import math
+    import random
+
+    from mrn_coord.mapf.bvc import min_separation, simulate
+
+    r = 0.2
+
+    def _naive(starts, goals, *, step=0.1, gr=0.12, max_steps=600):
+        pos = [tuple(p) for p in starts]
+        paths = {i: [pos[i]] for i in range(len(pos))}
+        for _ in range(max_steps):
+            if all(math.hypot(pos[i][0] - goals[i][0],
+                              pos[i][1] - goals[i][1]) <= gr
+                   for i in range(len(pos))):
+                break
+            nn = []
+            for i, p in enumerate(pos):
+                dx, dy = goals[i][0] - p[0], goals[i][1] - p[1]
+                d = math.hypot(dx, dy)
+                nn.append((p[0] + step * dx / d, p[1] + step * dy / d)
+                          if d > step else tuple(goals[i]))
+            pos = nn
+            for i in range(len(pos)):
+                paths[i].append(pos[i])
+        return paths
+
+    def _spread(n, rng, gap=3 * r):
+        pts = []
+        while len(pts) < n:
+            p = (rng.uniform(0, 4), rng.uniform(0, 4))
+            if all(math.hypot(p[0] - q[0], p[1] - q[1]) >= gap for q in pts):
+                pts.append(p)
+        return pts
+
+    # (1) random working-regime battery
+    insts = arrived = coll_free = naive_collisions = avoids_win = 0
+    for seed in range(12):
+        rng = random.Random(100 + seed)
+        pool = _spread(8, rng)
+        starts, goals = pool[:4], pool[4:]
+        insts += 1
+        res = simulate(starts, goals, r, step_size=0.1, goal_radius=0.12,
+                       max_steps=600)
+        bvc_cf = min_separation(res.paths, r) >= -1e-6
+        if res.arrived:
+            arrived += 1
+        if bvc_cf:
+            coll_free += 1
+        naive_cf = min_separation(_naive(starts, goals), r) >= -1e-6
+        if not naive_cf:
+            naive_collisions += 1
+            if bvc_cf and res.arrived:
+                avoids_win += 1
+
+    # (2)+(3) deadlock scenarios: always collision-free, but symmetric ones stall
+    deadlock_cf = True
+    deadlock_seen = False
+
+    # head-on swap
+    ho = simulate([(0, 0), (4, 0)], [(4, 0), (0, 0)], r, step_size=0.1,
+                  goal_radius=0.1, max_steps=400)
+    deadlock_cf = deadlock_cf and min_separation(ho.paths, r) >= -1e-6
+    deadlock_seen = deadlock_seen or not ho.arrived
+    ho_naive_collides = min_separation(
+        _naive([(0, 0), (4, 0)], [(4, 0), (0, 0)]), r) < -1e-6
+
+    # antipodal circle
+    n = 6
+    R = 2.5
+    cs = [(R * math.cos(2 * math.pi * k / n), R * math.sin(2 * math.pi * k / n))
+          for k in range(n)]
+    cg = [(R * math.cos(2 * math.pi * k / n + math.pi),
+           R * math.sin(2 * math.pi * k / n + math.pi)) for k in range(n)]
+    circ = simulate(cs, cg, r, step_size=0.08, goal_radius=0.15, max_steps=800)
+    deadlock_cf = deadlock_cf and min_separation(circ.paths, r) >= -1e-6
+    deadlock_seen = deadlock_seen or not circ.arrived
+
+    # symmetric 4-way crossing through the centre
+    xs = [(0, 0), (4, 0), (0, 4), (4, 4)]
+    xg = [(4, 4), (0, 4), (4, 0), (0, 0)]
+    xc = simulate(xs, xg, r, step_size=0.1, goal_radius=0.1, max_steps=600)
+    deadlock_cf = deadlock_cf and min_separation(xc.paths, r) >= -1e-6
+    deadlock_seen = deadlock_seen or not xc.arrived
+
+    # determinism
+    a = simulate([(0, 0), (4, 0)], [(4, 0), (0, 0)], r, step_size=0.1,
+                 max_steps=400)
+    b = simulate([(0, 0), (4, 0)], [(4, 0), (0, 0)], r, step_size=0.1,
+                 max_steps=400)
+    deterministic = a.paths == b.paths and a.steps == b.steps
+
+    return {
+        # (1) working regime + non-trivial avoidance vs naive
+        "random_all_arrived": arrived == insts,
+        "random_all_collision_free": coll_free == insts,
+        "naive_collides_somewhere": naive_collisions > 0,
+        "bvc_avoids_where_naive_collides": avoids_win == naive_collisions,
+        "random_instances": insts,
+        "naive_collision_count": naive_collisions,
+        # (2) the collision-free guarantee holds even in deadlock
+        "guarantee_holds_in_deadlock": deadlock_cf,
+        "headon_naive_collides": ho_naive_collides,
+        # (3) honest deadlock scope
+        "symmetric_configs_deadlock": deadlock_seen,
+        "circle_num_arrived": circ.num_arrived,
+        # (4)
+        "deterministic": deterministic,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -6870,6 +7005,7 @@ SUITE = [
     ("drrt_star", _run_drrt_star),
     ("kcbs", _run_kcbs),
     ("coordination_space", _run_coordination_space),
+    ("bvc", _run_bvc),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),

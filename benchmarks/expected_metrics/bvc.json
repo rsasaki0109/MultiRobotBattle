@@ -1,0 +1,13 @@
+{
+  "bvc_avoids_where_naive_collides": true,
+  "circle_num_arrived": 0,
+  "deterministic": true,
+  "guarantee_holds_in_deadlock": true,
+  "headon_naive_collides": true,
+  "naive_collides_somewhere": true,
+  "naive_collision_count": 7,
+  "random_all_arrived": true,
+  "random_all_collision_free": true,
+  "random_instances": 12,
+  "symmetric_configs_deadlock": true
+}

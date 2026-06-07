@@ -44,7 +44,7 @@ simulator emits them; that repo consumes them.
 - [x] CI: build + `colcon test` over all packages + coordination CLI demos.
 - [x] **MAPF algorithm zoo** (`mrn_coord.mapf`): 45+ algorithms faithfully
   reproduced from their papers in pure Python, each *benchmark-gated* in
-  `scripts/benchmark_gate.py` (full gate **99/99**). CBS family (CBSH, ECBS,
+  `scripts/benchmark_gate.py` (full gate **100/100**). CBS family (CBSH, ECBS,
   EECBS, FECBS, ICBS/bypass, MA-CBS, disjoint, BCP, rectangle/corridor/mutex
   symmetry), optimal joint-space search (M\*, rM\*, EPEA\*, ICTS, Standley
   OD/ID), declarative (MDD-SAT), constructive (Push-and-Rotate/Swap, TSWAP,
@@ -66,7 +66,8 @@ simulator emits them; that repo consumes them.
   Dubins-car robots, a kinodynamic-RRT low level + space–time constraint tubes,
   Kottinger et al.**), path–velocity decomposition (**the classic coordination
   diagram: fix paths, schedule speed by A-star over the coordination space, Kant
-  & Zucker / O'Donnell & Lozano-Pérez**), and
+  & Zucker / O'Donnell & Lozano-Pérez**), decentralized position-space collision
+  avoidance (**Buffered Voronoi Cells, Zhou et al.**), and
   the low
   levels (space-time A\*,
   SIPP/SIPPS, Multi-Label A\*). Each documented algorithm-by-algorithm with its
