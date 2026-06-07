@@ -1,4 +1,47 @@
-# multirobot-navigation
+# multirobot-battle
+
+<p align="center">
+  <img src="docs/media/battle.gif" alt="A dark battlefield where a red army and a blue army of robots, each a flocking swarm, advance from opposite sides into the centre and fight: laser lines flick between robots firing on their nearest enemy, expanding rings mark each elimination, the team tally bars shrink as robots fall, and after a back-and-forth that comes down to a one-on-one duel, RED WINS with a single survivor." width="820">
+</p>
+
+<p align="center">
+  <em>Two decentralized <strong>flocking armies</strong> — red vs blue — advance to contact and fight to the last robot. No commander: each robot only flocks with its team, chases its nearest enemy, and fires when in range. Damage is per-attacker, so <strong>focus fire emerges for free</strong> — and the battle is built on the same multi-robot stack that hosts a <strong>benchmark-gated MAPF zoo</strong> (below).</em>
+</p>
+
+[![build-jazzy](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml)
+[![docs](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/docs.yaml)
+[![MAPF zoo](https://img.shields.io/badge/MAPF%20zoo-45%2B%20algorithms%20%C2%B7%20gated-blue)](docs/coordination.md)
+
+## Swarm battle — two flocking armies, last robot standing
+
+Split a Boids swarm into two teams and let them fight. Every robot steers from
+only local information — flock with living teammates, advance on its nearest
+living enemy, keep spacing, and deal continuous damage to whatever enemy is in
+range — yet coherent battlefield behaviour emerges. Because damage is
+**per-attacker**, a robot caught by three enemies at once melts three times as
+fast, so the team that keeps formation and concentrates locally wears the other
+down. Nothing about that is scripted; it falls out of the local rules.
+
+```python
+from mrn_coord.battle import run_battle, TEAM_NAMES
+
+res = run_battle(n_per_team=14, seed=19)        # red vs blue, fight to the death
+print(TEAM_NAMES[res.winner], res.survivors)    # -> red {0: 1, 1: 0}
+```
+
+It is built directly on the swarm flocking primitives in
+[`mrn_coord.flocking`](mrn_coord/mrn_coord/flocking.py) (separation / alignment /
+cohesion + mutual avoidance); the simulation lives in
+[`mrn_coord.battle`](mrn_coord/mrn_coord/battle.py), is pure Python (no numpy)
+and deterministic given the seed, and the hero GIF above is rendered straight
+from it (`python3 scripts/make_battle_gif.py --seed 19`). A wounded-retreat
+behaviour is available (`BattleConfig(retreat_frac=...)`) but off by default so
+the default battle always reaches a decisive result.
+
+And under the hood, that battlefield is the same multi-robot stack that hosts a
+pip-installable, benchmark-gated MAPF algorithm zoo:
+
+## A pip-installable MAPF algorithm zoo
 
 <p align="center">
   <img src="docs/media/mapf_gallery.gif" alt="The same 12x12 multi-agent path-finding instance with 14 agents solved side by side by four algorithms — CBS finds the optimal sum-of-costs 123, prioritized planning 129, PIBT and LaCAM flow greedily at 280 — each agent a coloured disc sliding to its goal ring, collision-free" width="760">
@@ -7,12 +50,6 @@
 <p align="center">
   <em>The same 12×12 instance, 14 agents, solved side by side by four MAPF algorithms — optimal <strong>CBS</strong> finds sum-of-costs 123 while prioritized planning, <strong>PIBT</strong>, and <strong>LaCAM</strong> flow greedily higher. One of <strong>45+ algorithms</strong> in the zoo, each faithfully reproduced from its paper and benchmark-gated.</em>
 </p>
-
-[![build-jazzy](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/build_jazzy.yaml)
-[![docs](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-navigation/actions/workflows/docs.yaml)
-[![MAPF zoo](https://img.shields.io/badge/MAPF%20zoo-45%2B%20algorithms%20%C2%B7%20gated-blue)](docs/coordination.md)
-
-## A pip-installable MAPF algorithm zoo
 
 > **45+ Multi-Agent Path Finding algorithms, faithfully reproduced from their
 > papers and benchmark-gated — pure Python, ROS-free.**
@@ -25,7 +62,7 @@ reproduced from its source paper and **benchmark-gated** in CI, so each claim
 
 ```bash
 # Works today (PyPI release planned):
-pip install "git+https://github.com/rsasaki0109/multirobot-navigation"
+pip install "git+https://github.com/rsasaki0109/multirobot-battle"
 ```
 
 ```python

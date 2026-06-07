@@ -1,4 +1,4 @@
-# Plan — multirobot-navigation
+# Plan — multirobot-battle
 
 Scope: **multi-robot simulation, navigation, and coordination**. A deterministic
 2D world plus the planning/control/swarm algorithms that move robots through it,
@@ -37,6 +37,13 @@ simulator emits them; that repo consumes them.
 - [x] Swarm flocking: separation / alignment / cohesion + obstacle avoidance +
   migration + predator evasion (one or many) + leader following; deterministic
   swarm-in-world driver + multi-phase mission; CI-verified.
+- [x] **Swarm battle** (`mrn_coord.battle`): two flocking armies (red vs blue)
+  fight to the last robot — each robot flocks with its team, advances on its
+  nearest enemy, and deals continuous damage in range; per-attacker damage makes
+  **focus fire emergent**. Pure Python, deterministic, built on
+  `mrn_coord.flocking`; the project's headline GIF
+  (`scripts/make_battle_gif.py`), unit-tested (`test_battle.py`). Optional
+  wounded-retreat (`retreat_frac`), off by default so battles stay decisive.
 - [x] Navigation: occupancy grid + grid A* + pure pursuit; reciprocal
   multi-robot collision avoidance; replanning around dynamic obstacles.
 - [x] Optional Gazebo adapter: validated diff-drive world, `ros_gz_bridge`,

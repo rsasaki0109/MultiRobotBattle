@@ -17,9 +17,9 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="multirobot-navigation maintainers",
+    maintainer="multirobot-battle maintainers",
     maintainer_email="maintainers@example.com",
-    description="Optional Gazebo (gz sim) adapter for multirobot-navigation.",
+    description="Optional Gazebo (gz sim) adapter for multirobot-battle.",
     license="Apache-2.0",
     test_suite="test_mrn_gazebo",
     entry_points={

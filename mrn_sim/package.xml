@@ -2,8 +2,8 @@
 <package format="3">
   <name>mrn_sim</name>
   <version>0.1.0</version>
-  <description>Deterministic 2D multi-robot world simulator (kinematics, obstacles, and sensor models) for multirobot-navigation.</description>
-  <maintainer email="maintainers@example.com">multirobot-navigation maintainers</maintainer>
+  <description>Deterministic 2D multi-robot world simulator (kinematics, obstacles, and sensor models) for multirobot-battle.</description>
+  <maintainer email="maintainers@example.com">multirobot-battle maintainers</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>

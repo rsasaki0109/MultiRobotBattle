@@ -2,8 +2,8 @@
 <package format="3">
   <name>mrn_coord</name>
   <version>0.1.0</version>
-  <description>Multi-robot coordination layer: MAPF planning, formation control, and cooperative coverage for multirobot-navigation.</description>
-  <maintainer email="maintainers@example.com">multirobot-navigation maintainers</maintainer>
+  <description>Multi-robot coordination layer: MAPF planning, formation control, and cooperative coverage for multirobot-battle.</description>
+  <maintainer email="maintainers@example.com">multirobot-battle maintainers</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>

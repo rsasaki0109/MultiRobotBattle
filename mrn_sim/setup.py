@@ -17,10 +17,10 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="multirobot-navigation maintainers",
+    maintainer="multirobot-battle maintainers",
     maintainer_email="maintainers@example.com",
     description="Deterministic 2D multi-robot world simulator for "
-    "multirobot-navigation.",
+    "multirobot-battle.",
     license="Apache-2.0",
     test_suite="test_mrn_sim",
     entry_points={

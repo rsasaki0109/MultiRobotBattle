@@ -3,7 +3,7 @@
   <name>mrn_msgs</name>
   <version>0.1.0</version>
   <description>Message contracts for ROS 2-native cooperative robotics infrastructure.</description>
-  <maintainer email="maintainers@example.com">multirobot-navigation maintainers</maintainer>
+  <maintainer email="maintainers@example.com">multirobot-battle maintainers</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

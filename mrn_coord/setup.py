@@ -17,10 +17,10 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="multirobot-navigation maintainers",
+    maintainer="multirobot-battle maintainers",
     maintainer_email="maintainers@example.com",
     description="Multi-robot coordination layer (MAPF, formation, coverage) "
-    "for multirobot-navigation.",
+    "for multirobot-battle.",
     license="Apache-2.0",
     test_suite="test_mrn_coord",
     entry_points={
