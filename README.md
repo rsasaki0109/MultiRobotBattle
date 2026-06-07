@@ -208,6 +208,19 @@ the LaCAM/PIBT line, lifelong engines (RHCR, Token Passing, TPTS), and execution
 layers (k-robust, switchable-ADG) — is documented algorithm-by-algorithm, with the
 honest gated result of each, in [`docs/coordination.md`](docs/coordination.md).
 
+**The graph decides the cost** — a different corner of the zoo is **Token
+Swapping** (Yamanaka et al. 2014): no blank cells, every vertex holds a token, and
+the only move is an adjacent **swap** — minimise the *number* of swaps. Sort the
+*same* reversed rainbow on three topologies and the optimum changes completely: a
+**path** needs the full inversion count (21), a **cycle** uses its wrap-around edge
+(9), a **complete graph** sorts in `n − cycles` (3) — it finishes and waits while
+the path is still grinding. Each panel is driven by the real optimal solver
+(`python3 scripts/make_token_swap_gif.py`):
+
+<p align="center">
+  <img src="docs/media/token_swap.gif" alt="The same reversed rainbow of seven coloured tokens sorts into order on three graphs side by side: on a path the tokens bubble past their neighbours and it takes 21 adjacent swaps; on a 7-cycle the wrap-around edge cuts it to 9; on the complete graph any two tokens swap directly and it is sorted in just 3, finishing first and holding while the path still works. A live counter ticks up under each." width="760">
+</p>
+
 **Humanoid footstep planning → dynamically stable walk** — the zoo also drops to
 the footstep resolution of a walking humanoid: search-based **footstep planning**
 (Hornung et al. 2012) places the feet, then **ZMP preview control** (Kajita et al.
