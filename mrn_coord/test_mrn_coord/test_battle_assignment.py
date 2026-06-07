@@ -55,6 +55,13 @@ class TestHungarianAssignment(unittest.TestCase):
         res = simulate(bots, cfg, max_ticks=700)
         self.assertIsNotNone(res.winner)
 
+    def test_mapf_stack_duel_scenario(self):
+        bots, cfg, title = battle_scenario("mapf_stack_duel")
+        self.assertIn("MAPF stack", title)
+        self.assertEqual(cfg.assignment_by_team.get(RED), "cbs_ta")
+        res = simulate(bots, cfg, max_ticks=700)
+        self.assertIsNotNone(res.winner)
+
     def test_cbs_ta_assigns_on_chokepoint(self):
         bots, cfg, _ = battle_scenario("chokepoint")
         cfg = BattleConfig(

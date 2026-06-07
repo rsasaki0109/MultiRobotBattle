@@ -80,6 +80,17 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
   <a href="https://rsasaki0109.github.io/multirobot-battle/demo/battle.html">browser battle demo</a>.</em>
 </p>
 
+<p align="center">
+  <img src="docs/media/mapf_stack_duel.gif" alt="Side-by-side chokepoint battles comparing MAPF layers on red: left panel uses Hungarian assignment with greedy pursuit; right panel stacks CBS-TA path-aware assignment with prioritized MAPF maneuver and wedge formation — red routes through gaps while lasers fire." width="820">
+</p>
+
+<p align="center">
+  <em>Full MAPF stack on red — <strong>CBS-TA assignment</strong> (who engages whom
+  around terrain) plus <strong>prioritized maneuver</strong> (how they route there),
+  vs Hungarian + greedy on the same spawn. Render with
+  <code>python3 scripts/make_mapf_stack_gif.py</code>.</em>
+</p>
+
 And under the hood, that battlefield is the same multi-robot stack that hosts a
 pip-installable, benchmark-gated MAPF algorithm zoo:
 

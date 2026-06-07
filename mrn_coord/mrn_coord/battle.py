@@ -471,7 +471,7 @@ def run_battle(n_per_team=14, cfg=None, *, seed=0, max_ticks=800, num_teams=2):
 # reproducible. Each returns ``(bots, cfg, title)``; render them with
 # ``scripts/make_battle_gallery_gif.py``.
 SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
-                  "maneuver_duel")
+                  "maneuver_duel", "mapf_stack_duel")
 
 
 def battle_scenario(name):
@@ -519,4 +519,24 @@ def battle_scenario(name):
                             [("soldier", 10)], rng, jitter=2.8)
         return (red + blue, cfg,
                 "Maneuver duel — planned red vs greedy blue")
+    if name == "mapf_stack_duel":
+        obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
+        cfg = BattleConfig(
+            obstacles=obstacles,
+            tactics="count_aware",
+            formation="wedge",
+            assignment="none",
+            assignment_by_team={RED: "cbs_ta"},
+            maneuver="greedy",
+            maneuver_by_team={RED: "prioritized", BLUE: "greedy"},
+            maneuver_replan_ticks=15,
+            assignment_replan_ticks=15,
+        )
+        rng = random.Random(11)
+        red = make_company(cfg, RED, (cfg.width * 0.13, cfg.height * 0.5),
+                           [("soldier", 10)], rng, jitter=2.8)
+        blue = make_company(cfg, BLUE, (cfg.width * 0.87, cfg.height * 0.5),
+                            [("soldier", 10)], rng, jitter=2.8)
+        return (red + blue, cfg,
+                "MAPF stack — CBS-TA assignment + planned maneuver")
     raise KeyError(name)

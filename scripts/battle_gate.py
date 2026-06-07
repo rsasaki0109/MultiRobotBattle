@@ -76,20 +76,28 @@ def _run_decisive(tactics, *, seeds, n_per_team=12):
 
 
 def _run_chokepoint_matchup(*, seeds, n_per_team=8, max_ticks=650,
-                            red_assignment=None, blue_assignment=None):
-    """Chokepoint with terrain — assignment layers matter more than open field."""
+                            red_assignment=None, blue_assignment=None,
+                            red_maneuver=None, blue_maneuver="greedy"):
+    """Chokepoint with terrain — assignment / maneuver layers matter."""
     from mrn_coord.battle import BLUE, RED, BattleConfig, make_company, simulate
     import random
 
     obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
     wins = {RED: 0, BLUE: 0, None: 0}
     for seed in seeds:
+        maneuver_by = {BLUE: blue_maneuver}
+        if red_maneuver:
+            maneuver_by[RED] = red_maneuver
         cfg = BattleConfig(
             obstacles=obstacles,
             tactics="count_aware",
             formation="wedge",
             assignment="none",
             assignment_by_team={},
+            maneuver="greedy",
+            maneuver_by_team=maneuver_by,
+            maneuver_replan_ticks=15,
+            assignment_replan_ticks=15,
         )
         if red_assignment:
             cfg.assignment_by_team[RED] = red_assignment
@@ -132,6 +140,9 @@ def collect_metrics(*, seeds):
         max_ticks=600, red_assignment="hungarian", blue_assignment="none")
     metrics["cbs_ta_vs_hungarian_chokepoint"] = _run_chokepoint_matchup(
         seeds=seeds, red_assignment="cbs_ta", blue_assignment="hungarian")
+    metrics["mapf_stack_vs_local_chokepoint"] = _run_chokepoint_matchup(
+        seeds=seeds, red_assignment="cbs_ta", blue_assignment="hungarian",
+        red_maneuver="prioritized", blue_maneuver="greedy")
     return metrics
 
 

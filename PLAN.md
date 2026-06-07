@@ -203,7 +203,8 @@ battle is exactly where they should *do work*:
   real-machine — not CI).
 - [ ] **More GIFs + a one-line hook** — each new feature gets a GIF driven by the
   real engine, plus a short "how it works" writeup for sharing.
-  *(partial: ``maneuver_duel.gif`` in README + ``docs/media/README.md``.)*
+  *(partial: ``maneuver_duel.gif`` + ``mapf_stack_duel.gif`` in README;
+  ``make_mapf_stack_gif.py`` for assignment+maneuver stack.)*
 
 ## Next ideas
 

@@ -17,6 +17,7 @@ SCENARIOS = {
     "duel": 600,
     "chokepoint": 650,
     "maneuver_duel": 550,
+    "mapf_stack_duel": 550,
 }
 
 
