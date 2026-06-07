@@ -1,0 +1,14 @@
+{
+  "cbf_avoids_where_naive_collides": true,
+  "crossing_stays_safe": true,
+  "deterministic": true,
+  "filter_inactive_when_far": true,
+  "filter_intervenes_under_conflict": true,
+  "headon_deadlocks": true,
+  "headon_stays_safe": true,
+  "naive_collides_somewhere": true,
+  "naive_collision_count": 9,
+  "random_all_arrived": true,
+  "random_all_collision_free": true,
+  "random_instances": 12
+}

@@ -2446,6 +2446,39 @@ arrive) — BVC is reactive and always safe but **not complete**; the limitation
 shown explicitly (the paper resolves it with a separate right-hand-rule maneuver,
 omitted here). Deterministic, pure Python, no numpy.
 
+### Control Barrier Function safety certificates (`cbf.py`)
+
+A reproduction of Wang, Ames & Egerstedt's *"Safety Barrier Certificates for
+Collisions-Free Multirobot Systems"* (IEEE T-RO 2017) — the control-theoretic member
+of the reciprocal-avoidance trio (with ORCA in velocity space and BVC in position
+space). CBF is a **minimally-invasive safety filter**: given any nominal controller
+`û` (here a go-to-goal proportional law), it perturbs `û` as little as possible while
+*guaranteeing* the swarm never collides.
+
+Single-integrator robots `ṗ_i = u_i`. For each pair the **barrier**
+`h_ij = ‖p_i − p_j‖² − (2r)²` is `≥ 0` exactly when the robots do not overlap. Forward
+invariance of the safe set is enforced by the **certificate** `ḣ_ij ≥ −γ·h_ij`, which
+expands to the *linear* inequality `−2(p_i − p_j)·(u_i − u_j) ≤ γ·h_ij`
+(`barrier_constraints`). The safety filter is the QP `min ½‖u − û‖²` subject to every
+pairwise certificate — and because its Hessian is the identity, the solution is simply
+the **Euclidean projection** of `û` onto the polyhedron of safe controls
+(`safe_control`, by the same Dykstra alternating projection as BVC). Stopping (`u = 0`)
+always satisfies every certificate when `h_ij ≥ 0`, so the QP is always feasible.
+
+The gate (`cbf`) certifies the barrier theorem against an independent oracle
+(`min_separation`). **Minimally invasive:** with the robots far apart and no conflict,
+the filter is *inactive* — the safe control equals the nominal control exactly (zero
+deviation). **Working regime:** a 12-seed 4-robot random battery — all reach goals and
+stay `≥ 2r` apart; a naive *unfiltered* go-to-goal baseline collides on **9/12**, and
+on every one CBF is collision-free and still arrives while the filter actually
+intervenes (deviation `>` 0). **Guarantee even in deadlock:** a head-on swap and a
+symmetric 4-way crossing stay `≥ 2r` — collision-free even when stuck (notably CBF's
+soft deflection *clears* the symmetric crossing that BVC's hard cells deadlock on).
+**Honest scope:** the certificate is continuous-time, integrated at finite `dt` with a
+small margin folded into the barrier, so the guarantee holds up to discretization; and
+like every reactive filter it is **not complete** — a perfectly opposed head-on
+deadlocks safely (both robots decelerate to a stop). Deterministic, pure Python.
+
 ### Lifelong / online MAPF (`lifelong/`)
 
 CBS and prioritized planning solve a **one-shot** instance: a fixed set of

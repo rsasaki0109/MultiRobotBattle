@@ -333,6 +333,15 @@ The pieces compose bottom-up:
   buffered cells are ``>= 2r`` apart, so staying inside one's own cell is
   collision-free **by construction**. Reactive and always safe but not complete:
   symmetric configurations deadlock (shown honestly). Pure Python.
+- :mod:`cbf` — **Control Barrier Function safety certificates** (Wang, Ames &
+  Egerstedt, T-RO 2017): the control-theoretic member of the reciprocal-avoidance
+  trio (with ORCA and :mod:`bvc`). A **minimally-invasive safety filter** — it
+  perturbs any nominal controller as little as possible while keeping every
+  pairwise barrier ``h_ij = ‖p_i−p_j‖² − (2r)²`` non-negative (the certificate
+  ``ḣ_ij ≥ −γ·h_ij``, a linear inequality). The filter QP has identity Hessian, so
+  it is the **Euclidean projection** of the nominal control onto the safe
+  polyhedron (Dykstra). Collision-free by forward invariance; inactive when no
+  conflict; symmetric standoffs deadlock safely. Pure Python.
 - :mod:`solution` — ``Solution`` plus cost/makespan/padding/rendering helpers.
 """
 
@@ -500,6 +509,13 @@ from .bvc import (
     simulate as bvc_simulate,
     step_bvc,
 )
+from .cbf import (
+    CBFResult,
+    barrier_constraints,
+    nominal_control,
+    safe_control,
+    simulate as cbf_simulate,
+)
 from .conflicts import (
     EdgeConflict,
     VertexConflict,
@@ -659,6 +675,11 @@ __all__ = [
     "project_to_cell",
     "step_bvc",
     "BVCResult",
+    "cbf_simulate",
+    "safe_control",
+    "nominal_control",
+    "barrier_constraints",
+    "CBFResult",
     "whca_star",
     "push_and_rotate",
     "push_and_swap",

@@ -6760,6 +6760,133 @@ def _run_bvc() -> dict:
     }
 
 
+def _run_cbf() -> dict:
+    # cbf.py reproduces Wang, Ames & Egerstedt, "Safety Barrier Certificates for
+    # Collisions-Free Multirobot Systems" (IEEE T-RO 2017). The zoo has two
+    # reciprocal-avoidance methods -- ORCA (velocity-obstacle) and BVC (buffered
+    # Voronoi); CBF is the third, a control-theoretic MINIMALLY-INVASIVE SAFETY
+    # FILTER. Single-integrator robots; for each pair the barrier
+    # h_ij = ||p_i-p_j||^2 - (2r)^2 must stay >= 0, enforced by the certificate
+    # hdot_ij >= -gamma*h_ij -- a LINEAR inequality in the stacked control. The
+    # filter is the QP min ||u - u_nominal||^2 s.t. all certificates hold; its
+    # Hessian is the identity, so the solution is the EUCLIDEAN PROJECTION of the
+    # nominal go-to-goal control onto the safe polyhedron (Dykstra, like BVC).
+    # Stopping is always feasible, so forward invariance keeps the swarm safe.
+    #
+    # The gate certifies the barrier theorem against an independent oracle
+    # (min_separation):
+    # (1) MINIMALLY INVASIVE: with the robots far apart and no conflict, the filter
+    #     is inactive -- the safe control equals the nominal control exactly.
+    # (2) WORKING REGIME: a 12-seed 4-robot random battery -- all reach goals and
+    #     stay >= 2r apart; a naive (unfiltered) go-to-goal baseline collides on
+    #     several, and on every one CBF is collision-free and still arrives, while
+    #     the filter actually intervenes (max deviation > 0).
+    # (3) GUARANTEE EVEN IN DEADLOCK: a head-on swap stays >= 2r (collision-free)
+    #     even though it cannot make progress.
+    # (4) HONEST SCOPE: that symmetric head-on deadlocks (not all arrive) -- the
+    #     filter is reactive and safe, not complete.
+    # If the barrier construction or projection regressed, robots would breach 2r.
+    import math
+    import random
+
+    from mrn_coord.mapf.cbf import (
+        min_separation, nominal_control, safe_control, simulate,
+    )
+
+    r = 0.2
+
+    def _naive(starts, goals, *, dt=0.05, gain=1.5, vmax=1.0, gr=0.12, ms=900):
+        pos = [tuple(p) for p in starts]
+        paths = {i: [pos[i]] for i in range(len(pos))}
+        for _ in range(ms):
+            if all(math.hypot(pos[i][0] - goals[i][0],
+                              pos[i][1] - goals[i][1]) <= gr
+                   for i in range(len(pos))):
+                break
+            un = nominal_control(pos, goals, gain=gain, v_max=vmax)
+            pos = [(pos[i][0] + un[i][0] * dt, pos[i][1] + un[i][1] * dt)
+                   for i in range(len(pos))]
+            for i in range(len(pos)):
+                paths[i].append(pos[i])
+        return paths
+
+    def _spread(n, rng, gap=3 * r):
+        pts = []
+        while len(pts) < n:
+            p = (rng.uniform(0, 4), rng.uniform(0, 4))
+            if all(math.hypot(p[0] - q[0], p[1] - q[1]) >= gap for q in pts):
+                pts.append(p)
+        return pts
+
+    # (1) minimally invasive: far apart -> safe == nominal
+    pos = [(0.0, 0.0), (10.0, 10.0)]
+    gl = [(5.0, 0.0), (5.0, 10.0)]
+    un = nominal_control(pos, gl, gain=1.5, v_max=1.0)
+    us = safe_control(pos, un, r, gamma=1.0, margin=0.1)
+    far_dev = max(math.hypot(us[i][0] - un[i][0], us[i][1] - un[i][1])
+                  for i in range(2))
+    filter_inactive_when_far = far_dev < 1e-9
+
+    # (2) random battery
+    insts = arrived = coll_free = naive_collisions = avoids_win = 0
+    intervened = 0
+    for seed in range(12):
+        rng = random.Random(200 + seed)
+        pool = _spread(8, rng)
+        starts, goals = pool[:4], pool[4:]
+        insts += 1
+        res = simulate(starts, goals, r, dt=0.05, goal_radius=0.12,
+                       max_steps=900)
+        cbf_cf = min_separation(res.paths, r) >= -1e-6
+        if res.arrived:
+            arrived += 1
+        if cbf_cf:
+            coll_free += 1
+        if res.max_intervention > 1e-6:
+            intervened += 1
+        if min_separation(_naive(starts, goals), r) < -1e-6:
+            naive_collisions += 1
+            if cbf_cf and res.arrived:
+                avoids_win += 1
+
+    # (3)+(4) head-on deadlock: safe but stalls
+    ho = simulate([(0, 0), (4, 0)], [(4, 0), (0, 0)], r, dt=0.05,
+                  goal_radius=0.1, max_steps=600)
+    headon_safe = min_separation(ho.paths, r) >= -1e-6
+    headon_deadlocks = ho.num_arrived < 2
+
+    # also: the symmetric 4-way crossing stays safe (and CBF actually clears it)
+    xc = simulate([(0, 0), (4, 4), (4, 0), (0, 4)],
+                  [(4, 4), (0, 0), (0, 4), (4, 0)], r, dt=0.05,
+                  gamma=1.0, margin=0.1, goal_radius=0.1, max_steps=800)
+    cross_safe = min_separation(xc.paths, r) >= -1e-6
+
+    # determinism
+    a = simulate([(0, 0), (4, 4)], [(4, 4), (0, 0)], r, dt=0.05, max_steps=400)
+    b = simulate([(0, 0), (4, 4)], [(4, 4), (0, 0)], r, dt=0.05, max_steps=400)
+    deterministic = a.paths == b.paths and a.steps == b.steps
+
+    return {
+        # (1) minimally invasive
+        "filter_inactive_when_far": filter_inactive_when_far,
+        # (2) working regime + non-trivial avoidance vs naive
+        "random_all_arrived": arrived == insts,
+        "random_all_collision_free": coll_free == insts,
+        "naive_collides_somewhere": naive_collisions > 0,
+        "cbf_avoids_where_naive_collides": avoids_win == naive_collisions,
+        "filter_intervenes_under_conflict": intervened > 0,
+        "random_instances": insts,
+        "naive_collision_count": naive_collisions,
+        # (3) safety guarantee even in deadlock
+        "headon_stays_safe": headon_safe,
+        "crossing_stays_safe": cross_safe,
+        # (4) honest deadlock scope
+        "headon_deadlocks": headon_deadlocks,
+        # (5)
+        "deterministic": deterministic,
+    }
+
+
 # (case name, producer) — each returns a flat metrics dict.
 SUITE = [
     ("sim_around_obstacle", lambda: _run_sim_scenario("around_obstacle")),
@@ -7006,6 +7133,7 @@ SUITE = [
     ("kcbs", _run_kcbs),
     ("coordination_space", _run_coordination_space),
     ("bvc", _run_bvc),
+    ("cbf", _run_cbf),
     # M*: subdimensional expansion -- same optimum as CBS, couples only the agents
     # that interact (collision set stays small; expansions flat as the team grows)
     ("mstar_subdimensional", _run_mstar_subdimensional),
