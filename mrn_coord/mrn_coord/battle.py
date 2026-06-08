@@ -32,6 +32,10 @@ is no central commander — yet coherent battlefield behaviour emerges:
 - **fog of war** (optional) — :mod:`mrn_coord.battle_fog` limits each robot to
   enemies within ``sense_range`` (and optionally line of sight through terrain),
   so scouting and ambush matter; scouts / snipers see farther.
+- **morale / rout** (optional) — :mod:`mrn_coord.battle_morale` makes collapsing
+  teams flee off the field instead of stalling in a draw.
+- **collision-free charge** (optional) — :mod:`mrn_coord.battle_charge` filters
+  movement through ORCA or BVC (MAPF zoo primitives) for chokepoint breakthroughs.
 
 The one tactically interesting consequence is **focus fire for free**: damage is
 per-attacker, so a robot caught by three enemies at once takes triple damage.
@@ -84,6 +88,7 @@ from .battle_objectives import (
 )
 from .battle_teams import alliance_of, teams_are_enemies
 from .spatial_hash import SpatialHash
+from .battle_charge import apply_charge
 from .battle_fog import (
     blind_advance_vector,
     can_see_enemy,
@@ -91,6 +96,13 @@ from .battle_fog import (
     team_visible_enemy_bot_indices,
 )
 from .battle_formations import formation_commands
+from .battle_morale import (
+    MoraleState,
+    apply_rout_steering,
+    init_morale_state,
+    morale_snapshot,
+    remove_routed_off_field,
+)
 from .battle_maneuver import ManeuverState, maneuver_direction, maneuver_for_team, replan_paths
 from .battle_projectiles import (
     ProjectileState,
@@ -239,6 +251,16 @@ class BattleConfig:
     sense_range: float = None   # defaults to ``perception``; scouts see farther
     fog_requires_los: bool = True
     fog_view_team: int = None   # spectator view team for snapshots (defaults RED)
+    morale_rout_speed: float = 1.35
+    morale_exit_margin: float = 1.2
+    # collision-free charge — ``none``, ``orca``, or ``bvc`` (MAPF zoo primitives)
+    charge: str = "none"
+    charge_by_team: dict = None
+    charge_radius: float = 0.55
+    charge_time_horizon: float = 2.0
+    # morale — routed teams flee off-field when strength collapses
+    morale: bool = False
+    morale_rout_frac: float = 0.38
 
 
 @dataclass
@@ -258,6 +280,7 @@ class BattleResult:
     objective_zone: tuple = field(default_factory=tuple)
     objective_progress: list = field(default_factory=list)
     fog_visible: list = field(default_factory=list)  # per frame: enemy bot indices seen
+    morale_progress: list = field(default_factory=list)
     ticks: int = 0
     survivors: dict = field(default_factory=dict)
 
@@ -579,7 +602,7 @@ def _fire_at_target(b, e, bot_idx, target_bot_idx, i, best, cfg, live, *,
 
 def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
                 projectile_state=None, tick=0, ctf_tracker=None,
-                escort_tracker=None):
+                escort_tracker=None, morale_state=None):
     """Advance the battle one tick (in place).
 
     Returns ``(shots, projectiles, explosions)`` for this tick — firing lines,
@@ -788,6 +811,11 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
             desired[i][0] += cfg.w_obstacle * wobs[i][0]
             desired[i][1] += cfg.w_obstacle * wobs[i][1]
 
+    if morale_state is not None:
+        apply_rout_steering(bots, live, desired, cfg, morale_state)
+
+    apply_charge(live, desired, cfg)
+
     # integrate motion (snapshot-consistent), each bot at its own top speed
     for i in range(n):
         b = live[i]
@@ -806,6 +834,9 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
         if cfg.walls:
             b.x, b.y = push_out_of_walls(b.x, b.y, cfg.walls,
                                          body=cfg.body_radius)
+
+    if morale_state is not None:
+        remove_routed_off_field(bots, cfg, morale_state)
 
     # apply damage and resolve eliminations (simultaneous)
     for i in range(n):
@@ -925,6 +956,7 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     assault_tracker = (BaseAssaultTracker(cfg, teams)
                        if obj_mode == "base_assault" else None)
     escort_tracker = EscortTracker(cfg, teams) if obj_mode == "escort" else None
+    morale_state = init_morale_state(bots, teams) if cfg.morale else None
     objective_win = None
     for tick in range(max_ticks):
         record = (tick % frame_stride == 0)
@@ -943,6 +975,8 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
                 result.objective_progress.append(escort_tracker.snapshot())
             elif obj_tracker is not None:
                 result.objective_progress.append(obj_tracker.snapshot())
+            if morale_state is not None:
+                result.morale_progress.append(morale_snapshot(bots, teams, morale_state))
         if (obj_mode not in ("ctf", "base_assault", "escort")
                 and len(_standing_alliances(bots, teams, cfg.alliances)) <= 1):
             if record:
@@ -954,7 +988,8 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
                                    assignment_state=assignment_state,
                                    projectile_state=projectile_state, tick=tick,
                                    ctf_tracker=ctf_tracker,
-                                   escort_tracker=escort_tracker)
+                                   escort_tracker=escort_tracker,
+                                   morale_state=morale_state)
         if record:
             result.shots.append(shots)
             result.projectiles.append(projs)
@@ -990,6 +1025,8 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
                 view_team = cfg.fog_view_team if cfg.fog_view_team is not None else RED
                 result.fog_visible.append(
                     team_visible_enemy_bot_indices(bots, cfg, view_team))
+            if morale_state is not None:
+                result.morale_progress.append(morale_snapshot(bots, teams, morale_state))
             result.shots.append([])
             result.projectiles.append([])
             result.explosions.append([])
@@ -1054,7 +1091,7 @@ SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "mapf_total_war_mapf", "ctf_mapf_local", "ctf_mapf_mapf",
                   "kingdom", "grand_alliance",
                   "hill", "domination", "ctf", "base_assault", "escort", "fog_ambush",
-                  "artillery_barrage", "fog_artillery")
+                  "artillery_barrage", "fog_artillery", "morale_duel", "orca_charge_duel")
 
 MANEUVER_HEADLINE_MODES = ("greedy", "astar", "prioritized", "cbs")
 MANEUVER_HEADLINE_LABELS = {
@@ -1062,6 +1099,13 @@ MANEUVER_HEADLINE_LABELS = {
     "astar": "A* maneuver vs greedy",
     "prioritized": "Prioritized MAPF vs greedy",
     "cbs": "CBS maneuver vs greedy",
+}
+
+CHARGE_HEADLINE_MODES = ("none", "orca", "bvc")
+CHARGE_HEADLINE_LABELS = {
+    "none": "Greedy vs greedy",
+    "orca": "ORCA charge vs greedy",
+    "bvc": "BVC charge vs greedy",
 }
 
 ALLIANCE_NAMES = {0: "western", 1: "eastern"}
@@ -1089,6 +1133,33 @@ def maneuver_headline_duel(red_maneuver, *, seed=11, n=10, jitter=2.8):
     blue = make_company(cfg, BLUE, (cfg.width * 0.87, cfg.height * 0.5),
                         [("soldier", n)], random.Random(seed + 1), jitter=jitter)
     title = MANEUVER_HEADLINE_LABELS[red_maneuver]
+    return red + blue, cfg, title
+
+
+def charge_headline_duel(red_charge, *, seed=4, n=10, jitter=2.8):
+    """Chokepoint headline — red ORCA/BVC charge vs blue greedy flocking."""
+    if red_charge not in CHARGE_HEADLINE_MODES:
+        raise ValueError("unknown charge mode: %r" % (red_charge,))
+    charge_by = {BLUE: "none"}
+    if red_charge != "none":
+        charge_by[RED] = red_charge
+    cfg = BattleConfig(
+        **chokepoint_terrain(),
+        tactics="count_aware",
+        assignment="hungarian",
+        formation="wedge",
+        maneuver="greedy",
+        maneuver_replan_ticks=15,
+        charge_by_team=charge_by,
+        charge_radius=0.55,
+        charge_time_horizon=2.0,
+    )
+    rng = random.Random(seed)
+    red = make_company(cfg, RED, (cfg.width * 0.13, cfg.height * 0.5),
+                       [("soldier", n)], rng, jitter=jitter)
+    blue = make_company(cfg, BLUE, (cfg.width * 0.87, cfg.height * 0.5),
+                        [("soldier", n)], random.Random(seed + 1), jitter=jitter)
+    title = CHARGE_HEADLINE_LABELS[red_charge]
     return red + blue, cfg, title
 
 
@@ -1367,6 +1438,23 @@ def battle_scenario(name):
                             [("soldier", 12)], random.Random(25), jitter=2.4)
         return (red + blue, cfg,
                 "Fog artillery — scouts spot, indirect splash strikes")
+    if name == "morale_duel":
+        cfg = BattleConfig(
+            **arena_terrain(),
+            morale=True,
+            morale_rout_frac=0.38,
+            tactics="count_aware",
+            formation="wedge",
+        )
+        rng = random.Random(0)
+        red = make_company(cfg, RED, (cfg.width * 0.18, cfg.height * 0.5),
+                           [("tank", 6)], rng, jitter=2.4)
+        blue = make_company(cfg, BLUE, (cfg.width * 0.82, cfg.height * 0.5),
+                            [("scout", 18)], random.Random(1), jitter=2.2)
+        return (red + blue, cfg,
+                "Morale rout — tanks break scouts, survivors flee")
+    if name == "orca_charge_duel":
+        return charge_headline_duel("orca", seed=4, n=10)
     if name in ("mapf_total_war_local", "mapf_total_war_mapf"):
         spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
         cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf

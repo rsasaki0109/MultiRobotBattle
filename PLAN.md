@@ -127,13 +127,14 @@ invariants) → gate → record the honest result.
   class — landed with ``artillery_barrage.gif``, browser demo, and ``battle_gate`` pin.
   **Fog × artillery** (`fog_artillery`) — scouts spot under fog, indirect splash —
   landed with ``fog_artillery.gif``, browser demo, and ``battle_gate`` pin.
+- [x] **Morale / rout** — collapsing teams flee off-field and are removed instead
+  of stalling in wounded-retreat draws (`morale_duel`, ``morale_rout.gif``,
+  ``battle_gate`` pin).
 - [ ] **Typed damage & armor** — a small rock-paper-scissors (e.g. AP vs shield)
   so composition matters beyond raw dps; plus cooldown / reload / finite ammo so
   positioning and timing count.
-- [ ] **Support roles & morale** — a medic that heals nearby allies, shields /
-  buffs, so non-damage units earn their place; and a principled **morale / rout**
-  model (a squad whose strength collapses retreats *off the field* and is removed)
-  to replace the stalemating wounded-retreat with something that stays decisive.
+- [ ] **Support roles** — a medic that heals nearby allies, shields / buffs, so
+  non-damage units earn their place.
 
 ### Tactics & team AI
 - [x] **Formations** — line / wedge / screen / square via the existing
@@ -177,9 +178,11 @@ battle is exactly where they should *do work*:
   ``cbs_ta`` Murty-on-BFS path-aware matching; ``battle_gate`` chokepoint
   ``cbs_ta`` vs ``hungarian``; full joint CBS-TA path search still TODO for
   small-team maneuver coupling.)*
-- [ ] **Collision-free charges** — ORCA / Buffered Voronoi Cells / flocking for
-  the advance; switchable-ADG-style execution when the maneuver is pre-planned and
-  someone is delayed.
+- [x] **Collision-free charges** — ORCA / Buffered Voronoi Cells as a post-
+  steering filter on the chokepoint (`orca_charge_duel`, ``charge_layers.gif``,
+  ``battle_gate`` pins ``orca_charge_vs_greedy`` / ``bvc_charge_vs_greedy``).
+- [ ] **Switchable-ADG execution** — when maneuver is pre-planned and someone is
+  delayed, gate execution on the coordination graph.
 - [x] **The headline demo** — swap *only* the movement layer (greedy ↔ A\* ↔ CBS)
   and show the win-rate difference. That single experiment turns the zoo from a
   museum into the battle's brain, and is the strongest story this repo can tell.

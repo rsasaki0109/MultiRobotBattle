@@ -93,6 +93,26 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
 </p>
 
 <p align="center">
+  <img src="docs/media/charge_layers.gif" alt="Charge layers triple panel: greedy vs greedy baseline, ORCA reciprocal charge, and BVC buffered-Voronoi charge on the chokepoint — red collision-free breakthrough vs blue greedy flocking." width="820">
+</p>
+
+<p align="center">
+  <em><strong>ORCA / BVC charge</strong> — MAPF zoo collision avoidance as the
+  battle movement filter. Try <code>battle_scenario("orca_charge_duel")</code> or
+  <code>python3 scripts/make_charge_gif.py</code>.</em>
+</p>
+
+<p align="center">
+  <img src="docs/media/morale_rout.gif" alt="Morale rout — six red tanks break eighteen blue scouts; strength bars collapse and routing survivors flee off the right flank instead of stalling." width="820">
+</p>
+
+<p align="center">
+  <em><strong>Morale / rout</strong> — collapsing teams flee off-field instead of
+  drawing. Try <code>battle_scenario("morale_duel")</code> or
+  <code>python3 scripts/make_morale_gif.py</code>.</em>
+</p>
+
+<p align="center">
   <img src="docs/media/fog_artillery.gif" alt="Fog times artillery dual panel: scouts reveal enemies through limited vision while red mortar carriers lob splash rounds — spectator map on the left, red fog vision with detonation rings on the right." width="820">
 </p>
 

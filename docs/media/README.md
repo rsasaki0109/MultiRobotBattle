@@ -15,6 +15,8 @@ algorithms** — regenerate any of them with the matching script:
 | `fog_ambush.gif` | `make_fog_gif.py` | fog of war — spectator vs red vision dual panel, scout contact |
 | `artillery_barrage.gif` | `make_artillery_gif.py` | artillery splash — indirect rounds, detonation rings, friendly fire |
 | `fog_artillery.gif` | `make_fog_artillery_gif.py` | fog × artillery — dual panel, scout contact + splash barrage |
+| `morale_rout.gif` | `make_morale_gif.py` | morale rout — strength bars, scouts flee off-field |
+| `charge_layers.gif` | `make_charge_gif.py` | 1×3 headline — greedy / ORCA / BVC charge on chokepoint |
 | `ctf_mapf.gif` | `make_ctf_mapf_gif.py` | CTF × MAPF — Hungarian+greedy vs CBS-TA+prioritized, RoboMaster chassis |
 | `maneuver_layers.gif` | `make_maneuver_gif.py` | 2×2 headline — greedy / A* / prioritized / CBS red vs greedy blue |
 | `maneuver_duel.gif` | *(legacy)* | prioritized MAPF red vs greedy blue — two-panel chokepoint |

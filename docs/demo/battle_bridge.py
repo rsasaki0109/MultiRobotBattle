@@ -36,6 +36,8 @@ SCENARIOS = {
     "fog_ambush": {"max_ticks": 900, "frame_stride": 2},
     "artillery_barrage": {"max_ticks": 900, "frame_stride": 2},
     "fog_artillery": {"max_ticks": 900, "frame_stride": 2},
+    "morale_duel": {"max_ticks": 900, "frame_stride": 2},
+    "orca_charge_duel": {"max_ticks": 700, "frame_stride": 2},
 }
 
 

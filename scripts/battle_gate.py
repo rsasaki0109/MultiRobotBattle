@@ -89,6 +89,48 @@ def _run_maneuver_headline_matchup(red_maneuver, *, seeds, n_per_team=8,
     )
 
 
+def _run_charge_headline_matchup(red_charge, *, seeds, n_per_team=8, max_ticks=650):
+    """Headline demo — red ORCA/BVC charge vs blue greedy on chokepoint."""
+    from mrn_coord.battle import BLUE, RED, BattleConfig, make_company, simulate
+    import random
+
+    from mrn_coord.battle_terrain import chokepoint_terrain
+
+    terrain = chokepoint_terrain()
+    wins = {RED: 0, BLUE: 0, None: 0}
+    for seed in seeds:
+        charge_by = {BLUE: "none"}
+        if red_charge != "none":
+            charge_by[RED] = red_charge
+        cfg = BattleConfig(
+            **terrain,
+            tactics="count_aware",
+            formation="wedge",
+            assignment="hungarian",
+            maneuver="greedy",
+            maneuver_replan_ticks=15,
+            charge_by_team=charge_by,
+            charge_radius=0.55,
+            charge_time_horizon=2.0,
+        )
+        rng = random.Random(seed)
+        red = make_company(cfg, RED, (cfg.width * 0.13, cfg.height * 0.5),
+                           [("soldier", n_per_team)], rng, jitter=2.8)
+        blue = make_company(cfg, BLUE, (cfg.width * 0.87, cfg.height * 0.5),
+                            [("soldier", n_per_team)], random.Random(seed + 1),
+                            jitter=2.8)
+        res = simulate(red + blue, cfg, max_ticks=max_ticks)
+        wins[res.winner if res.winner is not None else None] += 1
+    n = len(seeds)
+    return {
+        "n_seeds": n,
+        "red_win_rate": wins[RED] / n,
+        "blue_win_rate": wins[BLUE] / n,
+        "draw_rate": wins[None] / n,
+        "decisive_rate": 1.0 - wins[None] / n,
+    }
+
+
 def _run_chokepoint_matchup(*, seeds, n_per_team=8, max_ticks=650,
                             red_assignment=None, blue_assignment=None,
                             red_maneuver=None, blue_maneuver="greedy"):
@@ -254,6 +296,10 @@ def collect_metrics(*, seeds):
     metrics["fog_ambush"] = _run_objective_scenario("fog_ambush", max_ticks=900)
     metrics["artillery_barrage"] = _run_objective_scenario("artillery_barrage", max_ticks=900)
     metrics["fog_artillery"] = _run_objective_scenario("fog_artillery", max_ticks=900)
+    metrics["morale_duel"] = _run_objective_scenario("morale_duel", max_ticks=900)
+    metrics["orca_charge_duel"] = _run_objective_scenario("orca_charge_duel", max_ticks=700)
+    metrics["orca_charge_vs_greedy"] = _run_charge_headline_matchup("orca", seeds=seeds)
+    metrics["bvc_charge_vs_greedy"] = _run_charge_headline_matchup("bvc", seeds=seeds)
     slow = seeds[: min(_SLOW_MATCHUP_SEEDS, len(seeds))]
     metrics["mapf_total_war_local"] = _run_mapf_total_war_side("local", seeds=slow)
     metrics["mapf_total_war_mapf"] = _run_mapf_total_war_side("mapf", seeds=slow)
