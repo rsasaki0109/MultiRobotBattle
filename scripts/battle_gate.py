@@ -82,14 +82,16 @@ def _run_chokepoint_matchup(*, seeds, n_per_team=8, max_ticks=650,
     from mrn_coord.battle import BLUE, RED, BattleConfig, make_company, simulate
     import random
 
-    obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
+    from mrn_coord.battle_terrain import chokepoint_terrain
+
+    terrain = chokepoint_terrain()
     wins = {RED: 0, BLUE: 0, None: 0}
     for seed in seeds:
         maneuver_by = {BLUE: blue_maneuver}
         if red_maneuver:
             maneuver_by[RED] = red_maneuver
         cfg = BattleConfig(
-            obstacles=obstacles,
+            **terrain,
             tactics="count_aware",
             formation="wedge",
             assignment="none",

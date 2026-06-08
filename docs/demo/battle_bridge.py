@@ -75,6 +75,8 @@ def _pack_result(bots, cfg, res, *, scenario_name, title, stride):
         "width": cfg.width,
         "height": cfg.height,
         "obstacles": [list(o) for o in cfg.obstacles],
+        "walls": [list(w) for w in getattr(cfg, "walls", ())],
+        "elevation": [list(z) for z in getattr(cfg, "elevation", ())],
         "frames": [_pack_frame(fr) for fr in res.frames],
         "shots": [_pack_shots(sh) for sh in res.shots],
         "counts": res.counts,

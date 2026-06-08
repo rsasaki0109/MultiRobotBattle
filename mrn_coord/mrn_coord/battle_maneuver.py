@@ -14,6 +14,7 @@ import math
 from collections import deque
 from dataclasses import dataclass, field
 
+from .battle_terrain import cell_blocked_by_terrain
 from .mapf.cbs import cbs
 from .mapf.grid import GridWorld, manhattan
 from .mapf.lacam import lacam
@@ -47,10 +48,9 @@ def grid_from_battle(cfg, *, cell_size=None, inflation=0.35):
     for cx in range(nx):
         for cy in range(ny):
             wx, wy = cell_to_world((cx, cy), cell_size)
-            for (ox, oy, r) in cfg.obstacles:
-                if math.hypot(wx - ox, wy - oy) <= r + inflation:
-                    blocked.add((cx, cy))
-                    break
+            if cell_blocked_by_terrain(wx, wy, cfg.obstacles, cfg.walls,
+                                       inflation=inflation):
+                blocked.add((cx, cy))
     return GridWorld(nx, ny, blocked=frozenset(blocked))
 
 

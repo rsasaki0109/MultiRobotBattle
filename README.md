@@ -1,7 +1,7 @@
 # MultiRobotBattle
 
 <p align="center">
-  <img src="docs/media/battle.gif" alt="RoboMaster-style total war on a lit competition arena: hundreds of custom chassis with coloured armour stripes, turrets and barrel tracers — red and green western bots charge east into blue and yellow eastern lines across a central no-man's-land; casualty bars and KIA counter climb until one allied coalition wins." width="820">
+  <img src="docs/media/battle.gif" alt="RoboMaster-style total war on a lit competition arena with rectangular bunker walls, raised elevation pads, lane chicanes and hazard-cap cover: hundreds of custom chassis with coloured armour stripes, turrets and barrel tracers — red and green western bots charge east into blue and yellow eastern lines across a central no-man's-land; casualty bars and KIA counter climb until one allied coalition wins." width="820">
 </p>
 
 <p align="center">

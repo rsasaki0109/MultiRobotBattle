@@ -56,6 +56,17 @@ import random
 from dataclasses import dataclass, field
 
 from .battle_assignment import apply_assignments, AssignmentState
+from .battle_terrain import (
+    arena_terrain,
+    chokepoint_terrain,
+    cover_along_segment_rect,
+    elevation_speed_mult,
+    kingdom_terrain,
+    objective_terrain,
+    push_out_of_walls,
+    total_war_terrain,
+    wall_avoidance,
+)
 from .battle_objectives import (
     CtfTracker, ObjectiveTracker, ctf_render_zones, objective_zone,
     winner_from_objective, zone_leader,
@@ -163,6 +174,10 @@ class BattleConfig:
     spatial_cell: float = 4.0
     # optional terrain: circular obstacles (x, y, radius) the robots flow around
     obstacles: tuple = ()
+    # axis-aligned wall blocks (cx, cy, half_w, half_h) — block fire and motion
+    walls: tuple = ()
+    # raised zones (cx, cy, half_w, half_h, speed_mult) — high ground bonus
+    elevation: tuple = ()
     # alliances — map team id -> alliance id; allied teams do not fire on each other
     alliances: dict = None
     # objectives — ``annihilation`` (default), ``hill``, ``domination``, ``ctf``
@@ -291,6 +306,7 @@ HILL_CONTEST_KW = dict(
     formation="wedge",
     maneuver_replan_ticks=12,
     assignment_replan_ticks=12,
+    **objective_terrain(),
 )
 
 
@@ -327,6 +343,7 @@ CTF_CONTEST_KW = dict(
     formation="wedge",
     maneuver_replan_ticks=12,
     assignment_replan_ticks=12,
+    **objective_terrain(),
 )
 
 
@@ -425,6 +442,10 @@ def _fire_cover(ax, ay, tx, ty, cfg, live, skip):
     for (ox, oy, r) in cfg.obstacles:
         factor = min(factor, _cover_along_segment(ax, ay, tx, ty, ox, oy, r,
                                                   cfg.cover_margin))
+    for (cx, cy, hw, hh) in cfg.walls:
+        factor = min(factor, cover_along_segment_rect(ax, ay, tx, ty,
+                                                      cx, cy, hw, hh,
+                                                      cfg.cover_margin))
     if cfg.body_blocks_fire:
         for j, other in enumerate(live):
             if j in skip:
@@ -434,6 +455,21 @@ def _fire_cover(ax, ay, tx, ty, cfg, live, skip):
                                                       cfg.body_radius,
                                                       cfg.cover_margin))
     return factor
+
+
+def _push_out_of_obstacles(x, y, obstacles, *, body: float = 0.55):
+    """Hard-push a point outside circular terrain (after soft avoidance)."""
+    for ox, oy, r in obstacles:
+        dx, dy = x - ox, y - oy
+        d = math.hypot(dx, dy)
+        min_d = r + body
+        if d < min_d:
+            if d > 1e-9:
+                s = min_d / d
+                x, y = ox + dx * s, oy + dy * s
+            else:
+                x, y = ox + min_d, oy
+    return x, y
 
 
 def _wall_turn(x, y, vx, vy, width, height, margin=2.0, push=2.0):
@@ -610,17 +646,30 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
         for i in range(n):
             desired[i][0] += cfg.w_obstacle * obs[i][0]
             desired[i][1] += cfg.w_obstacle * obs[i][1]
+    if cfg.walls:
+        wobs = wall_avoidance([(b.x, b.y) for b in live], list(cfg.walls))
+        for i in range(n):
+            desired[i][0] += cfg.w_obstacle * wobs[i][0]
+            desired[i][1] += cfg.w_obstacle * wobs[i][1]
 
     # integrate motion (snapshot-consistent), each bot at its own top speed
     for i in range(n):
         b = live[i]
         mspeed = b.max_speed if b.max_speed is not None else cfg.max_speed
+        if cfg.elevation:
+            mspeed *= elevation_speed_mult(b.x, b.y, cfg.elevation)
         vx, vy = _wall_turn(b.x, b.y, desired[i][0], desired[i][1],
                             cfg.width, cfg.height)
         vx, vy = _clamp_speed(vx, vy, mspeed)
         b.vx, b.vy = vx, vy
         b.x += vx * cfg.dt
         b.y += vy * cfg.dt
+        if cfg.obstacles:
+            b.x, b.y = _push_out_of_obstacles(b.x, b.y, cfg.obstacles,
+                                              body=cfg.body_radius)
+        if cfg.walls:
+            b.x, b.y = push_out_of_walls(b.x, b.y, cfg.walls,
+                                         body=cfg.body_radius)
 
     # apply damage and resolve eliminations (simultaneous)
     for i in range(n):
@@ -816,14 +865,14 @@ ALLIANCE_NAMES = {0: "western", 1: "eastern"}
 def battle_scenario(name):
     """Return ``(bots, cfg, title)`` for a named showcase battle (deterministic)."""
     if name == "duel":
-        cfg = BattleConfig()
+        cfg = BattleConfig(**arena_terrain())
         return (make_armies(14, cfg, seed=14), cfg, "Duel — 14 vs 14")
     if name == "free_for_all":
-        cfg = BattleConfig()
+        cfg = BattleConfig(**arena_terrain())
         bots = make_free_for_all(10, cfg, seed=6, num_teams=3)
         return (bots, cfg, "Free-for-all — three armies")
     if name == "quality_vs_quantity":
-        cfg = BattleConfig()
+        cfg = BattleConfig(**arena_terrain())
         rng = random.Random(0)
         red = make_company(cfg, RED, (cfg.width * 0.18, cfg.height * 0.5),
                            [("tank", 5)], rng)
@@ -831,8 +880,7 @@ def battle_scenario(name):
                             [("scout", 16)], rng)
         return (red + blue, cfg, "Quality vs quantity — 5 tanks vs 16 scouts")
     if name == "chokepoint":
-        obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
-        cfg = BattleConfig(obstacles=obstacles, formation="wedge",
+        cfg = BattleConfig(**chokepoint_terrain(), formation="wedge",
                            tactics="count_aware")
         rng = random.Random(7)
         red = make_company(cfg, RED, (cfg.width * 0.13, cfg.height * 0.5),
@@ -841,9 +889,8 @@ def battle_scenario(name):
                             [("soldier", 13)], rng, jitter=3.2)
         return (red + blue, cfg, "Chokepoint — wedge through terrain")
     if name == "maneuver_duel":
-        obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
         cfg = BattleConfig(
-            obstacles=obstacles,
+            **chokepoint_terrain(),
             tactics="count_aware",
             assignment="hungarian",
             formation="wedge",
@@ -859,9 +906,8 @@ def battle_scenario(name):
         return (red + blue, cfg,
                 "Maneuver duel — planned red vs greedy blue")
     if name == "mapf_stack_duel":
-        obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
         cfg = BattleConfig(
-            obstacles=obstacles,
+            **chokepoint_terrain(),
             tactics="count_aware",
             formation="wedge",
             assignment="none",
@@ -879,7 +925,10 @@ def battle_scenario(name):
         return (red + blue, cfg,
                 "MAPF stack — CBS-TA assignment + planned maneuver")
     if name == "kingdom":
-        cfg = kingdom_config(formation_by_team={RED: "line", BLUE: "line"})
+        cfg = kingdom_config(
+            **kingdom_terrain(width=100.0, height=56.0),
+            formation_by_team={RED: "line", BLUE: "line"},
+        )
         rng = random.Random(42)
         red = make_grand_army(cfg, RED, (cfg.width * 0.28, cfg.height * 0.5),
                               rows=8, cols=10, rng=rng, face_right=True)
@@ -896,6 +945,7 @@ def battle_scenario(name):
             dps=56.0,
             tactics="count_aware:aggressive",
             spatial_min_bots=24,
+            **total_war_terrain(width=140.0, height=72.0),
             formation_by_team={
                 RED: "line", BLUE: "line",
                 GREEN: "wedge", YELLOW: "wedge",
@@ -939,6 +989,7 @@ def battle_scenario(name):
             dps=50.0,
             tactics="count_aware:aggressive",
             spatial_min_bots=48,
+            **total_war_terrain(width=88.0, height=50.0),
             formation_by_team={
                 RED: "line", BLUE: "line", GREEN: "wedge", YELLOW: "wedge",
             },
@@ -959,7 +1010,10 @@ def battle_scenario(name):
         return (bots, cfg,
                 f"Allied fronts — {n} robots (browser scale)")
     if name == "kingdom_lite":
-        cfg = kingdom_config(formation_by_team={RED: "line", BLUE: "line"})
+        cfg = kingdom_config(
+            **arena_terrain(width=100.0, height=56.0),
+            formation_by_team={RED: "line", BLUE: "line"},
+        )
         w, h = cfg.width, cfg.height
         red = make_grand_army(cfg, RED, (w * 0.30, h * 0.5),
                               rows=5, cols=8, rng=random.Random(42),
@@ -975,6 +1029,7 @@ def battle_scenario(name):
             objective_hold_ticks=140,
             tactics="count_aware",
             formation="wedge",
+            **objective_terrain(),
         )
         return (make_contest_armies(12, cfg, seed=8), cfg,
                 "King of the hill — hold the centre")
@@ -985,6 +1040,7 @@ def battle_scenario(name):
             objective_hold_ticks=220,
             tactics="count_aware",
             formation="line",
+            **objective_terrain(),
         )
         return (make_contest_armies(14, cfg, seed=9), cfg,
                 "Domination — control the centre")
@@ -995,6 +1051,7 @@ def battle_scenario(name):
             base_radius=4.2,
             tactics="count_aware",
             formation="wedge",
+            **objective_terrain(),
         )
         return (make_armies(10, cfg, seed=10), cfg,
                 "Capture the flag — return home")

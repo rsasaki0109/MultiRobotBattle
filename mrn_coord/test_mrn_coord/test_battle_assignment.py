@@ -70,7 +70,7 @@ class TestHungarianAssignment(unittest.TestCase):
             assignment="cbs_ta",
             formation="wedge",
         )
-        res = simulate(bots, cfg, max_ticks=500)
+        res = simulate(bots, cfg, max_ticks=700)
         self.assertIsNotNone(res.winner)
 
     def test_cbs_ta_team_assignments_resolves(self):

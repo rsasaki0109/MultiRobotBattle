@@ -60,7 +60,7 @@ class Panel:
         ax.set_title(title, color=render.INK, fontsize=10, pad=5)
 
         render.draw_arena(ax, cfg, minimal=True)
-        render.draw_obstacles(ax, cfg.obstacles)
+        render.draw_terrain(ax, cfg)
 
         self.robots = render.RobotLayers(ax, flash_life=7, fire_alpha=0.55)
         self.tally = ax.text(cfg.width / 2, cfg.height - 0.7, "", color=render.INK,

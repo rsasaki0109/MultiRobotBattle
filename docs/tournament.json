@@ -10,24 +10,6 @@
       "red_win_rate": 0.75
     },
     {
-      "blue_win_rate": 0.333,
-      "decisive_rate": 1.0,
-      "id": "mapf_stack_vs_local_chokepoint",
-      "label": "Full MAPF stack vs local",
-      "note": "CBS-TA + prioritized",
-      "red_elo_delta": 120,
-      "red_win_rate": 0.6666666666666666
-    },
-    {
-      "blue_win_rate": 0.5,
-      "decisive_rate": 1.0,
-      "id": "cbs_ta_vs_hungarian_chokepoint",
-      "label": "CBS-TA vs Hungarian",
-      "note": "Chokepoint assignment",
-      "red_elo_delta": 0,
-      "red_win_rate": 0.5
-    },
-    {
       "blue_win_rate": 0.583,
       "decisive_rate": 1.0,
       "id": "transformer_vs_nearest",
@@ -53,6 +35,24 @@
       "note": "MAPF maneuver red",
       "red_elo_delta": -58,
       "red_win_rate": 0.4166666666666667
+    },
+    {
+      "blue_win_rate": 0.583,
+      "decisive_rate": 1.0,
+      "id": "mapf_stack_vs_local_chokepoint",
+      "label": "Full MAPF stack vs local",
+      "note": "CBS-TA + prioritized",
+      "red_elo_delta": -58,
+      "red_win_rate": 0.4166666666666667
+    },
+    {
+      "blue_win_rate": 0.75,
+      "decisive_rate": 1.0,
+      "id": "cbs_ta_vs_hungarian_chokepoint",
+      "label": "CBS-TA vs Hungarian",
+      "note": "Chokepoint assignment",
+      "red_elo_delta": -191,
+      "red_win_rate": 0.25
     },
     {
       "blue_win_rate": 1.0,

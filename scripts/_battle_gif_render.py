@@ -54,16 +54,92 @@ def draw_arena(ax, cfg, *, minimal=False):
         for y in np.arange(2, cfg.height, 7):
             ax.plot([mid - 0.55, mid + 0.55], [y, y + 2.5], color=FRONT, lw=0.7,
                     alpha=0.45, zorder=0)
+        _draw_lane_markers(ax, cfg)
         for cx, cy in ((6, 6), (cfg.width - 6, 6),
                        (6, cfg.height - 6), (cfg.width - 6, cfg.height - 6)):
             ax.add_patch(Circle((cx, cy), 1.8, fill=False, edgecolor="#2e3d54",
                                 lw=1.0, alpha=0.55, zorder=0))
 
 
+def _draw_lane_markers(ax, cfg):
+    """Rear supply pads and outer-lane chevrons (RoboMaster competition cues)."""
+    w, h = cfg.width, cfg.height
+    zone = "#2e3d54"
+    for x0, y0 in ((w * 0.06, h * 0.22), (w * 0.06, h * 0.78),
+                   (w * 0.94, h * 0.22), (w * 0.94, h * 0.78)):
+        ax.add_patch(Rectangle((x0 - 2.2, y0 - 1.6), 4.4, 3.2, fill=False,
+                               edgecolor=zone, lw=0.8, linestyle=(0, (3, 3)),
+                               alpha=0.45, zorder=0))
+    for y in (h * 0.18, h * 0.82):
+        for x, dx in ((w * 0.24, 1.2), (w * 0.76, -1.2)):
+            ax.plot([x, x + dx, x], [y, y + 1.4, y + 2.8], color=zone,
+                    lw=0.65, alpha=0.35, zorder=0)
+
+
+def draw_elevation(ax, elevation):
+    """Raised platform zones — subtle contour fill beneath cover."""
+    if not elevation:
+        return
+    for cx, cy, hw, hh, _bonus in elevation:
+        ax.add_patch(Rectangle((cx - hw, cy - hh), 2 * hw, 2 * hh,
+                               facecolor="#121820", edgecolor="#2a3848",
+                               lw=0.7, alpha=0.55, zorder=0.5))
+        inset = 0.35
+        ax.add_patch(Rectangle((cx - hw + inset, cy - hh + inset),
+                               2 * (hw - inset), 2 * (hh - inset),
+                               fill=False, edgecolor="#3d5068",
+                               lw=0.5, linestyle=(0, (4, 3)), alpha=0.45,
+                               zorder=0.6))
+        cap = min(hw, hh) * 0.55
+        ax.add_patch(Rectangle((cx - cap * 0.5, cy + hh - cap * 0.35),
+                               cap, cap * 0.18,
+                               facecolor="#f5cc4d", edgecolor="none",
+                               alpha=0.18, zorder=0.7))
+
+
+def draw_walls(ax, walls, *, face="#1a222c", edge="#3a4a62"):
+    """Rectangular bunker blocks with hazard-cap stripes (RoboMaster barriers)."""
+    if not walls:
+        return
+    for cx, cy, hw, hh in walls:
+        ax.add_patch(Rectangle((cx - hw, cy - hh), 2 * hw, 2 * hh,
+                               facecolor=face, edgecolor=edge,
+                               lw=1.2, zorder=1.5))
+        stripe_h = min(hh * 0.28, 0.55)
+        ax.add_patch(Rectangle((cx - hw * 0.92, cy + hh - stripe_h),
+                               hw * 1.84, stripe_h,
+                               facecolor="#f5cc4d", edgecolor="none",
+                               alpha=0.32, zorder=2))
+        ax.add_patch(Rectangle((cx - hw * 0.75, cy - hh * 0.55),
+                               hw * 1.5, hh * 0.12,
+                               facecolor="#0e1218", edgecolor="none",
+                               alpha=0.5, zorder=2))
+
+
 def draw_obstacles(ax, obstacles, *, face="#222a32", edge="#33405a"):
+    """Bunker discs — large obstacles get a hazard-cap ring like RoboMaster cover."""
+    if not obstacles:
+        return
     for ox, oy, r in obstacles:
         ax.add_patch(Circle((ox, oy), r, facecolor=face, edgecolor=edge,
-                            lw=1.0, zorder=1))
+                            lw=1.1, zorder=1))
+        if r >= 2.2:
+            ax.add_patch(Circle((ox, oy), r * 0.62, facecolor="#161b24",
+                                edgecolor="#2a3448", lw=0.6, zorder=2))
+            cap_w = r * 0.95
+            ax.add_patch(Rectangle((ox - cap_w * 0.5, oy + r * 0.42), cap_w, r * 0.22,
+                                   facecolor="#f5cc4d", edgecolor="none",
+                                   alpha=0.28, zorder=2))
+        elif r >= 1.4:
+            ax.add_patch(Circle((ox, oy), r * 0.45, fill=False,
+                                edgecolor="#3d4a62", lw=0.5, zorder=2))
+
+
+def draw_terrain(ax, cfg):
+    """Elevation pads, wall blocks, then circular cover (bottom to top)."""
+    draw_elevation(ax, getattr(cfg, "elevation", ()))
+    draw_walls(ax, getattr(cfg, "walls", ()))
+    draw_obstacles(ax, cfg.obstacles)
 
 
 def frame_robots(frame, prev):

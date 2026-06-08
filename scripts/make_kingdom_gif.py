@@ -49,6 +49,7 @@ def main():
     ax.set_aspect("equal")
     ax.axis("off")
     render.draw_arena(ax, cfg, minimal=True)
+    render.draw_terrain(ax, cfg)
 
     ax.text(cfg.width / 2, cfg.height + 0.75,
             "KINGDOM CLASH  —  80 vs 80 battle lines",

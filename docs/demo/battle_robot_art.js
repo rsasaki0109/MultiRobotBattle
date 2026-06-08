@@ -181,8 +181,89 @@ function drawShot(ctx, X, Y, sc, sx0, sy0, x1, y1, team) {
   ctx.stroke();
 }
 
+function drawElevation(ctx, X, Y, sc, cx, cy, hw, hh) {
+  ctx.fillStyle = "rgba(18,24,32,0.55)";
+  ctx.strokeStyle = "#2a3848";
+  ctx.lineWidth = Math.max(0.7, sc * 0.7);
+  ctx.fillRect(X(cx - hw), Y(cy + hh), 2 * hw * sc, -2 * hh * sc);
+  ctx.strokeRect(X(cx - hw), Y(cy + hh), 2 * hw * sc, -2 * hh * sc);
+  const inset = 0.35;
+  ctx.strokeStyle = "rgba(61,80,104,0.45)";
+  ctx.setLineDash([4, 3]);
+  ctx.strokeRect(
+    X(cx - hw + inset),
+    Y(cy + hh - inset),
+    2 * (hw - inset) * sc,
+    -2 * (hh - inset) * sc,
+  );
+  ctx.setLineDash([]);
+  const cap = Math.min(hw, hh) * 0.55;
+  ctx.fillStyle = "rgba(245,204,77,0.18)";
+  ctx.fillRect(
+    X(cx - cap * 0.5),
+    Y(cy + hh - cap * 0.35),
+    cap * sc,
+    -cap * 0.18 * sc,
+  );
+}
+
+function drawWall(ctx, X, Y, sc, cx, cy, hw, hh) {
+  ctx.fillStyle = "#1a222c";
+  ctx.strokeStyle = "#3a4a62";
+  ctx.lineWidth = Math.max(1.2, sc * 1.2);
+  ctx.fillRect(X(cx - hw), Y(cy + hh), 2 * hw * sc, -2 * hh * sc);
+  ctx.strokeRect(X(cx - hw), Y(cy + hh), 2 * hw * sc, -2 * hh * sc);
+  const stripeH = Math.min(hh * 0.28, 0.55) * sc;
+  ctx.fillStyle = "rgba(245,204,77,0.32)";
+  ctx.fillRect(
+    X(cx - hw * 0.92),
+    Y(cy + hh),
+    hw * 1.84 * sc,
+    -stripeH,
+  );
+  ctx.fillStyle = "rgba(14,18,24,0.5)";
+  ctx.fillRect(
+    X(cx - hw * 0.75),
+    Y(cy + hh * 0.45),
+    hw * 1.5 * sc,
+    -hh * 0.12 * sc,
+  );
+}
+
+function drawObstacle(ctx, X, Y, sc, ox, oy, r) {
+  ctx.fillStyle = "#222a32";
+  ctx.strokeStyle = "#33405a";
+  ctx.lineWidth = Math.max(1, sc * 1.1);
+  ctx.beginPath();
+  ctx.arc(X(ox), Y(oy), r * sc, 0, 7);
+  ctx.fill();
+  ctx.stroke();
+  if (r >= 2.2) {
+    ctx.fillStyle = "#161b24";
+    ctx.strokeStyle = "#2a3448";
+    ctx.lineWidth = Math.max(0.6, sc * 0.6);
+    ctx.beginPath();
+    ctx.arc(X(ox), Y(oy), r * 0.62 * sc, 0, 7);
+    ctx.fill();
+    ctx.stroke();
+    const capW = r * 0.95 * sc;
+    const capH = r * 0.22 * sc;
+    ctx.fillStyle = "rgba(245,204,77,0.28)";
+    ctx.fillRect(X(ox) - capW * 0.5, Y(oy + r * 0.42 * sc) - capH, capW, capH);
+  } else if (r >= 1.4) {
+    ctx.strokeStyle = "#3d4a62";
+    ctx.lineWidth = Math.max(0.5, sc * 0.5);
+    ctx.beginPath();
+    ctx.arc(X(ox), Y(oy), r * 0.45 * sc, 0, 7);
+    ctx.stroke();
+  }
+}
+
 window.BattleRobotArt = {
   inferHeading,
   drawRobotChassis,
   drawShot,
+  drawElevation,
+  drawWall,
+  drawObstacle,
 };

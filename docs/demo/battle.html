@@ -166,14 +166,16 @@ function drawPanel(s, frameIdx, region) {
     ctx.fillText(label, x0 + 8, y0 + 14);
   }
 
+  for (const z of (s.elevation || [])) {
+    const [cx, cy, hw, hh] = z;
+    BattleRobotArt.drawElevation(ctx, X, Y, sc, cx, cy, hw, hh);
+  }
+  for (const w of (s.walls || [])) {
+    const [cx, cy, hw, hh] = w;
+    BattleRobotArt.drawWall(ctx, X, Y, sc, cx, cy, hw, hh);
+  }
   for (const [ox0, oy0, r] of s.obstacles) {
-    ctx.fillStyle = "#222a32";
-    ctx.strokeStyle = "#33405a";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(X(ox0), Y(oy0), r * sc, 0, 7);
-    ctx.fill();
-    ctx.stroke();
+    BattleRobotArt.drawObstacle(ctx, X, Y, sc, ox0, oy0, r);
   }
 
   if (s.objective === "ctf" && Array.isArray(s.objective_zone) && s.objective_zone.length

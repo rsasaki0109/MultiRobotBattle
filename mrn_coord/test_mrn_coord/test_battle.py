@@ -158,6 +158,8 @@ class TestFreeForAll(unittest.TestCase):
 
 class TestTerrain(unittest.TestCase):
     def test_obstacles_are_never_penetrated(self):
+        from mrn_coord.battle_terrain import point_clearance_rect
+
         bots, cfg, _ = battle_scenario("chokepoint")
         res = simulate(bots, cfg, max_ticks=700)
         for frame in res.frames:
@@ -166,6 +168,9 @@ class TestTerrain(unittest.TestCase):
                     continue
                 for (ox, oy, r) in cfg.obstacles:
                     self.assertGreater((x - ox) ** 2 + (y - oy) ** 2, (r * 0.7) ** 2)
+                for (cx, cy, hw, hh) in cfg.walls:
+                    self.assertGreater(
+                        point_clearance_rect(x, y, cx, cy, hw, hh), 0.35)
 
 
 class TestScenarios(unittest.TestCase):
@@ -181,6 +186,14 @@ class TestScenarios(unittest.TestCase):
 
 
 class TestLineOfSight(unittest.TestCase):
+    def test_wall_blocks_fire(self):
+        cfg = BattleConfig(attack_range=5.0, dps=10.0, dt=0.1, max_speed=0.0,
+                           walls=((5.0, 0.0, 1.0, 2.0),))
+        bots = [Bot(0.0, 0.0, 0, 0, RED, 100, 100),
+                Bot(10.0, 0.0, 0, 0, BLUE, 100, 100)]
+        battle_step(bots, cfg)
+        self.assertTrue(all(b.hp == 100 for b in bots))
+
     def test_obstacle_blocks_fire(self):
         # pillar between two bots — no damage despite being in range
         cfg = BattleConfig(attack_range=5.0, dps=10.0, dt=0.1, max_speed=0.0,

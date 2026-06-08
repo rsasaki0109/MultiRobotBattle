@@ -79,6 +79,7 @@ def main():
     ax.set_aspect("equal")
     ax.axis("off")
     render.draw_arena(ax, cfg)
+    render.draw_terrain(ax, cfg)
 
     ax.text(cfg.width / 2, cfg.height + 1.55,
             f"ROBOMASTER TOTAL WAR  —  {n_total} custom bots · four armies · two alliances",

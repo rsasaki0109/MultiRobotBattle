@@ -36,9 +36,11 @@ from mrn_coord.battle import (  # noqa: E402
 import random  # noqa: E402
 
 
+from mrn_coord.battle_terrain import chokepoint_terrain  # noqa: E402
+
+
 def _make_pair(seed=11):
-    obstacles = ((20.0, 4.5, 2.6), (20.0, 12.0, 2.6), (20.0, 19.5, 2.6))
-    base = dict(obstacles=obstacles, tactics="count_aware", formation="wedge",
+    base = dict(**chokepoint_terrain(), tactics="count_aware", formation="wedge",
                 assignment="hungarian", maneuver_replan_ticks=15)
     rng = random.Random(seed)
     center_r = (BattleConfig().width * 0.13, BattleConfig().height * 0.5)
@@ -75,7 +77,7 @@ class ManeuverPanel:
             sp.set_color(render.MUTED)
         ax.set_title(subtitle, color=render.INK, fontsize=10)
         render.draw_arena(ax, cfg, minimal=True)
-        render.draw_obstacles(ax, cfg.obstacles)
+        render.draw_terrain(ax, cfg)
         self.robots = render.RobotLayers(ax, flash_life=7)
         self.banner = ax.text(cfg.width / 2, cfg.height / 2, "",
                               ha="center", va="center", fontsize=18,
