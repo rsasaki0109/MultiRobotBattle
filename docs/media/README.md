@@ -10,6 +10,7 @@ algorithms** — regenerate any of them with the matching script:
 | `objective_triple.gif` | `make_objective_triple_gif.py` | hill · domination · CTF — three objective modes, RoboMaster chassis |
 | `objective_duel.gif` | `make_objective_gif.py` | hill vs domination — zone hold progress, RoboMaster chassis |
 | `ctf_duel.gif` | `make_ctf_gif.py` | capture the flag — centre pickup, score at home base, RoboMaster chassis |
+| `base_assault.gif` | `make_base_assault_gif.py` | base assault — hold enemy HQ, tracer fire, capture progress |
 | `ctf_mapf.gif` | `make_ctf_mapf_gif.py` | CTF × MAPF — Hungarian+greedy vs CBS-TA+prioritized, RoboMaster chassis |
 | `maneuver_layers.gif` | `make_maneuver_gif.py` | 2×2 headline — greedy / A* / prioritized / CBS red vs greedy blue |
 | `maneuver_duel.gif` | *(legacy)* | prioritized MAPF red vs greedy blue — two-panel chokepoint |

@@ -189,8 +189,8 @@ class TestScenarios(unittest.TestCase):
             limit = 1300 if name == "kingdom" else 1000 if name == "grand_alliance" else 900
             if name == "duel":
                 limit = 1000
-            if name in ("hill", "domination"):
-                limit = 700
+            if name in ("hill", "domination", "base_assault"):
+                limit = 700 if name != "base_assault" else 900
             res = simulate(bots, cfg, max_ticks=limit)
             self.assertIsNotNone(res.winner, f"{name} stalled")
             self.assertTrue(title)

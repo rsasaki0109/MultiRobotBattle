@@ -60,6 +60,7 @@
     <div class="field">
       <label for="scenario">Scenario</label>
       <select id="scenario">
+        <option value="base_assault">base assault — hold the enemy HQ</option>
         <option value="ctf">capture the flag — grab centre, score at home</option>
         <option value="hill">king of the hill — hold the centre</option>
         <option value="domination">domination — control the centre</option>
@@ -125,10 +126,15 @@ function objectivePct(s, frameIdx) {
   const prog = (s.objective_progress || [])[
     Math.min(frameIdx, (s.objective_progress || []).length - 1)] || {};
   const hold = s.objective_hold_ticks || 1;
-  const keys = Object.keys(prog);
-  if (!keys.length || s.objective === "annihilation") return null;
-  const lead = keys.reduce((a, b) => (prog[a] >= prog[b] ? a : b));
-  return Math.min(100, Math.round(100 * prog[lead] / hold));
+  if (!Object.keys(prog).length || s.objective === "annihilation") return null;
+  let vals = Object.entries(prog)
+    .filter(([k, v]) => typeof v === "number" && !k.includes(":"))
+    .map(([, v]) => v);
+  if (!vals.length) {
+    vals = Object.values(prog).filter(v => typeof v === "number");
+  }
+  if (!vals.length) return null;
+  return Math.min(100, Math.round(100 * Math.max(...vals) / hold));
 }
 
 function drawPanel(s, frameIdx, region) {
@@ -178,7 +184,8 @@ function drawPanel(s, frameIdx, region) {
     BattleRobotArt.drawObstacle(ctx, X, Y, sc, ox0, oy0, r);
   }
 
-  if (s.objective === "ctf" && Array.isArray(s.objective_zone) && s.objective_zone.length
+  if ((s.objective === "ctf" || s.objective === "base_assault")
+      && Array.isArray(s.objective_zone) && s.objective_zone.length
       && typeof s.objective_zone[0][0] === "string") {
     for (const z of s.objective_zone) {
       if (z[0] === "flag") {
@@ -197,21 +204,37 @@ function drawPanel(s, frameIdx, region) {
         ctx.beginPath();
         ctx.arc(X(bx), Y(by), br * sc, 0, 7);
         ctx.stroke();
+        if (s.objective === "base_assault") {
+          const prog = (s.objective_progress || [])[
+            Math.min(frameIdx, (s.objective_progress || []).length - 1)] || {};
+          const cap = prog[`assault_${team}`];
+          if (typeof cap === "number" && cap > 0) {
+            const hold = s.objective_hold_ticks || 1;
+            const pct = Math.min(100, Math.round(100 * cap / hold));
+            ctx.fillStyle = "#f5cc4d";
+            ctx.font = "bold 11px monospace";
+            ctx.textAlign = "center";
+            ctx.fillText(`${pct}%`, X(bx), Y(by) + 4);
+            ctx.textAlign = "left";
+          }
+        }
       }
     }
-    const prog = (s.objective_progress || [])[
-      Math.min(frameIdx, (s.objective_progress || []).length - 1)] || {};
-    const flag = prog.flag || [];
-    if (flag.length === 2) {
-      const [fx, fy] = flag;
-      ctx.fillStyle = "#f5cc4d";
-      ctx.beginPath();
-      ctx.moveTo(X(fx), Y(fy) - 6);
-      ctx.lineTo(X(fx) + 6, Y(fy));
-      ctx.lineTo(X(fx), Y(fy) + 6);
-      ctx.lineTo(X(fx) - 6, Y(fy));
-      ctx.closePath();
-      ctx.fill();
+    if (s.objective === "ctf") {
+      const prog = (s.objective_progress || [])[
+        Math.min(frameIdx, (s.objective_progress || []).length - 1)] || {};
+      const flag = prog.flag || [];
+      if (flag.length === 2) {
+        const [fx, fy] = flag;
+        ctx.fillStyle = "#f5cc4d";
+        ctx.beginPath();
+        ctx.moveTo(X(fx), Y(fy) - 6);
+        ctx.lineTo(X(fx) + 6, Y(fy));
+        ctx.lineTo(X(fx), Y(fy) + 6);
+        ctx.lineTo(X(fx) - 6, Y(fy));
+        ctx.closePath();
+        ctx.fill();
+      }
     }
   } else if (s.objective_zone && s.objective_zone.length === 3
              && typeof s.objective_zone[0] !== "string") {

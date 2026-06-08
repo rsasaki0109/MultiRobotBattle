@@ -80,6 +80,44 @@ class TestObjectives(unittest.TestCase):
         self.assertEqual(res.objective, "ctf")
         self.assertTrue(len(res.objective_zone) >= 3)
 
+    def test_base_capture_requires_majority(self):
+        from mrn_coord.battle_objectives import base_capture_leader
+
+        cfg = BattleConfig(objective="base_assault", base_radius=4.0)
+        teams = [RED, BLUE]
+        bots = [
+            Bot(34.0, 12.0, 0, 0, RED, 100, 100),
+            Bot(35.0, 12.0, 0, 0, RED, 100, 100),
+            Bot(33.0, 12.0, 0, 0, BLUE, 100, 100),
+        ]
+        self.assertEqual(base_capture_leader(bots, cfg, teams, BLUE), RED)
+
+    def test_base_assault_tracker_wins_on_hold(self):
+        from mrn_coord.battle_objectives import BaseAssaultTracker
+
+        cfg = BattleConfig(objective="base_assault", base_radius=4.0,
+                           objective_hold_ticks=3)
+        teams = [RED, BLUE]
+        tr = BaseAssaultTracker(cfg, teams)
+        bots = [
+            Bot(34.0, 12.0, 0, 0, RED, 100, 100),
+            Bot(35.0, 12.0, 0, 0, RED, 100, 100),
+        ]
+        win = None
+        for _ in range(5):
+            win = tr.tick(bots, cfg)
+            if win is not None:
+                break
+        self.assertEqual(win, RED)
+
+    def test_base_assault_scenario_resolves(self):
+        bots, cfg, _ = battle_scenario("base_assault")
+        self.assertEqual(cfg.objective, "base_assault")
+        res = simulate(bots, cfg, max_ticks=900)
+        self.assertIsNotNone(res.winner)
+        self.assertEqual(res.objective, "base_assault")
+        self.assertTrue(len(res.objective_zone) >= 2)
+
     def test_ctf_mapf_pair_resolves(self):
         for name in ("ctf_mapf_local", "ctf_mapf_mapf"):
             bots, cfg, _ = battle_scenario(name)

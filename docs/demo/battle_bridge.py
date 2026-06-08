@@ -31,6 +31,7 @@ SCENARIOS = {
     "hill": {"max_ticks": 650, "frame_stride": 2},
     "domination": {"max_ticks": 700, "frame_stride": 2},
     "ctf": {"max_ticks": 900, "frame_stride": 2},
+    "base_assault": {"max_ticks": 900, "frame_stride": 2},
 }
 
 

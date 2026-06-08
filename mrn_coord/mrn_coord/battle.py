@@ -68,8 +68,14 @@ from .battle_terrain import (
     wall_avoidance,
 )
 from .battle_objectives import (
-    CtfTracker, ObjectiveTracker, ctf_render_zones, objective_zone,
-    winner_from_objective, zone_leader,
+    BaseAssaultTracker,
+    CtfTracker,
+    ObjectiveTracker,
+    base_assault_render_zones,
+    ctf_render_zones,
+    objective_zone,
+    winner_from_objective,
+    zone_leader,
 )
 from .battle_teams import alliance_of, teams_are_enemies
 from .spatial_hash import SpatialHash
@@ -199,7 +205,8 @@ class BattleConfig:
     elevation: tuple = ()
     # alliances — map team id -> alliance id; allied teams do not fire on each other
     alliances: dict = None
-    # objectives — ``annihilation`` (default), ``hill``, ``domination``, ``ctf``
+    # objectives — ``annihilation`` (default), ``hill``, ``domination``, ``ctf``,
+    # ``base_assault``
     objective: str = "annihilation"
     objective_center: tuple = None
     objective_radius: float = 5.0
@@ -828,6 +835,8 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
         zone = objective_zone(cfg)
     elif obj_mode == "ctf":
         zone = tuple(ctf_render_zones(cfg, teams))
+    elif obj_mode == "base_assault":
+        zone = tuple(base_assault_render_zones(cfg, teams))
     result = BattleResult(
         teams=teams,
         alliances=dict(cfg.alliances or {}),
@@ -839,6 +848,8 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     projectile_state = ProjectileState()
     obj_tracker = ObjectiveTracker(cfg) if obj_mode in ("hill", "domination") else None
     ctf_tracker = CtfTracker(cfg, teams) if obj_mode == "ctf" else None
+    assault_tracker = (BaseAssaultTracker(cfg, teams)
+                       if obj_mode == "base_assault" else None)
     objective_win = None
     for tick in range(max_ticks):
         record = (tick % frame_stride == 0)
@@ -847,9 +858,12 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
             result.counts.append(_counts(bots, teams))
             if ctf_tracker is not None:
                 result.objective_progress.append(ctf_tracker.snapshot(bots, cfg))
+            elif assault_tracker is not None:
+                result.objective_progress.append(assault_tracker.snapshot())
             elif obj_tracker is not None:
                 result.objective_progress.append(obj_tracker.snapshot())
-        if obj_mode != "ctf" and len(_standing_alliances(bots, teams, cfg.alliances)) <= 1:
+        if (obj_mode not in ("ctf", "base_assault")
+                and len(_standing_alliances(bots, teams, cfg.alliances)) <= 1):
             if record:
                 result.shots.append([])
                 result.projectiles.append([])
@@ -868,6 +882,10 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
                 break
         if ctf_tracker is not None:
             objective_win = ctf_tracker.tick(bots, cfg)
+            if objective_win is not None:
+                break
+        if assault_tracker is not None:
+            objective_win = assault_tracker.tick(bots, cfg)
             if objective_win is not None:
                 break
     else:
@@ -920,7 +938,7 @@ SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "maneuver_duel", "mapf_stack_duel", "mapf_total_war_local",
                   "mapf_total_war_mapf", "ctf_mapf_local", "ctf_mapf_mapf",
                   "kingdom", "grand_alliance",
-                  "hill", "domination", "ctf")
+                  "hill", "domination", "ctf", "base_assault")
 
 MANEUVER_HEADLINE_MODES = ("greedy", "astar", "prioritized", "cbs")
 MANEUVER_HEADLINE_LABELS = {
@@ -1139,6 +1157,19 @@ def battle_scenario(name):
         )
         return (make_armies(10, cfg, seed=10), cfg,
                 "Capture the flag — return home")
+    if name == "base_assault":
+        cfg = BattleConfig(
+            objective="base_assault",
+            base_radius=4.8,
+            objective_hold_ticks=140,
+            tactics="count_aware",
+            formation="wedge",
+            fire_mode="projectile",
+            projectile_damage="on_fire",
+            **objective_terrain(),
+        )
+        return (make_armies(12, cfg, seed=11), cfg,
+                "Base assault — hold the enemy HQ")
     if name in ("mapf_total_war_local", "mapf_total_war_mapf"):
         spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
         cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf

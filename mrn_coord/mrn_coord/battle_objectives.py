@@ -6,7 +6,7 @@ import math
 
 from .battle_teams import RED, BLUE, alliance_of
 
-OBJECTIVE_MODES = ("annihilation", "hill", "domination", "ctf")
+OBJECTIVE_MODES = ("annihilation", "hill", "domination", "ctf", "base_assault")
 
 
 def objective_zone(cfg):
@@ -46,6 +46,75 @@ def ctf_render_zones(cfg, teams):
     for team, (bx, by, br) in team_bases(cfg, teams).items():
         out.append(["base", team, bx, by, br])
     return out
+
+
+def base_assault_render_zones(cfg, teams):
+    """Home bases to assault — same layout as CTF without the centre flag."""
+    out = []
+    for team, (bx, by, br) in team_bases(cfg, teams).items():
+        out.append(["base", team, bx, by, br])
+    return out
+
+
+def base_capture_leader(bots, cfg, teams, base_owner_team):
+    """Alliance id capturing ``base_owner_team``'s base, or ``None``."""
+    bases = team_bases(cfg, teams)
+    if base_owner_team not in bases:
+        return None
+    bx, by, br = bases[base_owner_team]
+    buckets = {}
+    for b in bots:
+        if not b.alive:
+            continue
+        if math.hypot(b.x - bx, b.y - by) > br:
+            continue
+        key = alliance_of(cfg.alliances, b.team) if cfg.alliances else b.team
+        buckets[key] = buckets.get(key, 0) + 1
+    if not buckets:
+        return None
+    owner_key = (alliance_of(cfg.alliances, base_owner_team)
+                 if cfg.alliances else base_owner_team)
+    attackers = {k: n for k, n in buckets.items() if k != owner_key}
+    if not attackers:
+        return None
+    defender_n = buckets.get(owner_key, 0)
+    best_n = max(attackers.values())
+    leaders = [k for k, n in attackers.items() if n == best_n]
+    if len(leaders) != 1 or best_n <= defender_n:
+        return None
+    return leaders[0]
+
+
+class BaseAssaultTracker:
+    """Hold the enemy HQ — consecutive ticks inside their base zone wins."""
+
+    def __init__(self, cfg, teams):
+        self.hold_ticks = max(1, cfg.objective_hold_ticks)
+        self.teams = list(teams)
+        self.bases = team_bases(cfg, teams)
+        self.progress = {}
+
+    def tick(self, bots, cfg):
+        active = set()
+        for base_owner in self.teams:
+            captor = base_capture_leader(bots, cfg, self.teams, base_owner)
+            if captor is not None:
+                active.add((captor, base_owner))
+        for key in list(self.progress):
+            if key not in active:
+                del self.progress[key]
+        for key in active:
+            self.progress[key] = self.progress.get(key, 0) + 1
+            if self.progress[key] >= self.hold_ticks:
+                return key[0]
+        return None
+
+    def snapshot(self):
+        snap = {}
+        for (captor, base_owner), n in self.progress.items():
+            snap[f"{captor}:{base_owner}"] = n
+            snap[f"assault_{base_owner}"] = n
+        return snap
 
 
 def zone_leader(bots, cfg, teams):

@@ -99,7 +99,9 @@ def main():
             frame = p.res.frames[fi_local]
             prev = p.res.frames[fi_local - 1] if fi_local > 0 else None
             shots = p.res.shots[fi_local] if fi_local < len(p.res.shots) else ()
-            p.robots.update(frame, prev, shots, p.deaths, fi_local)
+            projs = (p.res.projectiles[fi_local]
+                     if fi_local < len(getattr(p.res, "projectiles", ())) else ())
+            p.robots.update(frame, prev, shots, projs, deaths=p.deaths, t=fi_local)
             w = p.res.winner
             if w is not None and fi_local >= len(p.res.frames) - 1:
                 p.banner.set_text(f"{'RED' if w == RED else 'BLUE'} WINS")
