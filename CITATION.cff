@@ -1,9 +1,9 @@
 cff-version: 1.2.0
-title: multirobot-navigation
+title: MultiRobotBattle
 message: "If you use this project in academic work, please cite the repository."
 type: software
 authors:
   - family-names: Sasaki
     given-names: Ryo
 license: Apache-2.0
-repository-code: "https://github.com/rsasaki0109/multirobot-navigation"
+repository-code: "https://github.com/rsasaki0109/MultiRobotBattle"

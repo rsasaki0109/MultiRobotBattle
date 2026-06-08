@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <!--
-  Minimal Gazebo (gz sim, Harmonic) world for the multirobot-navigation adapter.
+  Minimal Gazebo (gz sim, Harmonic) world for the MultiRobotBattle adapter.
   A ground plane, a couple of obstacles, and one differential-drive vehicle that
   publishes its pose. The vehicle block can be duplicated (with unique names /
   topics) for more robots; the adapter and bridge are already multi-robot.

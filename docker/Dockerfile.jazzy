@@ -10,6 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /ws
-COPY . /ws/src/multirobot-navigation
+COPY . /ws/src/MultiRobotBattle
 
 RUN source /opt/ros/jazzy/setup.bash && colcon build --symlink-install

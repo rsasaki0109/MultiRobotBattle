@@ -27,8 +27,8 @@ python3 -m http.server 8000
 ```
 
 On GitHub Pages it is live at
-[rsasaki0109.github.io/multirobot-battle/demo/](https://rsasaki0109.github.io/multirobot-battle/demo/)
-and […/demo/battle.html](https://rsasaki0109.github.io/multirobot-battle/demo/battle.html)
+[rsasaki0109.github.io/MultiRobotBattle/demo/](https://rsasaki0109.github.io/MultiRobotBattle/demo/)
+and […/demo/battle.html](https://rsasaki0109.github.io/MultiRobotBattle/demo/battle.html)
 (deployed by ``.github/workflows/pages.yaml`` on push to ``main``).
 
 ## Refresh the wheel after changing the core

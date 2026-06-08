@@ -1,4 +1,4 @@
-# multirobot-battle
+# MultiRobotBattle
 
 <p align="center">
   <img src="docs/media/battle.gif" alt="RoboMaster-style total war on a lit competition arena: hundreds of custom chassis with coloured armour stripes, turrets and barrel tracers — red and green western bots charge east into blue and yellow eastern lines across a central no-man's-land; casualty bars and KIA counter climb until one allied coalition wins." width="820">
@@ -14,9 +14,9 @@
   <strong>benchmark-gated MAPF zoo</strong> (below).</em>
 </p>
 
-[![build-jazzy](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml)
-[![docs](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/docs.yaml)
-[![live demos](https://img.shields.io/badge/live%20demos-GitHub%20Pages-5b8cff)](https://rsasaki0109.github.io/multirobot-battle/)
+[![build-jazzy](https://github.com/rsasaki0109/MultiRobotBattle/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/MultiRobotBattle/actions/workflows/build_jazzy.yaml)
+[![docs](https://github.com/rsasaki0109/MultiRobotBattle/actions/workflows/docs.yaml/badge.svg)](https://github.com/rsasaki0109/MultiRobotBattle/actions/workflows/docs.yaml)
+[![live demos](https://img.shields.io/badge/live%20demos-GitHub%20Pages-5b8cff)](https://rsasaki0109.github.io/MultiRobotBattle/)
 [![MAPF zoo](https://img.shields.io/badge/MAPF%20zoo-45%2B%20algorithms%20%C2%B7%20gated-blue)](docs/coordination.md)
 
 ## Swarm battle — multi-army total war
@@ -89,9 +89,9 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
 <p align="center">
   <em><strong>Capture the flag</strong> meets the MAPF zoo — same spawn, two movement
   stacks. Compare in the
-  <a href="https://rsasaki0109.github.io/multirobot-battle/demo/battle.html">browser demo</a>
+  <a href="https://rsasaki0109.github.io/MultiRobotBattle/demo/battle.html">browser demo</a>
   or the matchup ladder in
-  <a href="https://rsasaki0109.github.io/multirobot-battle/tournament.html">tournament.html</a>.</em>
+  <a href="https://rsasaki0109.github.io/MultiRobotBattle/tournament.html">tournament.html</a>.</em>
 </p>
 
 The battle stack is modular — swap one layer at a time and measure the effect
@@ -115,7 +115,7 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
   <strong>greedy pursuit</strong> (left) vs <strong>prioritized MAPF maneuver</strong>
   + Hungarian assignment + wedge (right). Render with
   <code>python3 scripts/make_maneuver_gif.py</code>; try it live in the
-  <a href="https://rsasaki0109.github.io/multirobot-battle/demo/battle.html">browser battle demo</a>.</em>
+  <a href="https://rsasaki0109.github.io/MultiRobotBattle/demo/battle.html">browser battle demo</a>.</em>
 </p>
 
 <p align="center">
@@ -185,7 +185,7 @@ reproduced from its source paper and **benchmark-gated** in CI, so each claim
 (a WIN, a LOSS, or an equivalence vs. a reference solver) is *measured*.
 
 ```bash
-pip install "git+https://github.com/rsasaki0109/multirobot-battle"
+pip install "git+https://github.com/rsasaki0109/MultiRobotBattle"
 ```
 
 ```python
@@ -202,9 +202,9 @@ Swap `cbs` for `ecbs`, `lacam`, `mapf_lns`, `pbs`, `mstar`, … — they share t
 same `(grid, agents)` interface. The core has **zero required dependencies**
 (only the LP-based `bcp` needs `pip install "...[bcp]"` for numpy/scipy).
 
-> **Try it without installing anything** — **[live browser demos](https://rsasaki0109.github.io/multirobot-battle/)**
-> run the pure-Python engine via Pyodide: the [**swarm battle**](https://rsasaki0109.github.io/multirobot-battle/demo/battle.html)
-> (duel / allied fronts / kingdom lines / chokepoint / MAPF duel) and the [**MAPF zoo**](https://rsasaki0109.github.io/multirobot-battle/demo/)
+> **Try it without installing anything** — **[live browser demos](https://rsasaki0109.github.io/MultiRobotBattle/)**
+> run the pure-Python engine via Pyodide: the [**swarm battle**](https://rsasaki0109.github.io/MultiRobotBattle/demo/battle.html)
+> (duel / allied fronts / kingdom lines / chokepoint / MAPF duel) and the [**MAPF zoo**](https://rsasaki0109.github.io/MultiRobotBattle/demo/)
 > (pick instance + solver, watch paths animate). Local fallback:
 > `python3 -m http.server` from `docs/demo/`.
 

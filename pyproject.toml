@@ -42,10 +42,10 @@ bcp = ["numpy>=1.21", "scipy>=1.7"]
 all = ["numpy>=1.21", "scipy>=1.7"]
 
 [project.urls]
-Homepage = "https://github.com/rsasaki0109/multirobot-battle"
-Repository = "https://github.com/rsasaki0109/multirobot-battle"
-Documentation = "https://github.com/rsasaki0109/multirobot-battle/blob/main/docs/coordination.md"
-Issues = "https://github.com/rsasaki0109/multirobot-battle/issues"
+Homepage = "https://github.com/rsasaki0109/MultiRobotBattle"
+Repository = "https://github.com/rsasaki0109/MultiRobotBattle"
+Documentation = "https://github.com/rsasaki0109/MultiRobotBattle/blob/main/docs/coordination.md"
+Issues = "https://github.com/rsasaki0109/MultiRobotBattle/issues"
 
 [project.scripts]
 # ROS-free CLIs that ship with the wheel.

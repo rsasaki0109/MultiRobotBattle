@@ -12,7 +12,7 @@ gate pins each one's honest result (a WIN, a LOSS, or an equivalence against a
 reference solver), so the claims are measured, not asserted.
 
 ```bash
-pip install "git+https://github.com/rsasaki0109/multirobot-battle"
+pip install "git+https://github.com/rsasaki0109/MultiRobotBattle"
 # or: pip install mapf-zoo   # not published — git / docs/demo wheel only
 pip install "mapf-zoo[bcp]"   # + numpy/scipy for the LP-based solver
 ```
@@ -57,7 +57,7 @@ mapf_lns(grid, agents)        # anytime large-neighborhood search
 | **Low levels** | space-time A\*, SIPP, SIPPS, Multi-Label A\* |
 
 Each is documented algorithm-by-algorithm — with its paper and its gated result
-— in [`docs/coordination.md`](https://github.com/rsasaki0109/multirobot-battle/blob/main/docs/coordination.md).
+— in [`docs/coordination.md`](https://github.com/rsasaki0109/MultiRobotBattle/blob/main/docs/coordination.md).
 
 ## Why "faithfully reproduced + gated" matters
 
@@ -85,7 +85,7 @@ from mrn_coord.mapf.movingai import load_map, load_scen, run_mapf_benchmark
 ## License
 
 Apache-2.0. Part of
-[multirobot-battle](https://github.com/rsasaki0109/multirobot-battle) —
+[MultiRobotBattle](https://github.com/rsasaki0109/MultiRobotBattle) —
 a ROS 2-native multi-robot simulation, navigation, and coordination stack. This
 package is its ROS-free coordination core, carved out so the algorithms are
 usable without ROS or colcon.

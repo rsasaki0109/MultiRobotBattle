@@ -1,6 +1,6 @@
 """mrn_coord: the multi-robot coordination layer.
 
-This package is the "navigation/coordination" half of multirobot-battle —
+This package is the "navigation/coordination" half of MultiRobotBattle —
 the counterpart to the cooperative-localization stack. Where the localization
 side answers *where are we*, this side answers *how do we move and what do we
 do together*. It follows the same project pattern: pure, ROS-free algorithm
