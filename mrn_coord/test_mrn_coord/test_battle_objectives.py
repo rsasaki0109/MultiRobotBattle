@@ -118,6 +118,45 @@ class TestObjectives(unittest.TestCase):
         self.assertEqual(res.objective, "base_assault")
         self.assertTrue(len(res.objective_zone) >= 2)
 
+    def test_escort_payload_moves_with_escorts(self):
+        from mrn_coord.battle_objectives import EscortTracker
+
+        cfg = BattleConfig(
+            objective="escort",
+            escort_team=RED,
+            base_radius=4.0,
+            escort_radius=6.0,
+            payload_speed=2.0,
+            dt=0.1,
+        )
+        teams = [RED, BLUE]
+        tr = EscortTracker(cfg, teams)
+        x0, y0 = tr.payload_x, tr.payload_y
+        bots = [
+            Bot(tr.payload_x + 1.0, tr.payload_y, 0, 0, RED, 100, 100),
+            Bot(tr.payload_x + 0.5, tr.payload_y + 0.5, 0, 0, RED, 100, 100),
+        ]
+        tr.tick(bots, cfg)
+        self.assertGreater(tr.payload_x, x0)
+        self.assertAlmostEqual(tr.payload_y, y0, places=1)
+
+    def test_escort_delivers_at_goal(self):
+        from mrn_coord.battle_objectives import EscortTracker
+
+        cfg = BattleConfig(objective="escort", escort_team=RED, base_radius=4.0)
+        tr = EscortTracker(cfg, [RED, BLUE])
+        tr.payload_x, tr.payload_y = tr.goal_x, tr.goal_y
+        bots = [Bot(0, 0, 0, 0, RED, 100, 100)]
+        self.assertEqual(tr.tick(bots, cfg), RED)
+
+    def test_escort_scenario_resolves(self):
+        bots, cfg, _ = battle_scenario("escort")
+        self.assertEqual(cfg.objective, "escort")
+        res = simulate(bots, cfg, max_ticks=900)
+        self.assertIsNotNone(res.winner)
+        self.assertEqual(res.objective, "escort")
+        self.assertTrue(len(res.objective_zone) >= 2)
+
     def test_ctf_mapf_pair_resolves(self):
         for name in ("ctf_mapf_local", "ctf_mapf_mapf"):
             bots, cfg, _ = battle_scenario(name)

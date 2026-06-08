@@ -271,11 +271,33 @@ function drawProjectile(ctx, X, Y, sc, px, py, team) {
   ctx.fill();
 }
 
+function drawPayload(ctx, X, Y, sc, px, py, team) {
+  const [r, g, b] = TEAM_RGB[team] || [0.96, 0.82, 0.3];
+  const w = Math.max(10, sc * 2.2);
+  const h = Math.max(7, sc * 1.5);
+  const cx = X(px);
+  const cy = Y(py);
+  ctx.fillStyle = rgbaStr([r * 0.55 + 0.2, g * 0.55 + 0.2, b * 0.55 + 0.2, 0.92]);
+  ctx.strokeStyle = "#f5cc4d";
+  ctx.lineWidth = Math.max(1.2, sc * 0.35);
+  ctx.beginPath();
+  ctx.roundRect(cx - w * 0.5, cy - h * 0.5, w, h, Math.max(2, sc * 0.25));
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = "#0f1320";
+  ctx.lineWidth = Math.max(1.5, sc * 0.4);
+  ctx.beginPath();
+  ctx.moveTo(cx - w * 0.25, cy);
+  ctx.lineTo(cx + w * 0.25, cy);
+  ctx.stroke();
+}
+
 window.BattleRobotArt = {
   inferHeading,
   drawRobotChassis,
   drawShot,
   drawProjectile,
+  drawPayload,
   drawElevation,
   drawWall,
   drawObstacle,

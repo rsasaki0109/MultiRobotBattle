@@ -81,10 +81,10 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
   <strong>domination</strong> (cumulative zone control), and
   <strong>capture the flag</strong> (grab centre, score at home) on the same engine.
   Try with <code>battle_scenario("hill")</code>, <code>"domination"</code>,
-  <code>"ctf"</code>, or <code>"base_assault"</code>; render all three with
+  <code>"ctf"</code>, <code>"base_assault"</code>, or <code>"escort"</code>; render with
   <code>python3 scripts/make_objective_triple_gif.py</code> or individually with
   <code>make_objective_gif.py</code> / <code>make_ctf_gif.py</code> /
-  <code>make_base_assault_gif.py</code>.</em>
+  <code>make_base_assault_gif.py</code> / <code>make_escort_gif.py</code>.</em>
 </p>
 
 <p align="center">

@@ -60,6 +60,7 @@
     <div class="field">
       <label for="scenario">Scenario</label>
       <select id="scenario">
+        <option value="escort">escort — push the payload to enemy HQ</option>
         <option value="base_assault">base assault — hold the enemy HQ</option>
         <option value="ctf">capture the flag — grab centre, score at home</option>
         <option value="hill">king of the hill — hold the centre</option>
@@ -125,8 +126,15 @@ function outcomeLabel(res) {
 function objectivePct(s, frameIdx) {
   const prog = (s.objective_progress || [])[
     Math.min(frameIdx, (s.objective_progress || []).length - 1)] || {};
-  const hold = s.objective_hold_ticks || 1;
   if (!Object.keys(prog).length || s.objective === "annihilation") return null;
+  if (s.objective === "escort") {
+    if (typeof prog.escort_pct === "number") return prog.escort_pct;
+    if (typeof prog.goal_progress === "number") {
+      return Math.min(100, Math.round(100 * prog.goal_progress));
+    }
+    return null;
+  }
+  const hold = s.objective_hold_ticks || 1;
   let vals = Object.entries(prog)
     .filter(([k, v]) => typeof v === "number" && !k.includes(":"))
     .map(([, v]) => v);
@@ -184,7 +192,7 @@ function drawPanel(s, frameIdx, region) {
     BattleRobotArt.drawObstacle(ctx, X, Y, sc, ox0, oy0, r);
   }
 
-  if ((s.objective === "ctf" || s.objective === "base_assault")
+  if ((s.objective === "ctf" || s.objective === "base_assault" || s.objective === "escort")
       && Array.isArray(s.objective_zone) && s.objective_zone.length
       && typeof s.objective_zone[0][0] === "string") {
     for (const z of s.objective_zone) {
@@ -197,10 +205,19 @@ function drawPanel(s, frameIdx, region) {
         ctx.arc(X(zx), Y(zy), zr * sc, 0, 7);
         ctx.stroke();
         ctx.setLineDash([]);
-      } else if (z[0] === "base") {
+      } else if (z[0] === "spawn") {
         const [, team, bx, by, br] = z;
-        ctx.strokeStyle = TEAM[team] || MUTED;
+        ctx.strokeStyle = TEAM[team] || "#9aa3bf";
         ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(X(bx), Y(by), br * sc, 0, 7);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (z[0] === "goal" || z[0] === "base") {
+        const [, team, bx, by, br] = z;
+        ctx.strokeStyle = TEAM[team] || "#9aa3bf";
+        ctx.lineWidth = z[0] === "goal" ? 2.5 : 2;
         ctx.beginPath();
         ctx.arc(X(bx), Y(by), br * sc, 0, 7);
         ctx.stroke();
@@ -234,6 +251,24 @@ function drawPanel(s, frameIdx, region) {
         ctx.lineTo(X(fx) - 6, Y(fy));
         ctx.closePath();
         ctx.fill();
+      }
+    }
+    if (s.objective === "escort") {
+      const prog = (s.objective_progress || [])[
+        Math.min(frameIdx, (s.objective_progress || []).length - 1)] || {};
+      const payload = prog.payload || [];
+      if (payload.length === 2) {
+        const [px, py] = payload;
+        const team = prog.escort_team ?? 0;
+        BattleRobotArt.drawPayload(ctx, X, Y, sc, px, py, team);
+        const pct = objectivePct(s, frameIdx);
+        if (pct !== null && pct > 0) {
+          ctx.fillStyle = "#f5cc4d";
+          ctx.font = "bold 11px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText(`${pct}%`, X(px), Y(py) - 10 * sc);
+          ctx.textAlign = "left";
+        }
       }
     }
   } else if (s.objective_zone && s.objective_zone.length === 3

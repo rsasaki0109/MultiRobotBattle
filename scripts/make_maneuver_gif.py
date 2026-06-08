@@ -72,7 +72,7 @@ class ManeuverPanel:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="docs/media/maneuver_layers.gif")
-    ap.add_argument("--seed", type=int, default=11)
+    ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--fps", type=int, default=14)
     ap.add_argument("--max-ticks", type=int, default=700)
     args = ap.parse_args()

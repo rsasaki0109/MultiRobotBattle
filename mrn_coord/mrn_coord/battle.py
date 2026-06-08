@@ -70,9 +70,11 @@ from .battle_terrain import (
 from .battle_objectives import (
     BaseAssaultTracker,
     CtfTracker,
+    EscortTracker,
     ObjectiveTracker,
     base_assault_render_zones,
     ctf_render_zones,
+    escort_render_zones,
     objective_zone,
     winner_from_objective,
     zone_leader,
@@ -206,12 +208,16 @@ class BattleConfig:
     # alliances — map team id -> alliance id; allied teams do not fire on each other
     alliances: dict = None
     # objectives — ``annihilation`` (default), ``hill``, ``domination``, ``ctf``,
-    # ``base_assault``
+    # ``base_assault``, ``escort``
     objective: str = "annihilation"
     objective_center: tuple = None
     objective_radius: float = 5.0
     objective_hold_ticks: int = 200
     base_radius: float = None   # CTF home-base radius (defaults to objective_radius)
+    escort_team: int = None     # team pushing the payload (defaults to RED)
+    escort_radius: float = 5.5  # allies within this range advance the payload
+    payload_speed: float = 1.4
+    payload_radius: float = 1.0
 
 
 @dataclass
@@ -541,7 +547,8 @@ def _fire_at_target(b, e, bot_idx, target_bot_idx, i, best, cfg, live, *,
 
 
 def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
-                projectile_state=None, tick=0, ctf_tracker=None):
+                projectile_state=None, tick=0, ctf_tracker=None,
+                escort_tracker=None):
     """Advance the battle one tick (in place).
 
     Returns ``(shots, projectiles)`` for this tick — firing lines and any
@@ -624,6 +631,7 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
 
     # 2) pursue / retreat toward the policy target, 3) fire if in range
     ctf_mode = cfg.objective == "ctf" and ctf_tracker is not None
+    escort_mode = cfg.objective == "escort" and escort_tracker is not None
     for i in range(n):
         b = live[i]
         bot_idx = bots.index(b)
@@ -656,6 +664,30 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
                     scale = cfg.w_pursue * 1.6
                     desired[i][0] += scale * dx / d
                     desired[i][1] += scale * dy / d
+        elif escort_mode:
+            px, py = escort_tracker.payload_x, escort_tracker.payload_y
+            gx, gy = escort_tracker.goal_x, escort_tracker.goal_y
+            escort_key = escort_tracker.escort_key
+            bot_key = (alliance_of(cfg.alliances, b.team)
+                       if cfg.alliances else b.team)
+            if bot_key == escort_key:
+                d_payload = math.hypot(b.x - px, b.y - py)
+                if d_payload > escort_tracker.escort_radius * 0.75:
+                    dx, dy = px - b.x, py - b.y
+                    scale = cfg.w_pursue * 1.35
+                else:
+                    dx, dy = gx - b.x, gy - b.y
+                    scale = cfg.w_pursue * 1.65
+                d = max(math.hypot(dx, dy), 1e-9)
+                desired[i][0] += scale * dx / d
+                desired[i][1] += scale * dy / d
+            elif teams_are_enemies(cfg.alliances, escort_tracker.escort_team,
+                                   b.team):
+                dx, dy = px - b.x, py - b.y
+                d = max(math.hypot(dx, dy), 1e-9)
+                scale = cfg.w_pursue * 1.55
+                desired[i][0] += scale * dx / d
+                desired[i][1] += scale * dy / d
         if decision is None:
             continue
         best = decision.target_index
@@ -837,6 +869,9 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
         zone = tuple(ctf_render_zones(cfg, teams))
     elif obj_mode == "base_assault":
         zone = tuple(base_assault_render_zones(cfg, teams))
+    elif obj_mode == "escort":
+        escort_team = cfg.escort_team if cfg.escort_team is not None else RED
+        zone = tuple(escort_render_zones(cfg, teams, escort_team))
     result = BattleResult(
         teams=teams,
         alliances=dict(cfg.alliances or {}),
@@ -850,6 +885,7 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     ctf_tracker = CtfTracker(cfg, teams) if obj_mode == "ctf" else None
     assault_tracker = (BaseAssaultTracker(cfg, teams)
                        if obj_mode == "base_assault" else None)
+    escort_tracker = EscortTracker(cfg, teams) if obj_mode == "escort" else None
     objective_win = None
     for tick in range(max_ticks):
         record = (tick % frame_stride == 0)
@@ -860,9 +896,11 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
                 result.objective_progress.append(ctf_tracker.snapshot(bots, cfg))
             elif assault_tracker is not None:
                 result.objective_progress.append(assault_tracker.snapshot())
+            elif escort_tracker is not None:
+                result.objective_progress.append(escort_tracker.snapshot())
             elif obj_tracker is not None:
                 result.objective_progress.append(obj_tracker.snapshot())
-        if (obj_mode not in ("ctf", "base_assault")
+        if (obj_mode not in ("ctf", "base_assault", "escort")
                 and len(_standing_alliances(bots, teams, cfg.alliances)) <= 1):
             if record:
                 result.shots.append([])
@@ -871,7 +909,8 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
         shots, projs = battle_step(bots, cfg, maneuver_state=maneuver_state,
                                    assignment_state=assignment_state,
                                    projectile_state=projectile_state, tick=tick,
-                                   ctf_tracker=ctf_tracker)
+                                   ctf_tracker=ctf_tracker,
+                                   escort_tracker=escort_tracker)
         if record:
             result.shots.append(shots)
             result.projectiles.append(projs)
@@ -888,12 +927,18 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
             objective_win = assault_tracker.tick(bots, cfg)
             if objective_win is not None:
                 break
+        if escort_tracker is not None:
+            objective_win = escort_tracker.tick(bots, cfg)
+            if objective_win is not None:
+                break
     else:
         if tick % frame_stride == 0:
             result.frames.append(_snapshot(bots))
             result.counts.append(_counts(bots, teams))
             if ctf_tracker is not None:
                 result.objective_progress.append(ctf_tracker.snapshot(bots, cfg))
+            elif escort_tracker is not None:
+                result.objective_progress.append(escort_tracker.snapshot())
             elif obj_tracker is not None:
                 result.objective_progress.append(obj_tracker.snapshot())
             result.shots.append([])
@@ -905,6 +950,26 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     if objective_win is not None:
         result.winner, result.winning_alliance = winner_from_objective(
             objective_win, cfg, teams)
+    elif escort_tracker is not None:
+        prog = escort_tracker.snapshot().get("goal_progress", 0.0)
+        escort_alive = result.survivors.get(escort_tracker.escort_team, 0)
+        if prog >= 0.72 and escort_alive > 0:
+            result.winner, result.winning_alliance = winner_from_objective(
+                escort_tracker.escort_key, cfg, teams)
+        elif escort_alive <= 0:
+            defender = escort_tracker.goal_team
+            def_key = (alliance_of(cfg.alliances, defender)
+                       if cfg.alliances else defender)
+            result.winner, result.winning_alliance = winner_from_objective(
+                def_key, cfg, teams)
+        else:
+            result.winner, result.winning_alliance = _pick_winner(
+                teams, result.survivors, cfg.alliances)
+            if (result.winning_alliance is None and cfg.alliances
+                    and len(_standing_alliances_from_counts(
+                        teams, result.survivors, cfg.alliances)) > 1):
+                result.winner, result.winning_alliance = _pick_winner_by_survivors(
+                    teams, result.survivors, cfg.alliances)
     else:
         result.winner, result.winning_alliance = _pick_winner(
             teams, result.survivors, cfg.alliances)
@@ -938,7 +1003,7 @@ SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "maneuver_duel", "mapf_stack_duel", "mapf_total_war_local",
                   "mapf_total_war_mapf", "ctf_mapf_local", "ctf_mapf_mapf",
                   "kingdom", "grand_alliance",
-                  "hill", "domination", "ctf", "base_assault")
+                  "hill", "domination", "ctf", "base_assault", "escort")
 
 MANEUVER_HEADLINE_MODES = ("greedy", "astar", "prioritized", "cbs")
 MANEUVER_HEADLINE_LABELS = {
@@ -1170,6 +1235,21 @@ def battle_scenario(name):
         )
         return (make_armies(12, cfg, seed=11), cfg,
                 "Base assault — hold the enemy HQ")
+    if name == "escort":
+        cfg = BattleConfig(
+            objective="escort",
+            escort_team=RED,
+            base_radius=4.5,
+            escort_radius=9.5,
+            payload_speed=4.2,
+            tactics="count_aware",
+            tactics_by_team={RED: "count_aware", BLUE: "nearest"},
+            formation="wedge",
+            fire_mode="hitscan",
+            **arena_terrain(),
+        )
+        return (make_armies(12, cfg, seed=10), cfg,
+                "Escort — push the payload to the enemy HQ")
     if name in ("mapf_total_war_local", "mapf_total_war_mapf"):
         spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
         cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf

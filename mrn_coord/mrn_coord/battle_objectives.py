@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import math
 
-from .battle_teams import RED, BLUE, alliance_of
+from .battle_teams import RED, BLUE, alliance_of, teams_are_enemies
+from .battle_terrain import push_out_of_walls
 
-OBJECTIVE_MODES = ("annihilation", "hill", "domination", "ctf", "base_assault")
+OBJECTIVE_MODES = (
+    "annihilation", "hill", "domination", "ctf", "base_assault", "escort",
+)
 
 
 def objective_zone(cfg):
@@ -54,6 +57,136 @@ def base_assault_render_zones(cfg, teams):
     for team, (bx, by, br) in team_bases(cfg, teams).items():
         out.append(["base", team, bx, by, br])
     return out
+
+
+def escort_goal_team(cfg, teams, escort_team):
+    """Enemy home base the payload must reach."""
+    for t in teams:
+        if t != escort_team and teams_are_enemies(cfg.alliances, escort_team, t):
+            return t
+    return BLUE if escort_team == RED else RED
+
+
+def escort_render_zones(cfg, teams, escort_team):
+    """Spawn base, delivery goal, and any other team bases."""
+    out = []
+    goal_team = escort_goal_team(cfg, teams, escort_team)
+    for team, (bx, by, br) in team_bases(cfg, teams).items():
+        if team == escort_team:
+            out.append(["spawn", team, bx, by, br])
+        elif team == goal_team:
+            out.append(["goal", team, bx, by, br])
+        else:
+            out.append(["base", team, bx, by, br])
+    return out
+
+
+def _push_out_of_obstacles(x, y, obstacles, *, body: float = 0.55):
+    for ox, oy, r in obstacles:
+        d = math.hypot(x - ox, y - oy)
+        need = r + body
+        if d < need:
+            if d < 1e-9:
+                x += need
+            else:
+                push = (need - d) / d
+                x += push * (x - ox)
+                y += push * (y - oy)
+    return x, y
+
+
+def _escort_key(cfg, team):
+    return alliance_of(cfg.alliances, team) if cfg.alliances else team
+
+
+class EscortTracker:
+    """Escort a payload from home to the enemy HQ — allies push, enemies block."""
+
+    def __init__(self, cfg, teams):
+        self.escort_team = cfg.escort_team if cfg.escort_team is not None else RED
+        self.bases = team_bases(cfg, teams)
+        self.escort_radius = getattr(cfg, "escort_radius", 5.5)
+        self.payload_speed = getattr(cfg, "payload_speed", 1.4)
+        self.payload_body = getattr(cfg, "payload_radius", 1.0)
+        self.goal_team = escort_goal_team(cfg, teams, self.escort_team)
+        sx, sy, _ = self.bases[self.escort_team]
+        gx, gy, gr = self.bases[self.goal_team]
+        self.payload_x, self.payload_y = sx, sy
+        self.start_x, self.start_y = sx, sy
+        self.goal_x, self.goal_y = gx, gy
+        self.goal_radius = getattr(cfg, "base_radius", None) or gr
+        self.total_dist = max(1.0, math.hypot(gx - sx, gy - sy))
+        self.escort_key = _escort_key(cfg, self.escort_team)
+
+    def _nearby_counts(self, bots, cfg):
+        ally_n, enemy_n = 0, 0
+        for b in bots:
+            if not b.alive:
+                continue
+            if math.hypot(b.x - self.payload_x, b.y - self.payload_y) > self.escort_radius:
+                continue
+            key = _escort_key(cfg, b.team)
+            if key == self.escort_key:
+                ally_n += 1
+            elif teams_are_enemies(cfg.alliances, self.escort_team, b.team):
+                enemy_n += 1
+        return ally_n, enemy_n
+
+    def _advance_payload(self, cfg, speed):
+        px, py = self.payload_x, self.payload_y
+        gx, gy = self.goal_x, self.goal_y
+        dx, dy = gx - px, gy - py
+        dist = math.hypot(dx, dy)
+        if dist < 1e-9:
+            return
+        base = math.atan2(dy, dx)
+        body = self.payload_body
+        best = None
+        best_score = -1e18
+        for off in (0.0, 0.45, -0.45, 0.9, -0.9, 1.35, -1.35):
+            ang = base + off
+            nx = px + speed * math.cos(ang)
+            ny = py + speed * math.sin(ang)
+            if cfg.obstacles:
+                nx, ny = _push_out_of_obstacles(nx, ny, cfg.obstacles, body=body)
+            if cfg.walls:
+                nx, ny = push_out_of_walls(nx, ny, cfg.walls, body=body)
+            moved = math.hypot(nx - px, ny - py)
+            if moved < 0.015:
+                continue
+            remain = math.hypot(nx - gx, ny - gy)
+            score = dist - remain - 0.05 * abs(off)
+            if score > best_score:
+                best_score = score
+                best = (nx, ny)
+        if best is not None:
+            self.payload_x, self.payload_y = best
+        elif speed >= dist:
+            self.payload_x, self.payload_y = gx, gy
+
+    def _move_payload(self, bots, cfg):
+        ally_n, enemy_n = self._nearby_counts(bots, cfg)
+        if ally_n <= 0:
+            return
+        speed_scale = max(0.22, (ally_n - enemy_n + 1) / (ally_n + enemy_n + 2))
+        speed = self.payload_speed * cfg.dt * speed_scale
+        self._advance_payload(cfg, speed)
+
+    def tick(self, bots, cfg):
+        self._move_payload(bots, cfg)
+        if math.hypot(self.payload_x - self.goal_x, self.payload_y - self.goal_y) <= self.goal_radius:
+            return self.escort_key
+        return None
+
+    def snapshot(self):
+        dist = math.hypot(self.payload_x - self.goal_x, self.payload_y - self.goal_y)
+        progress = max(0.0, min(1.0, 1.0 - dist / self.total_dist))
+        return {
+            "payload": [round(self.payload_x, 2), round(self.payload_y, 2)],
+            "escort_team": self.escort_team,
+            "goal_progress": round(progress, 3),
+            "escort_pct": int(round(100 * progress)),
+        }
 
 
 def base_capture_leader(bots, cfg, teams, base_owner_team):
