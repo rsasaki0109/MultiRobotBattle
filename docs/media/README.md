@@ -7,7 +7,7 @@ algorithms** — regenerate any of them with the matching script:
 | --- | --- | --- |
 | `battle.gif` | `make_battle_gif.py` | Total war — tracer rounds, walls, elevation, 576 bots |
 | `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid — duel uses real ballistics, RoboMaster chassis |
-| `objective_triple.gif` | `make_objective_triple_gif.py` | hill · domination · CTF — three objective modes, RoboMaster chassis |
+| `objective_triple.gif` | `make_objective_triple_gif.py` | 2×3 grid — hill · domination · CTF · base assault · escort |
 | `objective_duel.gif` | `make_objective_gif.py` | hill vs domination — zone hold progress, RoboMaster chassis |
 | `ctf_duel.gif` | `make_ctf_gif.py` | capture the flag — centre pickup, score at home base, RoboMaster chassis |
 | `base_assault.gif` | `make_base_assault_gif.py` | base assault — hold enemy HQ, tracer fire, capture progress |

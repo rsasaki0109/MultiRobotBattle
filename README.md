@@ -73,18 +73,23 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
 </p>
 
 <p align="center">
-  <img src="docs/media/objective_triple.gif" alt="Three RoboMaster-style objective battles side by side: king of the hill with a climbing hold meter, domination with cumulative zone control, and capture-the-flag with a yellow diamond flag between red and blue home bases — custom chassis fight forward until one side wins each mode." width="820">
+  <em><strong>576 bots · 45+ MAPF algorithms · browser demos</strong> — swarm battles where
+  you swap real planner layers and measure win-rate. Try live:
+  <a href="https://rsasaki0109.github.io/MultiRobotBattle/demo/battle.html">battle demo</a>
+  · <a href="https://rsasaki0109.github.io/MultiRobotBattle/demo/">MAPF zoo</a>
+  · <a href="https://rsasaki0109.github.io/MultiRobotBattle/tournament.html">tournament</a></em>
 </p>
 
 <p align="center">
-  <em>Win conditions beyond annihilation — <strong>hill</strong> (consecutive hold),
-  <strong>domination</strong> (cumulative zone control), and
-  <strong>capture the flag</strong> (grab centre, score at home) on the same engine.
-  Try with <code>battle_scenario("hill")</code>, <code>"domination"</code>,
-  <code>"ctf"</code>, <code>"base_assault"</code>, or <code>"escort"</code>; render with
-  <code>python3 scripts/make_objective_triple_gif.py</code> or individually with
-  <code>make_objective_gif.py</code> / <code>make_ctf_gif.py</code> /
-  <code>make_base_assault_gif.py</code> / <code>make_escort_gif.py</code>.</em>
+  <img src="docs/media/objective_triple.gif" alt="Five RoboMaster-style objective battles in a 2x3 grid: king of the hill, domination, capture-the-flag, base assault on the enemy HQ, and escort payload delivery — custom chassis, terrain, and progress meters in each panel until one side wins." width="820">
+</p>
+
+<p align="center">
+  <em>Five win conditions on one engine — <strong>hill</strong>, <strong>domination</strong>,
+  <strong>CTF</strong>, <strong>base assault</strong> (hold enemy HQ), and
+  <strong>escort</strong> (push payload to enemy base). Try
+  <code>battle_scenario("hill")</code> … <code>"escort"</code>; render the grid with
+  <code>python3 scripts/make_objective_triple_gif.py</code>.</em>
 </p>
 
 <p align="center">

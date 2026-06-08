@@ -246,10 +246,11 @@ asset underneath. The work now is to land both in **30 seconds** and to be found
 Leverage order:
 
 - [ ] **Distribution** (highest immediate leverage; topics already set): lead with
-  the `battle.gif` / `battle_gallery.gif` eye-catcher (r/robotics, Hacker News
+  the `battle.gif` / `maneuver_layers.gif` eye-catcher (r/robotics, Hacker News
   *Show HN*, X) and the one-line hook ("swarm robot battles, driven by a 50-paper
   MAPF zoo"), then land the substance — the benchmarked solver collection; open a
   PR adding the repo to *Awesome-MAPF* / *Awesome-Robotics*.
+  *(draft posts + links in ``docs/distribution/README.md``.)*
 - [x] **README refresh**: leads with the MAPF zoo — the `mapf_gallery.gif` hero,
   a 5-line `pip install` + solve quickstart, and a representative comparison
   table (algorithm | paper | one-line idea | gated result) linking the full
