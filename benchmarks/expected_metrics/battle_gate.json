@@ -1,4 +1,7 @@
 {
+  "artillery_barrage_decisive_rate": 1.0,
+  "artillery_barrage_rate": 1.0,
+  "artillery_barrage_red_win_rate": 1.0,
   "astar_maneuver_vs_greedy_decisive_rate": 1.0,
   "astar_maneuver_vs_greedy_rate": 1.0,
   "astar_maneuver_vs_greedy_red_win_rate": 0.6666666666666666,

@@ -60,6 +60,7 @@
     <div class="field">
       <label for="scenario">Scenario</label>
       <select id="scenario">
+        <option value="artillery_barrage">artillery barrage — splash rounds vs infantry</option>
         <option value="fog_ambush">fog ambush — limited vision, scout contact</option>
         <option value="escort">escort — push the payload to enemy HQ</option>
         <option value="base_assault">base assault — hold the enemy HQ</option>
@@ -307,6 +308,12 @@ function drawPanel(s, frameIdx, region) {
   ] || [];
   for (const [px, py, team] of projectiles) {
     BattleRobotArt.drawProjectile(ctx, X, Y, sc, px, py, team);
+  }
+  const explosions = (s.explosions || [])[
+    Math.min(frameIdx, (s.explosions || []).length - 1)
+  ] || [];
+  for (const [ex, ey, er, team] of explosions) {
+    BattleRobotArt.drawExplosion(ctx, X, Y, sc, ex, ey, er, team);
   }
 
   frame.forEach((row, idx) => {

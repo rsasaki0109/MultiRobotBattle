@@ -72,6 +72,38 @@ class TestProjectileCombat(unittest.TestCase):
         res = simulate(bots, cfg, max_ticks=1000)
         self.assertIsNotNone(res.winner)
         self.assertEqual(len(res.frames), len(res.projectiles))
+        self.assertEqual(len(res.frames), len(res.explosions))
+
+    def test_splash_hits_cluster(self):
+        from mrn_coord.battle import make_unit
+        from mrn_coord.battle_projectiles import (
+            Projectile, ProjectileState, advance_projectiles,
+        )
+
+        cfg = BattleConfig(fire_mode="projectile", dt=0.1, splash_friendly_fire=False)
+        bots = [
+            make_unit(0.0, 0.0, RED, "artillery"),
+            Bot(10.0, 0.0, 0, 0, BLUE, 100, 100),
+            Bot(10.5, 0.6, 0, 0, BLUE, 100, 100),
+            Bot(10.2, -0.5, 0, 0, BLUE, 100, 100),
+        ]
+        state = ProjectileState(projectiles=[
+            Projectile(x=10.0, y=0.0, vx=0.0, vy=0.0, damage=40.0, team=RED,
+                       target_bot_idx=1, splash_radius=2.5, homing=False,
+                       aim_x=10.0, aim_y=0.0, ttl=0.2, age=0.19),
+        ])
+        dmg, _, expls = advance_projectiles(state, bots, cfg, dt=0.05)
+        self.assertEqual(len(expls), 1)
+        self.assertGreater(sum(dmg), 0.0)
+        self.assertGreaterEqual(sum(1 for d in dmg if d > 0), 2)
+
+    def test_artillery_barrage_scenario_resolves(self):
+        from mrn_coord.battle import battle_scenario
+        bots, cfg, _ = battle_scenario("artillery_barrage")
+        self.assertEqual(cfg.fire_mode, "projectile")
+        res = simulate(bots, cfg, max_ticks=900)
+        self.assertIsNotNone(res.winner)
+        self.assertGreater(sum(len(e) for e in res.explosions), 0)
 
 
 if __name__ == "__main__":

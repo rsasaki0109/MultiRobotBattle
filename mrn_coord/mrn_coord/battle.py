@@ -114,10 +114,12 @@ TEAM_NAMES = {RED: "red", BLUE: "blue", GREEN: "green", YELLOW: "yellow"}
 # Unit classes — per-bot stats that override the config defaults. Mixing them
 # gives a rough rock-paper-scissors: tanks soak, snipers out-range, scouts swarm.
 CLASSES = {
-    "scout":   dict(hp=55.0,  dps=15.0, attack_range=3.0, max_speed=3.2),
-    "soldier": dict(hp=100.0, dps=22.0, attack_range=3.5, max_speed=2.2),
-    "tank":    dict(hp=240.0, dps=26.0, attack_range=2.6, max_speed=1.25),
-    "sniper":  dict(hp=60.0,  dps=30.0, attack_range=6.5, max_speed=1.7),
+    "scout":     dict(hp=55.0,  dps=15.0, attack_range=3.0, max_speed=3.2),
+    "soldier":   dict(hp=100.0, dps=22.0, attack_range=3.5, max_speed=2.2),
+    "tank":      dict(hp=240.0, dps=26.0, attack_range=2.6, max_speed=1.25),
+    "sniper":    dict(hp=60.0,  dps=30.0, attack_range=6.5, max_speed=1.7),
+    "artillery": dict(hp=75.0,  dps=16.0, attack_range=9.5, max_speed=1.05,
+                     splash_radius=2.75),
 }
 
 
@@ -169,6 +171,11 @@ class BattleConfig:
     projectile_speed: float = 32.0
     projectile_ttl: float = 0.42
     projectile_hit_radius: float = 0.42
+    projectile_splash_radius: float = 0.0
+    splash_friendly_fire: bool = True
+    splash_friendly_scale: float = 0.45
+    artillery_speed_scale: float = 0.62
+    artillery_ttl_scale: float = 2.8
     fire_interval: float = 0.06
     accuracy_min: float = 0.80
     accuracy_max: float = 0.98
@@ -241,6 +248,7 @@ class BattleResult:
     frames: list = field(default_factory=list)   # per tick: list of bot snapshots
     shots: list = field(default_factory=list)     # per tick: list of firing lines
     projectiles: list = field(default_factory=list)  # per tick: in-flight rounds
+    explosions: list = field(default_factory=list)   # per tick: splash detonations
     counts: list = field(default_factory=list)    # per tick: alive count per team (in `teams` order)
     teams: list = field(default_factory=list)     # team ids present, sorted
     winner: object = None                         # winning team id / None (draw)
@@ -535,6 +543,13 @@ def _wall_turn(x, y, vx, vy, width, height, margin=2.0, push=2.0):
     return vx, vy
 
 
+def _splash_radius_for(bot, cfg):
+    """Splash radius from unit class or config default."""
+    if bot.kind and bot.kind in CLASSES:
+        return CLASSES[bot.kind].get("splash_radius", 0.0) or 0.0
+    return cfg.projectile_splash_radius or 0.0
+
+
 def _fire_at_target(b, e, bot_idx, target_bot_idx, i, best, cfg, live, *,
                    damage, shots, projectile_state, tick, use_projectiles):
     """Apply hitscan damage or spawn a projectile toward ``e``."""
@@ -543,13 +558,14 @@ def _fire_at_target(b, e, bot_idx, target_bot_idx, i, best, cfg, live, *,
         return
     dps = b.dps if b.dps is not None else cfg.dps
     b_range = b.attack_range if b.attack_range is not None else cfg.attack_range
+    splash = _splash_radius_for(b, cfg)
     if use_projectiles:
         if not can_fire(projectile_state, bot_idx):
             return
         proj, shot = spawn_projectile_from_bot(
             b.x, b.y, (e.x, e.y), math.hypot(b.x - e.x, b.y - e.y), b_range, cfg,
             team=b.team, target_bot_idx=target_bot_idx, dps=dps, cover=cover,
-            tick=tick, shooter_bot_idx=bot_idx,
+            tick=tick, shooter_bot_idx=bot_idx, splash_radius=splash,
         )
         projectile_state.projectiles.append(proj)
         shots.append(shot)
@@ -566,9 +582,9 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
                 escort_tracker=None):
     """Advance the battle one tick (in place).
 
-    Returns ``(shots, projectiles)`` for this tick — firing lines and any
-    in-flight rounds (projectile mode). Steering and damage use the same
-    snapshot of living bots, so the update is order-independent.
+    Returns ``(shots, projectiles, explosions)`` for this tick — firing lines,
+    in-flight rounds, and any splash detonations (projectile mode). Steering and
+    damage use the same snapshot of living bots, so the update is order-independent.
     """
     if maneuver_state is None:
         maneuver_state = ManeuverState()
@@ -588,9 +604,10 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
     damage = [0.0] * n
     shots = []
     projectile_snapshots = []
+    explosion_snapshots = []
     if use_projectiles:
         tick_cooldowns(projectile_state, bots, cfg)
-        proj_dmg, projectile_snapshots = advance_projectiles(
+        proj_dmg, projectile_snapshots, explosion_snapshots = advance_projectiles(
             projectile_state, bots, cfg, dt=cfg.dt)
         for i in range(n):
             damage[i] += proj_dmg[i]
@@ -799,7 +816,7 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
         if b.hp <= 0.0:
             b.hp = 0.0
             b.alive = False
-    return shots, projectile_snapshots
+    return shots, projectile_snapshots, explosion_snapshots
 
 
 def _counts(bots, teams):
@@ -931,8 +948,9 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
             if record:
                 result.shots.append([])
                 result.projectiles.append([])
+                result.explosions.append([])
             break
-        shots, projs = battle_step(bots, cfg, maneuver_state=maneuver_state,
+        shots, projs, expls = battle_step(bots, cfg, maneuver_state=maneuver_state,
                                    assignment_state=assignment_state,
                                    projectile_state=projectile_state, tick=tick,
                                    ctf_tracker=ctf_tracker,
@@ -940,6 +958,7 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
         if record:
             result.shots.append(shots)
             result.projectiles.append(projs)
+            result.explosions.append(expls)
         if obj_tracker is not None:
             leader = zone_leader(bots, cfg, teams)
             objective_win = obj_tracker.tick(leader)
@@ -973,6 +992,7 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
                     team_visible_enemy_bot_indices(bots, cfg, view_team))
             result.shots.append([])
             result.projectiles.append([])
+            result.explosions.append([])
 
     c = _counts(bots, teams)
     result.survivors = {t: n for t, n in zip(teams, c)}
@@ -1033,7 +1053,8 @@ SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "maneuver_duel", "mapf_stack_duel", "mapf_total_war_local",
                   "mapf_total_war_mapf", "ctf_mapf_local", "ctf_mapf_mapf",
                   "kingdom", "grand_alliance",
-                  "hill", "domination", "ctf", "base_assault", "escort", "fog_ambush")
+                  "hill", "domination", "ctf", "base_assault", "escort", "fog_ambush",
+                  "artillery_barrage")
 
 MANEUVER_HEADLINE_MODES = ("greedy", "astar", "prioritized", "cbs")
 MANEUVER_HEADLINE_LABELS = {
@@ -1297,6 +1318,28 @@ def battle_scenario(name):
         blue = make_company(cfg, BLUE, (cfg.width * 0.85, cfg.height * 0.5),
                             [("soldier", 12)], random.Random(35), jitter=3.2)
         return (red + blue, cfg, "Fog ambush — scouts spot, wedge strikes")
+    if name == "artillery_barrage":
+        cfg = BattleConfig(
+            **arena_terrain(),
+            fire_mode="projectile",
+            projectile_damage="on_hit",
+            fire_interval=0.11,
+            projectile_speed=18.0,
+            projectile_ttl=0.55,
+            accuracy_min=0.72,
+            accuracy_max=0.94,
+            splash_friendly_fire=True,
+            splash_friendly_scale=0.40,
+            tactics="count_aware",
+            tactics_by_team={RED: "count_aware", BLUE: "nearest"},
+            formation="screen",
+        )
+        rng = random.Random(22)
+        red = make_company(cfg, RED, (cfg.width * 0.16, cfg.height * 0.5),
+                           [("artillery", 4), ("soldier", 8)], rng, jitter=3.0)
+        blue = make_company(cfg, BLUE, (cfg.width * 0.84, cfg.height * 0.5),
+                            [("soldier", 12)], random.Random(23), jitter=2.4)
+        return (red + blue, cfg, "Artillery barrage — splash rounds vs line infantry")
     if name in ("mapf_total_war_local", "mapf_total_war_mapf"):
         spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
         cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf

@@ -34,6 +34,7 @@ SCENARIOS = {
     "base_assault": {"max_ticks": 900, "frame_stride": 2},
     "escort": {"max_ticks": 900, "frame_stride": 2},
     "fog_ambush": {"max_ticks": 900, "frame_stride": 2},
+    "artillery_barrage": {"max_ticks": 900, "frame_stride": 2},
 }
 
 
@@ -96,6 +97,11 @@ def _pack_result(bots, cfg, res, *, scenario_name, title, stride):
         "projectiles": [
             [[round(x, 2), round(y, 2), team] for (x, y, team) in fr]
             for fr in getattr(res, "projectiles", [])
+        ],
+        "explosions": [
+            [[round(x, 2), round(y, 2), round(r, 2), team]
+             for (x, y, r, team) in fr]
+            for fr in getattr(res, "explosions", [])
         ],
         "counts": res.counts,
         "teams": list(res.teams),

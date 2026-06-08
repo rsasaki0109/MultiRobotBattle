@@ -14,6 +14,7 @@ const HULL = {
   soldier: [1.35, 0.95, 0.18],
   tank: [2.15, 1.55, 0.24],
   sniper: [1.15, 0.82, 0.16],
+  artillery: [1.85, 1.35, 0.22],
 };
 
 const BARREL = {
@@ -22,6 +23,7 @@ const BARREL = {
   soldier: 0.78,
   tank: 1.05,
   sniper: 1.35,
+  artillery: 1.55,
 };
 
 function defaultHeading(team) {
@@ -259,6 +261,24 @@ function drawObstacle(ctx, X, Y, sc, ox, oy, r) {
   }
 }
 
+function drawExplosion(ctx, X, Y, sc, px, py, radius, team) {
+  const [r, g, b] = TEAM_RGB[team] || [0.98, 0.72, 0.22];
+  const rad = radius * sc;
+  ctx.fillStyle = rgbaStr([r, g, b, 0.18]);
+  ctx.beginPath();
+  ctx.arc(X(px), Y(py), rad, 0, 7);
+  ctx.fill();
+  ctx.strokeStyle = rgbaStr([r, g, b, 0.55]);
+  ctx.lineWidth = Math.max(1.2, sc * 0.35);
+  ctx.beginPath();
+  ctx.arc(X(px), Y(py), rad * 0.72, 0, 7);
+  ctx.stroke();
+  ctx.fillStyle = rgbaStr([1, 0.92, 0.55, 0.35]);
+  ctx.beginPath();
+  ctx.arc(X(px), Y(py), rad * 0.28, 0, 7);
+  ctx.fill();
+}
+
 function drawProjectile(ctx, X, Y, sc, px, py, team) {
   const [r, g, b] = TEAM_RGB[team] || [0.95, 0.95, 0.95];
   ctx.fillStyle = rgbaStr([r, g, b, 0.95]);
@@ -297,6 +317,7 @@ window.BattleRobotArt = {
   drawRobotChassis,
   drawShot,
   drawProjectile,
+  drawExplosion,
   drawPayload,
   drawElevation,
   drawWall,

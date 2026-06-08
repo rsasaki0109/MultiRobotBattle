@@ -120,9 +120,11 @@ invariants) → gate → record the honest result.
 - [x] **Line of sight & cover** — obstacles (and optionally other bodies) block
   fire: a shot lands only if the segment to the target is clear; partial cover
   scales damage down. Reuses the segment/obstacle geometry already in the sim.
-- [ ] **Projectiles & ballistics** — discrete shots with travel time and accuracy
+- [x] **Projectiles & ballistics** — discrete shots with travel time and accuracy
   that falls off with range (vs today's instant hitscan): real misses, friendly
   fire, and splash / area effects for an "artillery" class.
+  **Artillery barrage** (`artillery_barrage`) — splash rounds + ``artillery`` unit
+  class — landed with ``artillery_barrage.gif``, browser demo, and ``battle_gate`` pin.
 - [ ] **Typed damage & armor** — a small rock-paper-scissors (e.g. AP vs shield)
   so composition matters beyond raw dps; plus cooldown / reload / finite ammo so
   positioning and timing count.

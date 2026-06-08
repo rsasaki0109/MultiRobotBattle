@@ -22,6 +22,7 @@ HULL = {
     "soldier": (1.35, 0.95, 0.18),
     "tank": (2.15, 1.55, 0.24),
     "sniper": (1.15, 0.82, 0.16),
+    "artillery": (1.85, 1.35, 0.22),
 }
 
 BARREL = {
@@ -30,6 +31,7 @@ BARREL = {
     "soldier": 0.78,
     "tank": 1.05,
     "sniper": 1.35,
+    "artillery": 1.55,
 }
 
 TURRET_R = {
@@ -38,6 +40,7 @@ TURRET_R = {
     "soldier": 0.28,
     "tank": 0.38,
     "sniper": 0.24,
+    "artillery": 0.34,
 }
 
 

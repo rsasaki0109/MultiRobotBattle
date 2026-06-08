@@ -1,4 +1,4 @@
-"""Discrete projectiles for swarm battle — travel time, range falloff, misses."""
+"""Discrete projectiles for swarm battle — travel time, range falloff, misses, splash."""
 
 from __future__ import annotations
 
@@ -22,6 +22,12 @@ class Projectile:
     age: float = 0.0
     ttl: float = 0.5
     hit_radius: float = 0.42
+    aim_x: float = 0.0
+    aim_y: float = 0.0
+    splash_radius: float = 0.0
+    homing: bool = True
+    splash_friendly_fire: bool = True
+    splash_friendly_scale: float = 0.45
 
 
 @dataclass
@@ -52,9 +58,45 @@ def _aim_point(ax, ay, tx, ty, dist, accuracy, rng, miss_spread):
     return tx + (-uy) * spread * sign, ty + ux * spread * sign
 
 
+def _splash_damage(base: float, dist: float, radius: float) -> float:
+    """Full damage at centre, 35% at the splash edge."""
+    if radius <= 1e-9 or dist > radius:
+        return 0.0
+    t = 1.0 - dist / radius
+    return base * (0.35 + 0.65 * t)
+
+
+def _should_splash_hit(shooter_team, victim_team, cfg) -> bool:
+    if victim_team == shooter_team:
+        return cfg.splash_friendly_fire
+    return True
+
+
+def _apply_splash(px, py, proj: Projectile, bots, live, live_idx, damage, cfg,
+                  explosions):
+    """Area damage on detonation — indirect fire ignores line of sight."""
+    radius = proj.splash_radius
+    if radius <= 0.0:
+        return
+    base = proj.damage * proj.cover
+    for j, victim in enumerate(live):
+        if not _should_splash_hit(proj.team, victim.team, cfg):
+            continue
+        d = math.hypot(victim.x - px, victim.y - py)
+        amt = _splash_damage(base, d, radius)
+        if amt <= 0.0:
+            continue
+        if victim.team == proj.team:
+            amt *= proj.splash_friendly_scale
+        li = live_idx.get(id(victim))
+        if li is not None:
+            damage[li] += amt
+    explosions.append((px, py, radius, proj.team))
+
+
 def spawn_projectile_from_bot(ax, ay, target, dist, b_range, cfg, *, team,
                               target_bot_idx, dps, cover, tick,
-                              shooter_bot_idx):
+                              shooter_bot_idx, splash_radius=0.0):
     """Fire one round using per-bot range for accuracy falloff."""
     rng = random.Random(tick * 7919 + shooter_bot_idx * 104729)
     acc = shot_accuracy(dist, b_range, acc_min=cfg.accuracy_min,
@@ -65,54 +107,87 @@ def spawn_projectile_from_bot(ax, ay, target, dist, b_range, cfg, *, team,
     dd = math.hypot(ddx, ddy)
     if dd <= 1e-9:
         ddx, ddy, dd = 1.0, 0.0, 1.0
+    splash = splash_radius or 0.0
+    homing = splash <= 0.0
     speed = cfg.projectile_speed
+    ttl = cfg.projectile_ttl
+    if splash > 0.0:
+        speed *= cfg.artillery_speed_scale
+        ttl *= cfg.artillery_ttl_scale
     damage = dps * cfg.fire_interval
     return Projectile(
         x=ax, y=ay,
         vx=ddx / dd * speed, vy=ddy / dd * speed,
         damage=damage, team=team, target_bot_idx=target_bot_idx,
-        cover=cover, ttl=cfg.projectile_ttl,
+        cover=cover, ttl=ttl,
         hit_radius=cfg.projectile_hit_radius,
+        aim_x=aim_x, aim_y=aim_y,
+        splash_radius=splash,
+        homing=homing,
+        splash_friendly_fire=cfg.splash_friendly_fire,
+        splash_friendly_scale=cfg.splash_friendly_scale,
     ), (ax, ay, aim_x, aim_y, team)
 
 
 def advance_projectiles(state: ProjectileState, bots, cfg, *, dt):
-    """Move active rounds, apply hits, return damage per living-bot index."""
+    """Move active rounds, apply hits / splash, return per-live damage + VFX."""
     live = [b for b in bots if b.alive]
     live_idx = {id(b): i for i, b in enumerate(live)}
     damage = [0.0] * len(live)
     remaining = []
     snapshots = []
+    explosions = []
 
     for p in state.projectiles:
         p.age += dt
         if p.age > p.ttl:
+            if p.splash_radius > 0.0:
+                _apply_splash(p.x, p.y, p, bots, live, live_idx, damage, cfg,
+                              explosions)
             continue
-        target = bots[p.target_bot_idx] if p.target_bot_idx < len(bots) else None
-        if target is not None and target.alive:
+
+        if p.splash_radius > 0.0:
             speed = math.hypot(p.vx, p.vy) or cfg.projectile_speed
-            dx, dy = target.x - p.x, target.y - p.y
+            dx, dy = p.aim_x - p.x, p.aim_y - p.y
             dd = math.hypot(dx, dy)
             if dd > 1e-9:
                 p.vx = dx / dd * speed
                 p.vy = dy / dd * speed
+        elif p.homing:
+            target = bots[p.target_bot_idx] if p.target_bot_idx < len(bots) else None
+            if target is not None and target.alive:
+                speed = math.hypot(p.vx, p.vy) or cfg.projectile_speed
+                dx, dy = target.x - p.x, target.y - p.y
+                dd = math.hypot(dx, dy)
+                if dd > 1e-9:
+                    p.vx = dx / dd * speed
+                    p.vy = dy / dd * speed
+
         p.x += p.vx * dt
         p.y += p.vy * dt
         snapshots.append((p.x, p.y, p.team))
 
-        hit = False
-        if target is not None and target.alive:
-            d = math.hypot(p.x - target.x, p.y - target.y)
-            if d <= p.hit_radius:
-                li = live_idx.get(id(target))
-                if li is not None:
-                    damage[li] += p.damage * p.cover
-                hit = True
-        if not hit and p.age < p.ttl:
+        detonated = False
+        if p.splash_radius > 0.0:
+            if math.hypot(p.x - p.aim_x, p.y - p.aim_y) <= p.hit_radius * 1.5:
+                _apply_splash(p.x, p.y, p, bots, live, live_idx, damage, cfg,
+                              explosions)
+                detonated = True
+        else:
+            target = bots[p.target_bot_idx] if p.target_bot_idx < len(bots) else None
+            if target is not None and target.alive:
+                d = math.hypot(p.x - target.x, p.y - target.y)
+                if d <= p.hit_radius:
+                    li = live_idx.get(id(target))
+                    if li is not None:
+                        damage[li] += p.damage * p.cover
+                    detonated = True
+
+        if not detonated and p.age < p.ttl:
             remaining.append(p)
 
     state.projectiles = remaining
-    return damage, snapshots
+    return damage, snapshots, explosions
 
 
 def tick_cooldowns(state: ProjectileState, bots, cfg):

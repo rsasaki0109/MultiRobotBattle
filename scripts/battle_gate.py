@@ -252,6 +252,7 @@ def collect_metrics(*, seeds):
     metrics["base_assault"] = _run_objective_scenario("base_assault", max_ticks=900)
     metrics["escort"] = _run_objective_scenario("escort", max_ticks=900)
     metrics["fog_ambush"] = _run_objective_scenario("fog_ambush", max_ticks=900)
+    metrics["artillery_barrage"] = _run_objective_scenario("artillery_barrage", max_ticks=900)
     slow = seeds[: min(_SLOW_MATCHUP_SEEDS, len(seeds))]
     metrics["mapf_total_war_local"] = _run_mapf_total_war_side("local", seeds=slow)
     metrics["mapf_total_war_mapf"] = _run_mapf_total_war_side("mapf", seeds=slow)

@@ -93,6 +93,16 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
 </p>
 
 <p align="center">
+  <img src="docs/media/artillery_barrage.gif" alt="Artillery barrage — red mortar carriers lob splash rounds into clustered blue infantry; orange detonation rings expand on impact while RoboMaster-style chassis advance across arena cover." width="820">
+</p>
+
+<p align="center">
+  <em><strong>Artillery splash</strong> — indirect rounds with area damage and
+  friendly-fire risk. Try <code>battle_scenario("artillery_barrage")</code> or
+  <code>python3 scripts/make_artillery_gif.py</code>.</em>
+</p>
+
+<p align="center">
   <img src="docs/media/fog_ambush.gif" alt="Fog of war dual panel: left shows the full spectator map, right shows red team vision where unseen blue robots are hidden until scouts make contact — count-aware wedge strikes after contact." width="820">
 </p>
 
