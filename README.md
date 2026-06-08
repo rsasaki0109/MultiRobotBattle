@@ -67,6 +67,18 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
   <code>python3 scripts/make_battle_gallery_gif.py</code>.</em>
 </p>
 
+<p align="center">
+  <img src="docs/media/objective_duel.gif" alt="Side-by-side objective battles on an open field: left panel is king of the hill — red and blue wedges fight for a dashed yellow circle at the centre and a hold meter climbs until one side secures consecutive control; right panel is domination — the same contest but progress accumulates over time in the zone until one army reaches the control threshold." width="820">
+</p>
+
+<p align="center">
+  <em>Win conditions beyond annihilation — <strong>hill</strong> (consecutive hold)
+  vs <strong>domination</strong> (cumulative zone control) on the same contested
+  centre. Try with <code>battle_scenario("hill")</code> or
+  <code>battle_scenario("domination")</code>; render with
+  <code>python3 scripts/make_objective_gif.py</code>.</em>
+</p>
+
 The battle stack is modular — swap one layer at a time and measure the effect
 with ``scripts/battle_gate.py`` (pinned win-rates in
 ``benchmarks/expected_metrics/battle_gate.json``):
@@ -100,6 +112,17 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
   around terrain) plus <strong>prioritized maneuver</strong> (how they route there),
   vs Hungarian + greedy on the same spawn. Render with
   <code>python3 scripts/make_mapf_stack_gif.py</code>.</em>
+</p>
+
+<p align="center">
+  <img src="docs/media/mapf_total_war.gif" alt="Side-by-side king-of-the-hill total-war contests with 36 robots: left panel uses Hungarian assignment and greedy pursuit; right panel stacks CBS-TA assignment with prioritized MAPF maneuver — both armies fight for a dashed yellow control circle at the centre while hold progress ticks up." width="820">
+</p>
+
+<p align="center">
+  <em>MAPF on an open-field total-war contest — same 18 vs 18 spawn fighting for
+  the hill; red runs <strong>Hungarian + greedy</strong> (left) or
+  <strong>CBS-TA + prioritized MAPF</strong> (right). Render with
+  <code>python3 scripts/make_mapf_total_war_gif.py</code>.</em>
 </p>
 
 <p align="center">
