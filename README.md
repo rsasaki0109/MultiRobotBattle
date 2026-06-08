@@ -1,16 +1,17 @@
 # multirobot-battle
 
 <p align="center">
-  <img src="docs/media/battle.gif" alt="Total-war swarm battle on a wide dark battlefield: hundreds of tiny robot discs mass in infantry blocks, tank echelons, scout wedges and sniper lines. Red and green western armies charge east into blue and yellow eastern lines across a central no-man's-land; laser fire criss-crosses the front, casualty counters climb, and one allied coalition claims victory." width="820">
+  <img src="docs/media/battle.gif" alt="RoboMaster-style total war on a lit competition arena: hundreds of custom chassis with coloured armour stripes, turrets and barrel tracers — red and green western bots charge east into blue and yellow eastern lines across a central no-man's-land; casualty bars and KIA counter climb until one allied coalition wins." width="820">
 </p>
 
 <p align="center">
-  <em><strong>Total war</strong> — four allied armies and <strong>576 robots</strong> in combined-arms
-  echelons (infantry, tanks, snipers) clash on a wide front until one coalition wins.
-  Allied teams never fire on each other; each robot still flocks only with its own
-  colour, chases the nearest enemy, and trades fire when in range. Damage is
-  per-attacker, so <strong>focus fire emerges for free</strong> — and the battle is built on
-  the same multi-robot stack that hosts a <strong>benchmark-gated MAPF zoo</strong> (below).</em>
+  <em><strong>Total war</strong> — four allied armies and <strong>576 custom bots</strong>
+  (RoboMaster-style chassis, turrets, combined-arms echelons) clash on a wide front
+  until one coalition wins. Allied teams never fire on each other; each robot still
+  flocks only with its own colour, chases the nearest enemy, and trades fire when in
+  range. Damage is per-attacker, so <strong>focus fire emerges for free</strong> — and
+  the battle is built on the same multi-robot stack that hosts a
+  <strong>benchmark-gated MAPF zoo</strong> (below).</em>
 </p>
 
 [![build-jazzy](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml)

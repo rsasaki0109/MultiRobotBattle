@@ -5,7 +5,7 @@ algorithms** — regenerate any of them with the matching script:
 
 | GIF | Script | Shows |
 | --- | --- | --- |
-| `battle.gif` | `make_battle_gif.py` | total war — 576 robots, four armies, two allied fronts |
+| `battle.gif` | `make_battle_gif.py` | RoboMaster-style total war — 576 bots, chassis + turrets |
 | `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid: duel / FFA / quality vs quantity / chokepoint |
 | `objective_duel.gif` | `make_objective_gif.py` | hill vs domination — zone hold progress side-by-side |
 | `ctf_duel.gif` | `make_ctf_gif.py` | capture the flag — centre pickup, score at home base |
