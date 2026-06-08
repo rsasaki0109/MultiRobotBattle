@@ -74,7 +74,8 @@ class Panel:
         frame = self.res.frames[t]
         prev = self.res.frames[t - 1] if t > 0 else None
         shots = self.res.shots[t] if t < len(self.res.shots) else ()
-        self.robots.update(frame, prev, shots, self.deaths, t)
+        projs = self.res.projectiles[t] if t < len(self.res.projectiles) else ()
+        self.robots.update(frame, prev, shots, projs, self.deaths, t)
 
         counts = self.res.counts[min(t, len(self.res.counts) - 1)]
         parts = [f"$\\bf{{{c}}}$ {TEAM_NAMES[team]}" for team, c in zip(self.teams, counts)]

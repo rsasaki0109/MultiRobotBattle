@@ -5,13 +5,14 @@ algorithms** — regenerate any of them with the matching script:
 
 | GIF | Script | Shows |
 | --- | --- | --- |
-| `battle.gif` | `make_battle_gif.py` | RoboMaster total war — wall blocks, elevation pads, 576 bots |
-| `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid — discs + wall bunkers + elevation, RoboMaster chassis |
+| `battle.gif` | `make_battle_gif.py` | Total war — tracer rounds, walls, elevation, 576 bots |
+| `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid — duel uses real ballistics, RoboMaster chassis |
 | `objective_triple.gif` | `make_objective_triple_gif.py` | hill · domination · CTF — three objective modes, RoboMaster chassis |
 | `objective_duel.gif` | `make_objective_gif.py` | hill vs domination — zone hold progress, RoboMaster chassis |
 | `ctf_duel.gif` | `make_ctf_gif.py` | capture the flag — centre pickup, score at home base, RoboMaster chassis |
 | `ctf_mapf.gif` | `make_ctf_mapf_gif.py` | CTF × MAPF — Hungarian+greedy vs CBS-TA+prioritized, RoboMaster chassis |
-| `maneuver_duel.gif` | `make_maneuver_gif.py` | greedy vs MAPF maneuver — wall bunkers + elevation on chokepoint |
+| `maneuver_layers.gif` | `make_maneuver_gif.py` | 2×2 headline — greedy / A* / prioritized / CBS red vs greedy blue |
+| `maneuver_duel.gif` | *(legacy)* | prioritized MAPF red vs greedy blue — two-panel chokepoint |
 | `mapf_stack_duel.gif` | `make_mapf_stack_gif.py` | Hungarian+greedy vs CBS-TA+prioritized — wall terrain |
 | `mapf_total_war.gif` | `make_mapf_total_war_gif.py` | MAPF stack on 18 vs 18 KOTH — RoboMaster chassis side-by-side |
 | `kingdom_clash.gif` | `make_kingdom_gif.py` | 80 vs 80 — rectangular berms, elevation pads, RoboMaster chassis |

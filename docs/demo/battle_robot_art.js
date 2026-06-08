@@ -259,10 +259,23 @@ function drawObstacle(ctx, X, Y, sc, ox, oy, r) {
   }
 }
 
+function drawProjectile(ctx, X, Y, sc, px, py, team) {
+  const [r, g, b] = TEAM_RGB[team] || [0.95, 0.95, 0.95];
+  ctx.fillStyle = rgbaStr([r, g, b, 0.95]);
+  ctx.beginPath();
+  ctx.arc(X(px), Y(py), Math.max(1.5, sc * 0.35), 0, 7);
+  ctx.fill();
+  ctx.fillStyle = rgbaStr([1, 1, 1, 0.55]);
+  ctx.beginPath();
+  ctx.arc(X(px), Y(py), Math.max(0.8, sc * 0.15), 0, 7);
+  ctx.fill();
+}
+
 window.BattleRobotArt = {
   inferHeading,
   drawRobotChassis,
   drawShot,
+  drawProjectile,
   drawElevation,
   drawWall,
   drawObstacle,

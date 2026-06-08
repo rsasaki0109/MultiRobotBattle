@@ -172,11 +172,13 @@ battle is exactly where they should *do work*:
 - [ ] **Collision-free charges** — ORCA / Buffered Voronoi Cells / flocking for
   the advance; switchable-ADG-style execution when the maneuver is pre-planned and
   someone is delayed.
-- [ ] **The headline demo** — swap *only* the movement layer (greedy ↔ A\* ↔ CBS)
+- [x] **The headline demo** — swap *only* the movement layer (greedy ↔ A\* ↔ CBS)
   and show the win-rate difference. That single experiment turns the zoo from a
   museum into the battle's brain, and is the strongest story this repo can tell.
-  *(partial: ``scripts/make_maneuver_gif.py`` → ``docs/media/maneuver_duel.gif``;
-  ``battle_gate`` astar/prioritized vs greedy matchups.)*
+  *(``maneuver_headline_duel`` + ``scripts/make_maneuver_gif.py`` →
+  ``docs/media/maneuver_layers.gif`` 2×2 grid; ``battle_gate`` pins chokepoint
+  A* / prioritized vs greedy at ~67% red win-rate; CBS shown in GIF but skipped
+  in CI gate — joint replanning is too slow.)*
 
 ### Scale, balance & evaluation
 - [ ] **Balance harness + `battle_gate`** — run K seeds of each matchup, report

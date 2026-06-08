@@ -104,18 +104,41 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
 | **Assignment** | ``assignment`` | ``hungarian`` (combat utility) or ``cbs_ta`` (grid BFS + Murty path-aware matching) |
 | **Formation** | ``formation`` | line / wedge / screen / square via displacement consensus |
 | **Maneuver** | ``maneuver`` / ``maneuver_by_team`` | greedy pursuit vs grid A* / prioritized / CBS / LaCAM-PIBT |
+
+On the **chokepoint** (same soldiers, Hungarian assignment + wedge held fixed),
+red's MAPF maneuver vs blue greedy is pinned in ``battle_gate``:
+
+| Red movement layer | Red win-rate vs greedy blue | Notes |
+| --- | --- | --- |
+| Greedy (baseline) | ~50% | symmetric — no planner advantage |
+| Grid A* | **67%** | routes around wall bunkers |
+| Prioritized MAPF | **67%** | collision-free column through gaps |
+| CBS | *(GIF only)* | optimal joint paths — too slow for CI gate |
+
 | **LoS & cover** | ``require_los``, ``obstacles`` | terrain blocks or attenuates fire |
+
+<p align="center">
+  <img src="docs/media/maneuver_layers.gif" alt="2x2 grid of RoboMaster-style chokepoint battles: four panels swap only red's movement layer while blue stays on greedy pursuit — greedy baseline, grid A* maneuver, prioritized MAPF, and CBS joint planning — with wall bunkers and elevation pads; laser tracers flicker until each panel shows its winner." width="820">
+</p>
+
+<p align="center">
+  <em><strong>Headline demo</strong> — same soldiers, terrain, assignment, and formation;
+  only red's movement layer changes (<strong>greedy → A* → prioritized → CBS</strong>)
+  while blue stays greedy. MAPF planners win ~67% on the chokepoint (pinned in
+  <code>battle_gate</code>); CBS is shown here but skipped in CI because joint CBS
+  replanning is too slow. Render with
+  <code>python3 scripts/make_maneuver_gif.py</code>; try prioritized vs greedy live in the
+  <a href="https://rsasaki0109.github.io/MultiRobotBattle/demo/battle.html">browser battle demo</a>.</em>
+</p>
 
 <p align="center">
   <img src="docs/media/maneuver_duel.gif" alt="Side-by-side chokepoint battles with RoboMaster-style chassis: left panel shows greedy straight-line pursuit through three terrain gaps; right panel shows the same soldiers with Hungarian assignment, wedge formation, and prioritized MAPF maneuver — red plans paths around obstacles while blue charges in, lasers flicker, and one side wins." width="820">
 </p>
 
 <p align="center">
-  <em>Headline demo — same soldiers and terrain, two movement layers:
-  <strong>greedy pursuit</strong> (left) vs <strong>prioritized MAPF maneuver</strong>
-  + Hungarian assignment + wedge (right). Render with
-  <code>python3 scripts/make_maneuver_gif.py</code>; try it live in the
-  <a href="https://rsasaki0109.github.io/MultiRobotBattle/demo/battle.html">browser battle demo</a>.</em>
+  <em>Prioritized MAPF vs greedy on the chokepoint — red plans around wall bunkers
+  while blue charges straight. Legacy two-panel render; the 2×2 grid above is the
+  full movement-layer sweep.</em>
 </p>
 
 <p align="center">

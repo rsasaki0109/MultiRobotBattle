@@ -79,6 +79,10 @@ def _pack_result(bots, cfg, res, *, scenario_name, title, stride):
         "elevation": [list(z) for z in getattr(cfg, "elevation", ())],
         "frames": [_pack_frame(fr) for fr in res.frames],
         "shots": [_pack_shots(sh) for sh in res.shots],
+        "projectiles": [
+            [[round(x, 2), round(y, 2), team] for (x, y, team) in fr]
+            for fr in getattr(res, "projectiles", [])
+        ],
         "counts": res.counts,
         "teams": list(res.teams),
         "alliances": {str(k): v for k, v in (cfg.alliances or {}).items()},

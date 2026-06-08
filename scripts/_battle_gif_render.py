@@ -190,12 +190,13 @@ class RobotLayers:
                                         capstyle="round")
         self.fire = LineCollection([], linewidths=0.9, zorder=7,
                                    alpha=fire_alpha, capstyle="round")
+        self.rounds = ax.scatter([], [], s=14, c=[], zorder=8, linewidths=0)
         self.flash = LineCollection([], linewidths=1.2, zorder=9, alpha=0.9)
         for c in (self.wheels, self.hulls, self.stripes, self.barrels,
                   self.fire_glow, self.fire, self.flash):
             ax.add_collection(c)
 
-    def update(self, frame, prev, shots=(), deaths=None, t=0):
+    def update(self, frame, prev, shots=(), projectiles=(), deaths=None, t=0):
         hpoly, hcol, spoly, scol, wpoly, wcol, blines = frame_robots(frame, prev)
         _apply_polys(self.hulls, hpoly, hcol)
         _apply_polys(self.stripes, spoly, scol)
@@ -213,6 +214,20 @@ class RobotLayers:
         self.fire.set_color(fcols if fcols else "none")
         self.fire_glow.set_segments(segs)
         self.fire_glow.set_color(glow if glow else "none")
+
+        if projectiles:
+            xs, ys, pcols = [], [], []
+            for px, py, team in projectiles:
+                xs.append(px)
+                ys.append(py)
+                r, g, b = art.TEAM_RGB.get(team, (0.95, 0.95, 0.95))
+                pcols.append((r, g, b, 0.95))
+            self.rounds.set_offsets(list(zip(xs, ys)))
+            self.rounds.set_facecolors(pcols)
+            self.rounds.set_sizes([14] * len(xs))
+        else:
+            self.rounds.set_offsets(np.empty((0, 2)))
+            self.rounds.set_facecolors([])
 
         fsegs, fcols2 = [], []
         if deaths:

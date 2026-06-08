@@ -1,7 +1,7 @@
 {
   "astar_maneuver_vs_greedy_decisive_rate": 1.0,
   "astar_maneuver_vs_greedy_rate": 1.0,
-  "astar_maneuver_vs_greedy_red_win_rate": 0.4166666666666667,
+  "astar_maneuver_vs_greedy_red_win_rate": 0.6666666666666666,
   "cbs_ta_vs_hungarian_chokepoint_decisive_rate": 1.0,
   "cbs_ta_vs_hungarian_chokepoint_rate": 1.0,
   "cbs_ta_vs_hungarian_chokepoint_red_win_rate": 0.6666666666666666,
@@ -51,7 +51,7 @@
   "mapf_total_war_mapf_red_win_rate": 0.0,
   "prioritized_maneuver_vs_greedy_decisive_rate": 1.0,
   "prioritized_maneuver_vs_greedy_rate": 1.0,
-  "prioritized_maneuver_vs_greedy_red_win_rate": 0.4166666666666667,
+  "prioritized_maneuver_vs_greedy_red_win_rate": 0.6666666666666666,
   "transformer_vs_nearest_decisive_rate": 1.0,
   "transformer_vs_nearest_rate": 1.0,
   "transformer_vs_nearest_red_win_rate": 0.4166666666666667

@@ -119,7 +119,8 @@ def main():
         t = ticks[fi]
         frame = res.frames[t]
         prev = res.frames[t - 1] if t > 0 else None
-        robots.update(frame, prev, res.shots[t], deaths, t)
+        projs = res.projectiles[t] if t < len(res.projectiles) else ()
+        robots.update(frame, prev, res.shots[t], projs, deaths, t)
 
         counts = res.counts[min(t, len(res.counts) - 1)]
         totals = _alliance_totals(counts, teams, alliances)

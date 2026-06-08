@@ -75,6 +75,20 @@ def _run_decisive(tactics, *, seeds, n_per_team=12):
     return {"tactics": tactics, "decisive_rate": decisive / n, "n_seeds": n}
 
 
+def _run_maneuver_headline_matchup(red_maneuver, *, seeds, n_per_team=8,
+                                   max_ticks=650):
+    """Headline demo — red MAPF maneuver vs blue greedy on the chokepoint."""
+    return _run_chokepoint_matchup(
+        seeds=seeds,
+        n_per_team=n_per_team,
+        max_ticks=max_ticks,
+        red_maneuver=None if red_maneuver == "greedy" else red_maneuver,
+        blue_maneuver="greedy",
+        red_assignment="hungarian",
+        blue_assignment="hungarian",
+    )
+
+
 def _run_chokepoint_matchup(*, seeds, n_per_team=8, max_ticks=650,
                             red_assignment=None, blue_assignment=None,
                             red_maneuver=None, blue_maneuver="greedy"):
@@ -218,12 +232,10 @@ def collect_metrics(*, seeds):
         "count_aware", "nearest", seeds=seeds)
     metrics["transformer_vs_nearest"] = _run_matchup(
         "transformer", "nearest", seeds=seeds)
-    metrics["astar_maneuver_vs_greedy"] = _run_matchup(
-        "count_aware", "count_aware", seeds=seeds, n_per_team=8,
-        red_maneuver="astar", blue_maneuver="greedy", max_ticks=600)
-    metrics["prioritized_maneuver_vs_greedy"] = _run_matchup(
-        "count_aware", "count_aware", seeds=seeds, n_per_team=8,
-        red_maneuver="prioritized", blue_maneuver="greedy", max_ticks=600)
+    metrics["astar_maneuver_vs_greedy"] = _run_maneuver_headline_matchup(
+        "astar", seeds=seeds)
+    metrics["prioritized_maneuver_vs_greedy"] = _run_maneuver_headline_matchup(
+        "prioritized", seeds=seeds)
     metrics["hungarian_vs_local"] = _run_matchup(
         "count_aware", "count_aware", seeds=seeds, n_per_team=8,
         max_ticks=600, red_assignment="hungarian", blue_assignment="none")

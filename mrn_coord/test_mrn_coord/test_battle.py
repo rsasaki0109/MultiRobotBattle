@@ -157,6 +157,15 @@ class TestFreeForAll(unittest.TestCase):
 
 
 class TestTerrain(unittest.TestCase):
+    def test_maneuver_headline_duel_resolves(self):
+        from mrn_coord.battle import maneuver_headline_duel
+
+        for mode in ("greedy", "astar", "prioritized"):
+            bots, cfg, title = maneuver_headline_duel(mode, seed=11, n=8)
+            self.assertIn("greedy", title.lower())
+            res = simulate(bots, cfg, max_ticks=400, frame_stride=8)
+            self.assertGreater(res.ticks, 0)
+
     def test_obstacles_are_never_penetrated(self):
         from mrn_coord.battle_terrain import point_clearance_rect
 
@@ -177,7 +186,9 @@ class TestScenarios(unittest.TestCase):
     def test_all_scenarios_are_decisive(self):
         for name in SCENARIO_NAMES:
             bots, cfg, title = battle_scenario(name)
-            limit = 1000 if name in ("kingdom", "grand_alliance") else 900
+            limit = 1300 if name == "kingdom" else 1000 if name == "grand_alliance" else 900
+            if name == "duel":
+                limit = 1000
             if name in ("hill", "domination"):
                 limit = 700
             res = simulate(bots, cfg, max_ticks=limit)

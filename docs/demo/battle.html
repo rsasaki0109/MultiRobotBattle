@@ -243,6 +243,12 @@ function drawPanel(s, frameIdx, region) {
   for (const [sx0, sy0, x1, y1, team] of shots) {
     BattleRobotArt.drawShot(ctx, X, Y, sc, sx0, sy0, x1, y1, team);
   }
+  const projectiles = (s.projectiles || [])[
+    Math.min(frameIdx, (s.projectiles || []).length - 1)
+  ] || [];
+  for (const [px, py, team] of projectiles) {
+    BattleRobotArt.drawProjectile(ctx, X, Y, sc, px, py, team);
+  }
 
   frame.forEach(([x, y, team, hp, kind], idx) => {
     let px = x;

@@ -37,7 +37,7 @@ def main():
     args = ap.parse_args()
 
     bots, cfg, title = battle_scenario("kingdom")
-    res = simulate(bots, cfg, max_ticks=1000, frame_stride=args.stride)
+    res = simulate(bots, cfg, max_ticks=1200, frame_stride=args.stride)
     nframes = len(res.frames)
     deaths = render.collect_deaths(res.frames)
     ticks = list(range(nframes)) + [nframes - 1] * args.fps
@@ -68,7 +68,8 @@ def main():
         frame = res.frames[t]
         prev = res.frames[t - 1] if t > 0 else None
         shots = res.shots[t] if t < len(res.shots) else ()
-        robots.update(frame, prev, shots, deaths, t)
+        projs = res.projectiles[t] if t < len(res.projectiles) else ()
+        robots.update(frame, prev, shots, projs, deaths, t)
 
         counts = res.counts[min(t, len(res.counts) - 1)]
         tally.set_text("  ·  ".join(f"{TEAM_NAMES.get(tm, tm)} {n}"

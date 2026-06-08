@@ -17,8 +17,8 @@ _OUT = os.path.join(_REPO, "docs", "tournament.json")
 MATCHUPS = (
     ("count_aware_vs_nearest", "Count-aware vs nearest", "Open field tactics"),
     ("transformer_vs_nearest", "Transformer vs nearest", "Distilled policy vs baseline"),
-    ("astar_maneuver_vs_greedy", "A* maneuver vs greedy", "Planned red movement"),
-    ("prioritized_maneuver_vs_greedy", "Prioritized MAPF vs greedy", "MAPF maneuver red"),
+    ("astar_maneuver_vs_greedy", "A* maneuver vs greedy", "Chokepoint — red MAPF movement"),
+    ("prioritized_maneuver_vs_greedy", "Prioritized MAPF vs greedy", "Chokepoint — red MAPF movement"),
     ("hungarian_vs_local", "Hungarian assignment vs local", "Combat matching"),
     ("cbs_ta_vs_hungarian_chokepoint", "CBS-TA vs Hungarian", "Chokepoint assignment"),
     ("mapf_stack_vs_local_chokepoint", "Full MAPF stack vs local", "CBS-TA + prioritized"),

@@ -10,6 +10,33 @@
       "red_win_rate": 0.75
     },
     {
+      "blue_win_rate": 0.333,
+      "decisive_rate": 1.0,
+      "id": "astar_maneuver_vs_greedy",
+      "label": "A* maneuver vs greedy",
+      "note": "Chokepoint \u2014 red MAPF movement",
+      "red_elo_delta": 120,
+      "red_win_rate": 0.6666666666666666
+    },
+    {
+      "blue_win_rate": 0.333,
+      "decisive_rate": 1.0,
+      "id": "prioritized_maneuver_vs_greedy",
+      "label": "Prioritized MAPF vs greedy",
+      "note": "Chokepoint \u2014 red MAPF movement",
+      "red_elo_delta": 120,
+      "red_win_rate": 0.6666666666666666
+    },
+    {
+      "blue_win_rate": 0.333,
+      "decisive_rate": 1.0,
+      "id": "cbs_ta_vs_hungarian_chokepoint",
+      "label": "CBS-TA vs Hungarian",
+      "note": "Chokepoint assignment",
+      "red_elo_delta": 120,
+      "red_win_rate": 0.6666666666666666
+    },
+    {
       "blue_win_rate": 0.583,
       "decisive_rate": 1.0,
       "id": "transformer_vs_nearest",
@@ -19,40 +46,13 @@
       "red_win_rate": 0.4166666666666667
     },
     {
-      "blue_win_rate": 0.583,
-      "decisive_rate": 1.0,
-      "id": "astar_maneuver_vs_greedy",
-      "label": "A* maneuver vs greedy",
-      "note": "Planned red movement",
-      "red_elo_delta": -58,
-      "red_win_rate": 0.4166666666666667
-    },
-    {
-      "blue_win_rate": 0.583,
-      "decisive_rate": 1.0,
-      "id": "prioritized_maneuver_vs_greedy",
-      "label": "Prioritized MAPF vs greedy",
-      "note": "MAPF maneuver red",
-      "red_elo_delta": -58,
-      "red_win_rate": 0.4166666666666667
-    },
-    {
-      "blue_win_rate": 0.583,
+      "blue_win_rate": 0.667,
       "decisive_rate": 1.0,
       "id": "mapf_stack_vs_local_chokepoint",
       "label": "Full MAPF stack vs local",
       "note": "CBS-TA + prioritized",
-      "red_elo_delta": -58,
-      "red_win_rate": 0.4166666666666667
-    },
-    {
-      "blue_win_rate": 0.75,
-      "decisive_rate": 1.0,
-      "id": "cbs_ta_vs_hungarian_chokepoint",
-      "label": "CBS-TA vs Hungarian",
-      "note": "Chokepoint assignment",
-      "red_elo_delta": -191,
-      "red_win_rate": 0.25
+      "red_elo_delta": -120,
+      "red_win_rate": 0.3333333333333333
     },
     {
       "blue_win_rate": 1.0,

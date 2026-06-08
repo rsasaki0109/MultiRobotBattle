@@ -75,6 +75,14 @@ from .battle_teams import alliance_of, teams_are_enemies
 from .spatial_hash import SpatialHash
 from .battle_formations import formation_commands
 from .battle_maneuver import ManeuverState, maneuver_direction, maneuver_for_team, replan_paths
+from .battle_projectiles import (
+    ProjectileState,
+    advance_projectiles,
+    can_fire,
+    mark_fired,
+    spawn_projectile_from_bot,
+    tick_cooldowns,
+)
 from .battle_policy.count_aware import policy_for_name
 from .flocking import (
     _clamp_speed,
@@ -137,6 +145,17 @@ class BattleConfig:
     dps: float = 22.0
     max_hp: float = 100.0
     retreat_frac: float = 0.0    # 0 = fight to the death (decisive); >0 = skirmish
+    # ``hitscan`` = instant; ``projectile`` = flying rounds
+    # ``projectile_damage``: ``on_hit`` (real travel) or ``on_fire`` (tracer)
+    fire_mode: str = "hitscan"
+    projectile_damage: str = "on_hit"
+    projectile_speed: float = 32.0
+    projectile_ttl: float = 0.42
+    projectile_hit_radius: float = 0.42
+    fire_interval: float = 0.06
+    accuracy_min: float = 0.80
+    accuracy_max: float = 0.98
+    miss_spread: float = 0.22
     # line of sight / cover (terrain + optional body blocking)
     require_los: bool = True
     body_blocks_fire: bool = False   # other robots attenuate fire along the ray
@@ -194,6 +213,7 @@ class BattleResult:
 
     frames: list = field(default_factory=list)   # per tick: list of bot snapshots
     shots: list = field(default_factory=list)     # per tick: list of firing lines
+    projectiles: list = field(default_factory=list)  # per tick: in-flight rounds
     counts: list = field(default_factory=list)    # per tick: alive count per team (in `teams` order)
     teams: list = field(default_factory=list)     # team ids present, sorted
     winner: object = None                         # winning team id / None (draw)
@@ -385,6 +405,9 @@ def kingdom_config(**overrides):
         assignment="none",
         maneuver="greedy",
         dps=28.0,
+        fire_mode="projectile",
+        projectile_damage="on_fire",
+        fire_interval=0.06,
         spatial_min_bots=30,
         spatial_cell=4.5,
     )
@@ -484,17 +507,47 @@ def _wall_turn(x, y, vx, vy, width, height, margin=2.0, push=2.0):
     return vx, vy
 
 
-def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
-                tick=0, ctf_tracker=None):
-    """Advance the battle one tick (in place); return this tick's firing lines.
+def _fire_at_target(b, e, bot_idx, target_bot_idx, i, best, cfg, live, *,
+                   damage, shots, projectile_state, tick, use_projectiles):
+    """Apply hitscan damage or spawn a projectile toward ``e``."""
+    cover = _fire_cover(b.x, b.y, e.x, e.y, cfg, live, {i, best})
+    if cover <= 0.0:
+        return
+    dps = b.dps if b.dps is not None else cfg.dps
+    b_range = b.attack_range if b.attack_range is not None else cfg.attack_range
+    if use_projectiles:
+        if not can_fire(projectile_state, bot_idx):
+            return
+        proj, shot = spawn_projectile_from_bot(
+            b.x, b.y, (e.x, e.y), math.hypot(b.x - e.x, b.y - e.y), b_range, cfg,
+            team=b.team, target_bot_idx=target_bot_idx, dps=dps, cover=cover,
+            tick=tick, shooter_bot_idx=bot_idx,
+        )
+        projectile_state.projectiles.append(proj)
+        shots.append(shot)
+        mark_fired(projectile_state, bot_idx, cfg)
+        if cfg.projectile_damage == "on_fire":
+            damage[best] += dps * cfg.fire_interval * cover
+    else:
+        damage[best] += dps * cfg.dt * cover
+        shots.append((b.x, b.y, e.x, e.y, b.team))
 
-    Steering and damage are both computed from the *same* snapshot of living
-    bots, so the update is order-independent and deterministic.
+
+def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
+                projectile_state=None, tick=0, ctf_tracker=None):
+    """Advance the battle one tick (in place).
+
+    Returns ``(shots, projectiles)`` for this tick — firing lines and any
+    in-flight rounds (projectile mode). Steering and damage use the same
+    snapshot of living bots, so the update is order-independent.
     """
     if maneuver_state is None:
         maneuver_state = ManeuverState()
     if assignment_state is None:
         assignment_state = AssignmentState()
+    if projectile_state is None:
+        projectile_state = ProjectileState()
+    use_projectiles = cfg.fire_mode == "projectile"
     live = [b for b in bots if b.alive]
     n = len(live)
     spatial = None
@@ -505,6 +558,13 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
     desired = [[0.0, 0.0] for _ in range(n)]
     damage = [0.0] * n
     shots = []
+    projectile_snapshots = []
+    if use_projectiles:
+        tick_cooldowns(projectile_state, bots, cfg)
+        proj_dmg, projectile_snapshots = advance_projectiles(
+            projectile_state, bots, cfg, dt=cfg.dt)
+        for i in range(n):
+            damage[i] += proj_dmg[i]
     policy = policy_for_name(cfg.tactics)
     policy_cache = {cfg.tactics: policy}
 
@@ -601,11 +661,10 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
             bd = math.hypot(b.x - e.x, b.y - e.y)
             b_range = b.attack_range if b.attack_range is not None else cfg.attack_range
             if bd <= b_range:
-                cover = _fire_cover(b.x, b.y, e.x, e.y, cfg, live, {i, best})
-                if cover > 0.0:
-                    dps = b.dps if b.dps is not None else cfg.dps
-                    damage[best] += dps * cfg.dt * cover
-                    shots.append((b.x, b.y, e.x, e.y, b.team))
+                _fire_at_target(b, e, bot_idx, bots.index(e), i, best, cfg, live,
+                                damage=damage, shots=shots,
+                                projectile_state=projectile_state, tick=tick,
+                                use_projectiles=use_projectiles)
             continue
         bd = math.hypot(b.x - e.x, b.y - e.y)
         d = max(bd, 1e-9)
@@ -627,11 +686,10 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
             desired[i][1] += scale * uy
         b_range = b.attack_range if b.attack_range is not None else cfg.attack_range
         if bd <= b_range:
-            cover = _fire_cover(b.x, b.y, e.x, e.y, cfg, live, {i, best})
-            if cover > 0.0:
-                dps = b.dps if b.dps is not None else cfg.dps
-                damage[best] += dps * cfg.dt * cover
-                shots.append((b.x, b.y, e.x, e.y, b.team))
+            _fire_at_target(b, e, bot_idx, bots.index(e), i, best, cfg, live,
+                            damage=damage, shots=shots,
+                            projectile_state=projectile_state, tick=tick,
+                            use_projectiles=use_projectiles)
 
     # 4) keep spacing — mutual repulsion across everyone (reuse flocking)
     sep = mutual_avoidance([(b.x, b.y) for b in live], radius=cfg.sep_radius,
@@ -680,7 +738,7 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
         if b.hp <= 0.0:
             b.hp = 0.0
             b.alive = False
-    return shots
+    return shots, projectile_snapshots
 
 
 def _counts(bots, teams):
@@ -778,6 +836,7 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     )
     maneuver_state = ManeuverState()
     assignment_state = AssignmentState()
+    projectile_state = ProjectileState()
     obj_tracker = ObjectiveTracker(cfg) if obj_mode in ("hill", "domination") else None
     ctf_tracker = CtfTracker(cfg, teams) if obj_mode == "ctf" else None
     objective_win = None
@@ -793,12 +852,15 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
         if obj_mode != "ctf" and len(_standing_alliances(bots, teams, cfg.alliances)) <= 1:
             if record:
                 result.shots.append([])
+                result.projectiles.append([])
             break
-        shots = battle_step(bots, cfg, maneuver_state=maneuver_state,
-                            assignment_state=assignment_state, tick=tick,
-                            ctf_tracker=ctf_tracker)
+        shots, projs = battle_step(bots, cfg, maneuver_state=maneuver_state,
+                                   assignment_state=assignment_state,
+                                   projectile_state=projectile_state, tick=tick,
+                                   ctf_tracker=ctf_tracker)
         if record:
             result.shots.append(shots)
+            result.projectiles.append(projs)
         if obj_tracker is not None:
             leader = zone_leader(bots, cfg, teams)
             objective_win = obj_tracker.tick(leader)
@@ -817,6 +879,7 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
             elif obj_tracker is not None:
                 result.objective_progress.append(obj_tracker.snapshot())
             result.shots.append([])
+            result.projectiles.append([])
 
     c = _counts(bots, teams)
     result.survivors = {t: n for t, n in zip(teams, c)}
@@ -859,13 +922,47 @@ SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "kingdom", "grand_alliance",
                   "hill", "domination", "ctf")
 
+MANEUVER_HEADLINE_MODES = ("greedy", "astar", "prioritized", "cbs")
+MANEUVER_HEADLINE_LABELS = {
+    "greedy": "Greedy vs greedy",
+    "astar": "A* maneuver vs greedy",
+    "prioritized": "Prioritized MAPF vs greedy",
+    "cbs": "CBS maneuver vs greedy",
+}
+
 ALLIANCE_NAMES = {0: "western", 1: "eastern"}
+
+
+def maneuver_headline_duel(red_maneuver, *, seed=11, n=10, jitter=2.8):
+    """Chokepoint headline — red ``red_maneuver`` vs blue greedy, Hungarian both sides."""
+    if red_maneuver not in MANEUVER_HEADLINE_MODES:
+        raise ValueError("unknown maneuver: %r" % (red_maneuver,))
+    maneuver_by = {BLUE: "greedy"}
+    if red_maneuver != "greedy":
+        maneuver_by[RED] = red_maneuver
+    cfg = BattleConfig(
+        **chokepoint_terrain(),
+        tactics="count_aware",
+        assignment="hungarian",
+        formation="wedge",
+        maneuver="greedy",
+        maneuver_by_team=maneuver_by,
+        maneuver_replan_ticks=15,
+    )
+    rng = random.Random(seed)
+    red = make_company(cfg, RED, (cfg.width * 0.13, cfg.height * 0.5),
+                       [("soldier", n)], rng, jitter=jitter)
+    blue = make_company(cfg, BLUE, (cfg.width * 0.87, cfg.height * 0.5),
+                        [("soldier", n)], random.Random(seed + 1), jitter=jitter)
+    title = MANEUVER_HEADLINE_LABELS[red_maneuver]
+    return red + blue, cfg, title
 
 
 def battle_scenario(name):
     """Return ``(bots, cfg, title)`` for a named showcase battle (deterministic)."""
     if name == "duel":
-        cfg = BattleConfig(**arena_terrain())
+        cfg = BattleConfig(**arena_terrain(), fire_mode="projectile",
+                           projectile_damage="on_hit")
         return (make_armies(14, cfg, seed=14), cfg, "Duel — 14 vs 14")
     if name == "free_for_all":
         cfg = BattleConfig(**arena_terrain())
@@ -889,22 +986,7 @@ def battle_scenario(name):
                             [("soldier", 13)], rng, jitter=3.2)
         return (red + blue, cfg, "Chokepoint — wedge through terrain")
     if name == "maneuver_duel":
-        cfg = BattleConfig(
-            **chokepoint_terrain(),
-            tactics="count_aware",
-            assignment="hungarian",
-            formation="wedge",
-            maneuver="greedy",
-            maneuver_by_team={RED: "prioritized", BLUE: "greedy"},
-            maneuver_replan_ticks=15,
-        )
-        rng = random.Random(11)
-        red = make_company(cfg, RED, (cfg.width * 0.13, cfg.height * 0.5),
-                           [("soldier", 10)], rng, jitter=2.8)
-        blue = make_company(cfg, BLUE, (cfg.width * 0.87, cfg.height * 0.5),
-                            [("soldier", 10)], rng, jitter=2.8)
-        return (red + blue, cfg,
-                "Maneuver duel — planned red vs greedy blue")
+        return maneuver_headline_duel("prioritized", seed=11, n=10)
     if name == "mapf_stack_duel":
         cfg = BattleConfig(
             **chokepoint_terrain(),
@@ -987,6 +1069,7 @@ def battle_scenario(name):
             height=50.0,
             alliances=alliances,
             dps=50.0,
+            fire_mode="hitscan",
             tactics="count_aware:aggressive",
             spatial_min_bots=48,
             **total_war_terrain(width=88.0, height=50.0),
@@ -1012,6 +1095,7 @@ def battle_scenario(name):
     if name == "kingdom_lite":
         cfg = kingdom_config(
             **arena_terrain(width=100.0, height=56.0),
+            fire_mode="hitscan",
             formation_by_team={RED: "line", BLUE: "line"},
         )
         w, h = cfg.width, cfg.height
