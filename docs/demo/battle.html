@@ -37,7 +37,7 @@
   canvas { width:100%; height:auto; display:block; border-radius:8px; background:#0b0f1c; }
   .legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:12px;
             color:var(--muted); }
-  .tally { display:flex; gap:18px; margin-top:8px; font-size:13px; }
+  .tally { display:flex; flex-wrap:wrap; gap:18px; margin-top:8px; font-size:13px; }
   .tally span { font-weight:600; }
   .red { color:#ff5b5b; } .blue { color:#5b8cff; }
   footer { text-align:center; color:var(--muted); font-size:12px; padding:0 16px 30px; }
@@ -47,8 +47,9 @@
 <body>
 <header>
   <h1>Swarm <span class="z">battle</span> — fight in your browser</h1>
-  <p class="sub">Multi-army swarm battles — duels, allied fronts, and kingdom-scale
-  lines — the same pure-Python engine that drives the repo's GIFs, running live via
+  <p class="sub">Multi-army swarm battles — hill/domination objectives, allied fronts,
+  kingdom lines, and MAPF stack matchups — the same pure-Python engine that drives
+  the repo's GIFs, running live via
   <a href="https://pyodide.org/" target="_blank" rel="noopener">Pyodide</a>.
   Pick a scenario and watch armies advance, fire, and collapse. Also try the
   <a href="./index.html">MAPF zoo demo</a>.</p>
@@ -61,6 +62,7 @@
       <select id="scenario">
         <option value="hill">king of the hill — hold the centre</option>
         <option value="domination">domination — control the centre</option>
+        <option value="mapf_total_war">MAPF total war — hill, local vs MAPF stack</option>
         <option value="grand_alliance_lite">allied fronts — 128 robots, red+green vs blue+yellow</option>
         <option value="kingdom_lite">kingdom — 40 vs 40 battle lines</option>
         <option value="duel">duel — 14 vs 14 open field</option>
@@ -82,7 +84,7 @@
     <div class="legend">
       <span class="red">● red</span><span class="blue">● blue</span>
       <span style="color:#33d6a6">● green</span><span style="color:#ffd166">● yellow</span>
-      <span>— laser line</span><span>▦ terrain</span>
+      <span style="color:#f5cc4d">◎ objective zone</span><span>— laser line</span><span>▦ terrain</span>
     </div>
   </div>
 </main>
@@ -107,6 +109,139 @@ let py = null, current = null, playing = true, t0 = null, raf = null, fi = 0;
 
 function setStatus(html, isErr=false) {
   statusEl.innerHTML = isErr ? `<span class="err">${html}</span>` : html;
+}
+
+function outcomeLabel(res) {
+  const aw = res.winning_alliance ? `<b>${res.winning_alliance.toUpperCase()}</b> alliance wins` : "";
+  const w = res.winner ? `<b>${res.winner.toUpperCase()}</b> wins` : "";
+  return aw || w || "draw";
+}
+
+function objectivePct(s, frameIdx) {
+  const prog = (s.objective_progress || [])[
+    Math.min(frameIdx, (s.objective_progress || []).length - 1)] || {};
+  const hold = s.objective_hold_ticks || 1;
+  const keys = Object.keys(prog);
+  if (!keys.length || s.objective === "annihilation") return null;
+  const lead = keys.reduce((a, b) => (prog[a] >= prog[b] ? a : b));
+  return Math.min(100, Math.round(100 * prog[lead] / hold));
+}
+
+function drawPanel(s, frameIdx, region) {
+  const {x0, y0, w, h, label} = region;
+  const pad = 14;
+  const sx = (w - 2 * pad) / s.width;
+  const sy = (h - 2 * pad) / s.height;
+  const sc = Math.min(sx, sy);
+  const ox = x0 + (w - sc * s.width) / 2;
+  const oy = y0 + (h - sc * s.height) / 2;
+  const X = x => ox + x * sc;
+  const Y = y => oy + (s.height - y) * sc;
+
+  ctx.fillStyle = "#0b0f1c";
+  ctx.fillRect(x0, y0, w, h);
+
+  if (label) {
+    ctx.fillStyle = "#e6edf3";
+    ctx.font = "11px system-ui,sans-serif";
+    ctx.fillText(label, x0 + 8, y0 + 14);
+  }
+
+  for (const [ox0, oy0, r] of s.obstacles) {
+    ctx.fillStyle = "#334155";
+    ctx.beginPath();
+    ctx.arc(X(ox0), Y(oy0), r * sc, 0, 7);
+    ctx.fill();
+  }
+
+  if (s.objective_zone && s.objective_zone.length === 3) {
+    const [zx, zy, zr] = s.objective_zone;
+    ctx.strokeStyle = "#f5cc4d";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(X(zx), Y(zy), zr * sc, 0, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const pct = objectivePct(s, frameIdx);
+    if (pct !== null) {
+      ctx.fillStyle = "#f5cc4d";
+      ctx.font = "bold 13px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`${pct}%`, X(zx), Y(zy) + 4);
+      ctx.font = "10px monospace";
+      ctx.fillText(s.objective, X(zx), Y(zy) - zr * sc - 4);
+      ctx.textAlign = "left";
+    }
+  }
+
+  const frame = s.frames[Math.min(frameIdx, s.frames.length - 1)] || [];
+  const shots = s.shots[Math.min(frameIdx, s.shots.length - 1)] || [];
+  ctx.globalAlpha = 0.35;
+  for (const [sx0, sy0, x1, y1, team] of shots) {
+    ctx.strokeStyle = TEAM[team] || "#8b95a7";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(X(sx0), Y(sy0));
+    ctx.lineTo(X(x1), Y(y1));
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  for (const [x, y, team, hp, kind] of frame) {
+    const col = TEAM[team] || "#ccc";
+    const base = kind === "tank" ? 7 : kind === "scout" ? 3 : kind === "sniper" ? 4 : 5;
+    const rad = base + 2 * hp;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(X(x), Y(y), rad, 0, 7);
+    ctx.fill();
+  }
+}
+
+function formatTally(s, frameIdx) {
+  const counts = s.counts[Math.min(frameIdx, s.counts.length - 1)] || [];
+  const al = s.alliances || {};
+  const hasAlliance = Object.keys(al).length > 0;
+  if (hasAlliance) {
+    let west = 0, east = 0;
+    s.teams.forEach((t, i) => {
+      const side = al[String(t)] ?? al[t];
+      if (side === 0) west += counts[i] ?? 0;
+      else if (side === 1) east += counts[i] ?? 0;
+    });
+    return `<span class="red">Western ${west}</span><span class="blue">Eastern ${east}</span>` +
+      s.teams.map((t, i) => {
+        const cls = t === 0 ? "red" : t === 1 ? "blue" : "";
+        return `<span class="${cls}">${TEAM_LABEL[t] || t}: ${counts[i] ?? 0}</span>`;
+      }).join("");
+  }
+  return s.teams.map((t, i) => {
+    const cls = t === 0 ? "red" : t === 1 ? "blue" : "";
+    return `<span class="${cls}">${TEAM_LABEL[t] || t}: ${counts[i] ?? 0}</span>`;
+  }).join("");
+}
+
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!current) return;
+
+  if (current.dual) {
+    const gap = 8;
+    const half = (cv.width - gap) / 2;
+    const panels = current.panels || [];
+    panels.forEach((p, i) => {
+      drawPanel(p, fi, {x0: i * (half + gap), y0: 0, w: half, h: cv.height,
+                        label: p.title});
+    });
+    tallyEl.innerHTML = panels.map(p =>
+      `<span><b>${p.title}</b>: ${formatTally(p, fi)} — ${outcomeLabel(p)}</span>`
+    ).join("");
+    return;
+  }
+
+  drawPanel(current, fi, {x0: 0, y0: 0, w: cv.width, h: cv.height});
+  tallyEl.innerHTML = formatTally(current, fi);
 }
 
 async function boot() {
@@ -149,115 +284,34 @@ async function fight() {
   if (!res.ok) { setStatus(res.error, true); current = null; draw(); return; }
   current = res;
   fi = 0;
-  const w = res.winner ? `<b>${res.winner.toUpperCase()}</b> wins` : "";
-  const aw = res.winning_alliance ? `<b>${res.winning_alliance.toUpperCase()}</b> alliance wins` : "";
-  const outcome = aw || w || "draw";
-  setStatus(`<b>${res.title}</b> — ${res.n_bots} bots, ${res.frames.length} frames (stride ${res.stride}), ${outcome}.`);
+  if (res.dual) {
+    const n = (res.panels[0] || {}).frames?.length || 0;
+    setStatus(`<b>${res.title}</b> — side-by-side, ${n} frames (stride ${res.panels[0].stride}).`);
+  } else {
+    setStatus(`<b>${res.title}</b> — ${res.n_bots} bots, ${res.frames.length} frames (stride ${res.stride}), ${outcomeLabel(res)}.`);
+  }
   t0 = performance.now(); playing = true; $("play").textContent = "Pause";
   loop();
 }
 
-function draw() {
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  if (!current) return;
-  const s = current;
-  const pad = 18;
-  const sx = (cv.width - 2 * pad) / s.width;
-  const sy = (cv.height - 2 * pad) / s.height;
-  const sc = Math.min(sx, sy);
-  const ox = (cv.width - sc * s.width) / 2;
-  const oy = (cv.height - sc * s.height) / 2;
-  const X = x => ox + x * sc;
-  const Y = y => oy + (s.height - y) * sc;
-
-  ctx.fillStyle = "#0b0f1c";
-  ctx.fillRect(0, 0, cv.width, cv.height);
-
-  for (const [ox0, oy0, r] of s.obstacles) {
-    ctx.fillStyle = "#334155";
-    ctx.beginPath();
-    ctx.arc(X(ox0), Y(oy0), r * sc, 0, 7);
-    ctx.fill();
+const STEP_MS = 80;
+function frameCount() {
+  if (!current) return 0;
+  if (current.dual) {
+    return Math.max(...(current.panels || []).map(p => p.frames.length));
   }
-
-  if (s.objective_zone && s.objective_zone.length === 3) {
-    const [zx, zy, zr] = s.objective_zone;
-    ctx.strokeStyle = "#f5cc4d";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.arc(X(zx), Y(zy), zr * sc, 0, 7);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    const prog = (s.objective_progress || [])[Math.min(fi, (s.objective_progress || []).length - 1)] || {};
-    const hold = s.objective_hold_ticks || 1;
-    const keys = Object.keys(prog);
-    if (keys.length && s.objective !== "annihilation") {
-      const lead = keys.reduce((a, b) => (prog[a] >= prog[b] ? a : b));
-      const pct = Math.min(100, Math.round(100 * prog[lead] / hold));
-      ctx.fillStyle = "#f5cc4d";
-      ctx.font = "11px monospace";
-      ctx.fillText(`${s.objective} ${pct}%`, X(zx) - 28, Y(zy) - zr * sc - 6);
-    }
-  }
-
-  const frame = s.frames[Math.min(fi, s.frames.length - 1)] || [];
-  const shots = s.shots[Math.min(fi, s.shots.length - 1)] || [];
-  ctx.strokeStyle = "#8b95a7";
-  ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.35;
-  for (const [x0, y0, x1, y1, team] of shots) {
-    ctx.strokeStyle = TEAM[team] || "#8b95a7";
-    ctx.beginPath();
-    ctx.moveTo(X(x0), Y(y0));
-    ctx.lineTo(X(x1), Y(y1));
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-
-  for (const [x, y, team, hp, kind] of frame) {
-    const col = TEAM[team] || "#ccc";
-    const base = kind === "tank" ? 7 : kind === "scout" ? 3 : kind === "sniper" ? 4 : 5;
-    const rad = base + 2 * hp;
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.arc(X(x), Y(y), rad, 0, 7);
-    ctx.fill();
-  }
-
-  const counts = s.counts[Math.min(fi, s.counts.length - 1)] || [];
-  const al = s.alliances || {};
-  const hasAlliance = Object.keys(al).length > 0;
-  if (hasAlliance) {
-    let west = 0, east = 0;
-    s.teams.forEach((t, i) => {
-      const side = al[String(t)] ?? al[t];
-      if (side === 0) west += counts[i] ?? 0;
-      else if (side === 1) east += counts[i] ?? 0;
-    });
-    tallyEl.innerHTML =
-      `<span class="red">Western ${west}</span><span class="blue">Eastern ${east}</span>` +
-      s.teams.map((t, i) => {
-        const cls = t === 0 ? "red" : t === 1 ? "blue" : "";
-        return `<span class="${cls}">${TEAM_LABEL[t] || t}: ${counts[i] ?? 0}</span>`;
-      }).join("");
-  } else {
-    tallyEl.innerHTML = s.teams.map((t, i) => {
-      const cls = t === 0 ? "red" : t === 1 ? "blue" : "";
-      return `<span class="${cls}">${TEAM_LABEL[t] || t}: ${counts[i] ?? 0}</span>`;
-    }).join("");
-  }
+  return current.frames.length;
 }
 
-const STEP_MS = 80;
 function loop() {
   cancelAnimationFrame(raf);
   const tick = now => {
     if (!current) return;
     if (playing) {
       fi = Math.floor((now - t0) / STEP_MS);
-      if (fi >= current.frames.length) {
-        fi = current.frames.length - 1;
+      const n = frameCount();
+      if (fi >= n) {
+        fi = n - 1;
         playing = false;
         $("play").textContent = "Replay";
       }
@@ -271,7 +325,8 @@ function loop() {
 $("fight").addEventListener("click", fight);
 $("scenario").addEventListener("change", fight);
 $("play").addEventListener("click", () => {
-  if (current && fi >= current.frames.length - 1 && !playing) {
+  const n = frameCount();
+  if (current && fi >= n - 1 && !playing) {
     fi = 0; t0 = performance.now(); playing = true;
     $("play").textContent = "Pause";
     return;

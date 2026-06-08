@@ -27,10 +27,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "mrn_coord
 from mrn_coord.battle import (  # noqa: E402
     BLUE,
     RED,
-    Bot,
-    BattleConfig,
     TEAM_NAMES,
-    make_contest_armies,
+    clone_bots,
+    mapf_total_war_pair,
     simulate,
 )
 
@@ -40,47 +39,11 @@ MUTED = "#8b95a7"
 ZONE = "#f5cc4d"
 TEAM = {RED: "#ff5b5b", BLUE: "#5b8cff"}
 
-HILL_KW = dict(
-    objective="hill",
-    objective_radius=4.8,
-    objective_hold_ticks=120,
-    tactics="count_aware",
-    formation="wedge",
-    maneuver_replan_ticks=12,
-    assignment_replan_ticks=12,
-)
-
-
-def _clone_bots(bots):
-    return [Bot(b.x, b.y, b.vx, b.vy, b.team, b.hp, b.max_hp, alive=b.alive,
-                dps=b.dps, attack_range=b.attack_range, max_speed=b.max_speed,
-                kind=b.kind)
-            for b in bots]
-
-
-def _spawn(n=18, seed=8):
-    cfg = BattleConfig(**HILL_KW)
-    return make_contest_armies(n, cfg, seed=seed), cfg
-
 
 def _run_pair(n=18, seed=8):
-    spawn, base = _spawn(n, seed)
-    cfg_local = BattleConfig(
-        **HILL_KW,
-        assignment="none",
-        assignment_by_team={RED: "hungarian"},
-        maneuver="greedy",
-        maneuver_by_team={BLUE: "greedy"},
-    )
-    cfg_mapf = BattleConfig(
-        **HILL_KW,
-        assignment="none",
-        assignment_by_team={RED: "cbs_ta"},
-        maneuver="greedy",
-        maneuver_by_team={RED: "prioritized", BLUE: "greedy"},
-    )
-    res_local = simulate(_clone_bots(spawn), cfg_local, max_ticks=650)
-    res_mapf = simulate(_clone_bots(spawn), cfg_mapf, max_ticks=650)
+    spawn, cfg_local, cfg_mapf, _ = mapf_total_war_pair(n=n, seed=seed)
+    res_local = simulate(clone_bots(spawn), cfg_local, max_ticks=650)
+    res_mapf = simulate(clone_bots(spawn), cfg_mapf, max_ticks=650)
     return cfg_local, res_local, res_mapf
 
 

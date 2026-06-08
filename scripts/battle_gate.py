@@ -151,16 +151,36 @@ def _run_kingdom_lite(*, max_ticks=800):
 
 
 def _run_objective_scenario(scenario_name, *, max_ticks=700):
-    from mrn_coord.battle import battle_scenario, simulate
+    from mrn_coord.battle import RED, battle_scenario, simulate
 
     bots, cfg, _ = battle_scenario(scenario_name)
     res = simulate(bots, cfg, max_ticks=max_ticks, frame_stride=2)
-    from mrn_coord.battle import RED
     return {
         "scenario": scenario_name,
         "decisive_rate": 1.0 if res.winner is not None else 0.0,
         "red_win_rate": 1.0 if res.winner == RED else 0.0,
         "objective": cfg.objective,
+    }
+
+
+def _run_mapf_total_war_side(side, *, seeds, n=18, max_ticks=650):
+    """Hill contest — Hungarian+greedy (local) vs CBS-TA+MAPF, pinned per side."""
+    from mrn_coord.battle import BLUE, RED, clone_bots, mapf_total_war_pair, simulate
+
+    wins = {RED: 0, BLUE: 0, None: 0}
+    for seed in seeds:
+        spawn, cfg_local, cfg_mapf, _ = mapf_total_war_pair(n=n, seed=seed)
+        cfg = cfg_local if side == "local" else cfg_mapf
+        res = simulate(clone_bots(spawn), cfg, max_ticks=max_ticks)
+        wins[res.winner if res.winner is not None else None] += 1
+    n = len(seeds)
+    return {
+        "side": side,
+        "n_seeds": n,
+        "red_win_rate": wins[RED] / n,
+        "blue_win_rate": wins[BLUE] / n,
+        "draw_rate": wins[None] / n,
+        "decisive_rate": 1.0 - wins[None] / n,
     }
 
 
@@ -190,6 +210,8 @@ def collect_metrics(*, seeds):
     metrics["kingdom_lite"] = _run_kingdom_lite()
     metrics["hill"] = _run_objective_scenario("hill")
     metrics["domination"] = _run_objective_scenario("domination")
+    metrics["mapf_total_war_local"] = _run_mapf_total_war_side("local", seeds=seeds)
+    metrics["mapf_total_war_mapf"] = _run_mapf_total_war_side("mapf", seeds=seeds)
     return metrics
 
 

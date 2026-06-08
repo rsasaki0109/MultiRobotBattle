@@ -271,6 +271,50 @@ def make_contest_armies(n_per_team, cfg, *, seed=0):
     return bots
 
 
+def clone_bots(bots):
+    """Deep-copy bot state for a fair rematch on the same spawn."""
+    return [Bot(b.x, b.y, b.vx, b.vy, b.team, b.hp, b.max_hp, alive=b.alive,
+                dps=b.dps, attack_range=b.attack_range, max_speed=b.max_speed,
+                kind=b.kind)
+            for b in bots]
+
+
+HILL_CONTEST_KW = dict(
+    objective="hill",
+    objective_radius=4.8,
+    objective_hold_ticks=120,
+    tactics="count_aware",
+    formation="wedge",
+    maneuver_replan_ticks=12,
+    assignment_replan_ticks=12,
+)
+
+
+def mapf_total_war_pair(*, n=18, seed=8):
+    """Same spawn, two configs — Hungarian+greedy vs CBS-TA+prioritized MAPF."""
+    cfg_base = BattleConfig(**HILL_CONTEST_KW)
+    spawn = make_contest_armies(n, cfg_base, seed=seed)
+    cfg_local = BattleConfig(
+        **HILL_CONTEST_KW,
+        assignment="none",
+        assignment_by_team={RED: "hungarian"},
+        maneuver="greedy",
+        maneuver_by_team={BLUE: "greedy"},
+    )
+    cfg_mapf = BattleConfig(
+        **HILL_CONTEST_KW,
+        assignment="none",
+        assignment_by_team={RED: "cbs_ta"},
+        maneuver="greedy",
+        maneuver_by_team={RED: "prioritized", BLUE: "greedy"},
+    )
+    titles = (
+        "Hungarian + greedy",
+        "CBS-TA + prioritized MAPF",
+    )
+    return spawn, cfg_local, cfg_mapf, titles
+
+
 def kingdom_config(**overrides):
     """Wide arena defaults for hundred-bot clashes."""
     base = dict(
@@ -663,7 +707,8 @@ def run_battle(n_per_team=14, cfg=None, *, seed=0, max_ticks=800, num_teams=2):
 # reproducible. Each returns ``(bots, cfg, title)``; render them with
 # ``scripts/make_battle_gallery_gif.py``.
 SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
-                  "maneuver_duel", "mapf_stack_duel", "kingdom", "grand_alliance",
+                  "maneuver_duel", "mapf_stack_duel", "mapf_total_war_local",
+                  "mapf_total_war_mapf", "kingdom", "grand_alliance",
                   "hill", "domination")
 
 ALLIANCE_NAMES = {0: "western", 1: "eastern"}
@@ -844,4 +889,9 @@ def battle_scenario(name):
         )
         return (make_contest_armies(14, cfg, seed=9), cfg,
                 "Domination — control the centre")
+    if name in ("mapf_total_war_local", "mapf_total_war_mapf"):
+        spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
+        cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf
+        title = f"MAPF total war — {titles[0 if name == 'mapf_total_war_local' else 1]}"
+        return (clone_bots(spawn), cfg, title)
     raise KeyError(name)

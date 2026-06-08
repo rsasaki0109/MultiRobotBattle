@@ -146,9 +146,10 @@ invariants) → gate → record the honest result.
   *(partial: ``count_aware:aggressive`` / ``defensive`` / ``balanced`` stances;
   ``auto`` adapts to ally/enemy counts TeamHOI-style; ``tactics_by_team`` +
   ``scripts/battle_gate.py`` for strategy-vs-strategy win-rates.)*
-- [ ] **Win conditions beyond annihilation** — king-of-the-hill, capture-the-flag,
-  base assault, escort / payload: each a small objective module over the same
-  engine, with its own success metric.
+- [x] **Win conditions beyond annihilation** — king-of-the-hill and domination
+  objective modules over the same engine, with ``battle_gate`` pins, browser demo,
+  and headline GIFs (``objective_duel.gif``, ``mapf_total_war.gif``).
+  Still TODO: capture-the-flag, base assault, escort / payload.
 - [ ] **Fog of war** — units only sense enemies within range (reuse the `mrn_sim`
   V2V / range sensor models), so scouting, ambush, and surprise become real.
 
@@ -198,8 +199,9 @@ battle is exactly where they should *do work*:
 - [ ] **Battle in the browser** — extend the Pyodide demo (`docs/demo/`): pick two
   armies, press go, watch them fight on the canvas. The battle is pure-Python and
   already runs under Pyodide.
-  *(partial: ``docs/demo/battle.html`` + ``battle_bridge.py`` — duel / chokepoint /
-  maneuver_duel; ``pages.yaml`` deploys ``docs/`` on push to ``main``.)*
+  *(partial: ``docs/demo/battle.html`` + ``battle_bridge.py`` — hill / domination /
+  MAPF total-war dual panel, allied fronts, kingdom lite, duel / chokepoint /
+  maneuver / MAPF stack; ``pages.yaml`` deploys ``docs/`` on push to ``main``.)*
 - [ ] **Battle in the sim / Gazebo** — drive the real diff-drive robots as
   combatants through the existing `mrn_sim` / `mrn_gazebo` wiring (closed-loop,
   real-machine — not CI).
