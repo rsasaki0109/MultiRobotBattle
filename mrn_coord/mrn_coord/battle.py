@@ -1229,38 +1229,40 @@ def battle_scenario(name):
             width=140.0,
             height=72.0,
             alliances=alliances,
-            dps=56.0,
+            dps=62.0,
+            w_pursue=2.35,
+            fire_interval=0.05,
             tactics="count_aware:aggressive",
             spatial_min_bots=24,
             **total_war_terrain(width=140.0, height=72.0),
             formation_by_team={
-                RED: "line", BLUE: "line",
+                RED: "wedge", BLUE: "wedge",
                 GREEN: "wedge", YELLOW: "wedge",
             },
         )
         w, h = cfg.width, cfg.height
         dense = 1.78
-        # Total war — four full-strength infantry battle lines (upper/lower per
-        # alliance) plus armoured and fire-support echelons tucked behind each wing.
+        # Deployed close to the centre strip so the two fronts collide in no-man's-land
+        # within the first seconds — readable contact and tracer fire from frame one.
         bots = make_allied_armies(cfg, [
-            dict(team=RED, front_center=(w * 0.36, h * 0.36),
+            dict(team=RED, front_center=(w * 0.455, h * 0.36),
                  rows=9, cols=14, face_right=True, spacing=dense, seed=19),
-            dict(team=RED, front_center=(w * 0.29, h * 0.36),
+            dict(team=RED, front_center=(w * 0.395, h * 0.36),
                  rows=2, cols=10, kind="tank", face_right=True, spacing=2.6,
                  seed=23),
-            dict(team=GREEN, front_center=(w * 0.36, h * 0.64),
+            dict(team=GREEN, front_center=(w * 0.455, h * 0.64),
                  rows=9, cols=14, face_right=True, spacing=dense, seed=20),
-            dict(team=GREEN, front_center=(w * 0.27, h * 0.64),
+            dict(team=GREEN, front_center=(w * 0.385, h * 0.64),
                  rows=2, cols=8, kind="sniper", face_right=True, spacing=2.5,
                  seed=24),
-            dict(team=BLUE, front_center=(w * 0.64, h * 0.36),
+            dict(team=BLUE, front_center=(w * 0.545, h * 0.36),
                  rows=9, cols=14, face_right=False, spacing=dense, seed=21),
-            dict(team=BLUE, front_center=(w * 0.71, h * 0.36),
+            dict(team=BLUE, front_center=(w * 0.605, h * 0.36),
                  rows=2, cols=10, kind="tank", face_right=False, spacing=2.6,
                  seed=25),
-            dict(team=YELLOW, front_center=(w * 0.64, h * 0.64),
+            dict(team=YELLOW, front_center=(w * 0.545, h * 0.64),
                  rows=9, cols=14, face_right=False, spacing=dense, seed=22),
-            dict(team=YELLOW, front_center=(w * 0.73, h * 0.64),
+            dict(team=YELLOW, front_center=(w * 0.615, h * 0.64),
                  rows=2, cols=8, kind="sniper", face_right=False, spacing=2.5,
                  seed=26),
         ])
