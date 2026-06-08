@@ -56,6 +56,15 @@ class TestFogOfWar(unittest.TestCase):
         self.assertIsNotNone(res.winner)
         self.assertTrue(len(res.fog_visible) == len(res.frames))
 
+    def test_fog_artillery_combines_fog_and_splash(self):
+        bots, cfg, _ = battle_scenario("fog_artillery")
+        self.assertTrue(cfg.fog_of_war)
+        self.assertEqual(cfg.fire_mode, "projectile")
+        res = simulate(bots, cfg, max_ticks=900)
+        self.assertIsNotNone(res.winner)
+        self.assertTrue(len(res.fog_visible) == len(res.frames))
+        self.assertGreater(sum(len(e) for e in res.explosions), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

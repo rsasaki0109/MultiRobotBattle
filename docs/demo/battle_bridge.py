@@ -35,6 +35,7 @@ SCENARIOS = {
     "escort": {"max_ticks": 900, "frame_stride": 2},
     "fog_ambush": {"max_ticks": 900, "frame_stride": 2},
     "artillery_barrage": {"max_ticks": 900, "frame_stride": 2},
+    "fog_artillery": {"max_ticks": 900, "frame_stride": 2},
 }
 
 

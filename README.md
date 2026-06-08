@@ -93,6 +93,17 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
 </p>
 
 <p align="center">
+  <img src="docs/media/fog_artillery.gif" alt="Fog times artillery dual panel: scouts reveal enemies through limited vision while red mortar carriers lob splash rounds — spectator map on the left, red fog vision with detonation rings on the right." width="820">
+</p>
+
+<p align="center">
+  <em><strong>Fog × artillery</strong> — scouts spot under limited vision, then
+  indirect splash clears clustered infantry. Try
+  <code>battle_scenario("fog_artillery")</code> or
+  <code>python3 scripts/make_fog_artillery_gif.py</code>.</em>
+</p>
+
+<p align="center">
   <img src="docs/media/artillery_barrage.gif" alt="Artillery barrage — red mortar carriers lob splash rounds into clustered blue infantry; orange detonation rings expand on impact while RoboMaster-style chassis advance across arena cover." width="820">
 </p>
 

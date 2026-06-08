@@ -125,6 +125,8 @@ invariants) → gate → record the honest result.
   fire, and splash / area effects for an "artillery" class.
   **Artillery barrage** (`artillery_barrage`) — splash rounds + ``artillery`` unit
   class — landed with ``artillery_barrage.gif``, browser demo, and ``battle_gate`` pin.
+  **Fog × artillery** (`fog_artillery`) — scouts spot under fog, indirect splash —
+  landed with ``fog_artillery.gif``, browser demo, and ``battle_gate`` pin.
 - [ ] **Typed damage & armor** — a small rock-paper-scissors (e.g. AP vs shield)
   so composition matters beyond raw dps; plus cooldown / reload / finite ammo so
   positioning and timing count.

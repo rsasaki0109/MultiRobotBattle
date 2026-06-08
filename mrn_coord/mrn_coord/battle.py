@@ -1054,7 +1054,7 @@ SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "mapf_total_war_mapf", "ctf_mapf_local", "ctf_mapf_mapf",
                   "kingdom", "grand_alliance",
                   "hill", "domination", "ctf", "base_assault", "escort", "fog_ambush",
-                  "artillery_barrage")
+                  "artillery_barrage", "fog_artillery")
 
 MANEUVER_HEADLINE_MODES = ("greedy", "astar", "prioritized", "cbs")
 MANEUVER_HEADLINE_LABELS = {
@@ -1340,6 +1340,33 @@ def battle_scenario(name):
         blue = make_company(cfg, BLUE, (cfg.width * 0.84, cfg.height * 0.5),
                             [("soldier", 12)], random.Random(23), jitter=2.4)
         return (red + blue, cfg, "Artillery barrage — splash rounds vs line infantry")
+    if name == "fog_artillery":
+        cfg = BattleConfig(
+            **arena_terrain(),
+            fog_of_war=True,
+            sense_range=8.0,
+            fog_requires_los=True,
+            fire_mode="projectile",
+            projectile_damage="on_hit",
+            fire_interval=0.11,
+            projectile_speed=18.0,
+            projectile_ttl=0.55,
+            accuracy_min=0.72,
+            accuracy_max=0.94,
+            splash_friendly_fire=True,
+            splash_friendly_scale=0.40,
+            tactics="count_aware",
+            tactics_by_team={RED: "count_aware", BLUE: "nearest"},
+            formation="screen",
+        )
+        rng = random.Random(24)
+        red = make_company(cfg, RED, (cfg.width * 0.16, cfg.height * 0.5),
+                           [("scout", 3), ("artillery", 3), ("soldier", 6)],
+                           rng, jitter=3.0)
+        blue = make_company(cfg, BLUE, (cfg.width * 0.84, cfg.height * 0.5),
+                            [("soldier", 12)], random.Random(25), jitter=2.4)
+        return (red + blue, cfg,
+                "Fog artillery — scouts spot, indirect splash strikes")
     if name in ("mapf_total_war_local", "mapf_total_war_mapf"):
         spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
         cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf
