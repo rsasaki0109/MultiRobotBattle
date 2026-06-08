@@ -1,18 +1,51 @@
-"""Objective zones — hill hold and domination control for swarm battles."""
+"""Objective zones — hill, domination, and capture-the-flag for swarm battles."""
 
 from __future__ import annotations
 
 import math
 
-from .battle_teams import alliance_of
+from .battle_teams import RED, BLUE, alliance_of
 
-OBJECTIVE_MODES = ("annihilation", "hill", "domination")
+OBJECTIVE_MODES = ("annihilation", "hill", "domination", "ctf")
 
 
 def objective_zone(cfg):
     """Return ``(cx, cy, radius)`` for the control zone."""
     cx, cy = cfg.objective_center or (cfg.width / 2.0, cfg.height / 2.0)
     return (cx, cy, cfg.objective_radius)
+
+
+def flag_spawn(cfg):
+    """Neutral flag start position."""
+    cx, cy = cfg.objective_center or (cfg.width / 2.0, cfg.height / 2.0)
+    return (cx, cy)
+
+
+def team_bases(cfg, teams):
+    """Home bases for CTF — red west, blue east."""
+    w, h = cfg.width, cfg.height
+    r = getattr(cfg, "base_radius", None) or cfg.objective_radius
+    bases = {}
+    for t in sorted(teams):
+        if t == RED:
+            bases[t] = (w * 0.12, h * 0.5, r)
+        elif t == BLUE:
+            bases[t] = (w * 0.88, h * 0.5, r)
+        else:
+            angle = 2.0 * math.pi * t / max(4, len(teams))
+            bases[t] = (w * 0.5 + 0.34 * w * math.cos(angle),
+                        h * 0.5 + 0.34 * h * math.sin(angle), r)
+    return bases
+
+
+def ctf_render_zones(cfg, teams):
+    """Zones for animators: flag spawn + home bases."""
+    fx, fy = flag_spawn(cfg)
+    pickup = cfg.objective_radius
+    out = [["flag", fx, fy, pickup]]
+    for team, (bx, by, br) in team_bases(cfg, teams).items():
+        out.append(["base", team, bx, by, br])
+    return out
 
 
 def zone_leader(bots, cfg, teams):
@@ -71,6 +104,63 @@ class ObjectiveTracker:
         if self.mode == "domination":
             return dict(self.cumulative)
         return {}
+
+
+class CtfTracker:
+    """Capture-the-flag — pickup at centre, score by returning to home base."""
+
+    def __init__(self, cfg, teams):
+        self.pickup_r = cfg.objective_radius
+        self.bases = team_bases(cfg, teams)
+        fx, fy = flag_spawn(cfg)
+        self.flag_x, self.flag_y = fx, fy
+        self.carrier_idx = None
+
+    def _winner_key(self, team, cfg):
+        return alliance_of(cfg.alliances, team) if cfg.alliances else team
+
+    def _in_base(self, bot):
+        base = self.bases.get(bot.team)
+        if base is None:
+            return False
+        bx, by, br = base
+        return math.hypot(bot.x - bx, bot.y - by) <= br
+
+    def tick(self, bots, cfg):
+        if self.carrier_idx is not None:
+            carrier = bots[self.carrier_idx]
+            if not carrier.alive:
+                self.flag_x, self.flag_y = carrier.x, carrier.y
+                self.carrier_idx = None
+            else:
+                self.flag_x, self.flag_y = carrier.x, carrier.y
+                if self._in_base(carrier):
+                    return self._winner_key(carrier.team, cfg)
+                return None
+
+        best_i, best_d = None, self.pickup_r + 1.0
+        for i, b in enumerate(bots):
+            if not b.alive:
+                continue
+            d = math.hypot(b.x - self.flag_x, b.y - self.flag_y)
+            if d <= self.pickup_r and d < best_d:
+                best_d, best_i = d, i
+        if best_i is not None:
+            self.carrier_idx = best_i
+            b = bots[best_i]
+            self.flag_x, self.flag_y = b.x, b.y
+        return None
+
+    def snapshot(self, bots, cfg):
+        carrier = None
+        if self.carrier_idx is not None:
+            b = bots[self.carrier_idx]
+            if b.alive:
+                carrier = self._winner_key(b.team, cfg)
+        return {
+            "flag": [round(self.flag_x, 2), round(self.flag_y, 2)],
+            "carrier": carrier,
+        }
 
 
 def winner_from_objective(key, cfg, teams):

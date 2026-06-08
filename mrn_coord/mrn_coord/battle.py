@@ -56,7 +56,10 @@ import random
 from dataclasses import dataclass, field
 
 from .battle_assignment import apply_assignments, AssignmentState
-from .battle_objectives import ObjectiveTracker, objective_zone, winner_from_objective, zone_leader
+from .battle_objectives import (
+    CtfTracker, ObjectiveTracker, ctf_render_zones, objective_zone,
+    winner_from_objective, zone_leader,
+)
 from .battle_teams import alliance_of, teams_are_enemies
 from .spatial_hash import SpatialHash
 from .battle_formations import formation_commands
@@ -162,11 +165,12 @@ class BattleConfig:
     obstacles: tuple = ()
     # alliances — map team id -> alliance id; allied teams do not fire on each other
     alliances: dict = None
-    # objectives — ``annihilation`` (default), ``hill`` (consecutive hold), ``domination`` (cumulative)
+    # objectives — ``annihilation`` (default), ``hill``, ``domination``, ``ctf``
     objective: str = "annihilation"
     objective_center: tuple = None
     objective_radius: float = 5.0
     objective_hold_ticks: int = 200
+    base_radius: float = None   # CTF home-base radius (defaults to objective_radius)
 
 
 @dataclass
@@ -408,7 +412,8 @@ def _wall_turn(x, y, vx, vy, width, height, margin=2.0, push=2.0):
     return vx, vy
 
 
-def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0):
+def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
+                tick=0, ctf_tracker=None):
     """Advance the battle one tick (in place); return this tick's firing lines.
 
     Steering and damage are both computed from the *same* snapshot of living
@@ -479,9 +484,39 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0
             desired[i][1] += cfg.w_formation * uy
 
     # 2) pursue / retreat toward the policy target, 3) fire if in range
+    ctf_mode = cfg.objective == "ctf" and ctf_tracker is not None
     for i in range(n):
         b = live[i]
+        bot_idx = bots.index(b)
         decision = decisions[i]
+        if ctf_mode:
+            carrier_idx = ctf_tracker.carrier_idx
+            if carrier_idx == bot_idx:
+                base = ctf_tracker.bases.get(b.team)
+                if base is not None:
+                    bx, by, _ = base
+                    dx, dy = bx - b.x, by - b.y
+                    d = max(math.hypot(dx, dy), 1e-9)
+                    scale = cfg.w_pursue * 2.4
+                    desired[i][0] += scale * dx / d
+                    desired[i][1] += scale * dy / d
+            elif carrier_idx is None:
+                dx = ctf_tracker.flag_x - b.x
+                dy = ctf_tracker.flag_y - b.y
+                d = math.hypot(dx, dy)
+                if d < cfg.perception * 1.3:
+                    scale = cfg.w_pursue * 1.1
+                    desired[i][0] += scale * dx / max(d, 1e-9)
+                    desired[i][1] += scale * dy / max(d, 1e-9)
+            elif carrier_idx is not None:
+                carrier = bots[carrier_idx]
+                if carrier.alive and teams_are_enemies(cfg.alliances, b.team,
+                                                       carrier.team):
+                    dx, dy = carrier.x - b.x, carrier.y - b.y
+                    d = max(math.hypot(dx, dy), 1e-9)
+                    scale = cfg.w_pursue * 1.6
+                    desired[i][0] += scale * dx / d
+                    desired[i][1] += scale * dy / d
         if decision is None:
             continue
         best = decision.target_index
@@ -489,6 +524,16 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0
             continue
         e = live[best]
         if not teams_are_enemies(cfg.alliances, b.team, e.team):
+            continue
+        if ctf_mode and ctf_tracker.carrier_idx == bot_idx:
+            bd = math.hypot(b.x - e.x, b.y - e.y)
+            b_range = b.attack_range if b.attack_range is not None else cfg.attack_range
+            if bd <= b_range:
+                cover = _fire_cover(b.x, b.y, e.x, e.y, cfg, live, {i, best})
+                if cover > 0.0:
+                    dps = b.dps if b.dps is not None else cfg.dps
+                    damage[best] += dps * cfg.dt * cover
+                    shots.append((b.x, b.y, e.x, e.y, b.team))
             continue
         bd = math.hypot(b.x - e.x, b.y - e.y)
         d = max(bd, 1e-9)
@@ -635,40 +680,57 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     frame_stride = max(1, frame_stride)
     teams = sorted({b.team for b in bots})
     obj_mode = cfg.objective or "annihilation"
+    zone = ()
+    if obj_mode in ("hill", "domination"):
+        zone = objective_zone(cfg)
+    elif obj_mode == "ctf":
+        zone = tuple(ctf_render_zones(cfg, teams))
     result = BattleResult(
         teams=teams,
         alliances=dict(cfg.alliances or {}),
         objective=obj_mode,
-        objective_zone=objective_zone(cfg) if obj_mode != "annihilation" else (),
+        objective_zone=zone,
     )
     maneuver_state = ManeuverState()
     assignment_state = AssignmentState()
-    obj_tracker = ObjectiveTracker(cfg)
+    obj_tracker = ObjectiveTracker(cfg) if obj_mode in ("hill", "domination") else None
+    ctf_tracker = CtfTracker(cfg, teams) if obj_mode == "ctf" else None
     objective_win = None
     for tick in range(max_ticks):
         record = (tick % frame_stride == 0)
         if record:
             result.frames.append(_snapshot(bots))
             result.counts.append(_counts(bots, teams))
-            result.objective_progress.append(obj_tracker.snapshot())
-        if len(_standing_alliances(bots, teams, cfg.alliances)) <= 1:
+            if ctf_tracker is not None:
+                result.objective_progress.append(ctf_tracker.snapshot(bots, cfg))
+            elif obj_tracker is not None:
+                result.objective_progress.append(obj_tracker.snapshot())
+        if obj_mode != "ctf" and len(_standing_alliances(bots, teams, cfg.alliances)) <= 1:
             if record:
                 result.shots.append([])
             break
         shots = battle_step(bots, cfg, maneuver_state=maneuver_state,
-                            assignment_state=assignment_state, tick=tick)
+                            assignment_state=assignment_state, tick=tick,
+                            ctf_tracker=ctf_tracker)
         if record:
             result.shots.append(shots)
-        if obj_mode != "annihilation":
+        if obj_tracker is not None:
             leader = zone_leader(bots, cfg, teams)
             objective_win = obj_tracker.tick(leader)
+            if objective_win is not None:
+                break
+        if ctf_tracker is not None:
+            objective_win = ctf_tracker.tick(bots, cfg)
             if objective_win is not None:
                 break
     else:
         if tick % frame_stride == 0:
             result.frames.append(_snapshot(bots))
             result.counts.append(_counts(bots, teams))
-            result.objective_progress.append(obj_tracker.snapshot())
+            if ctf_tracker is not None:
+                result.objective_progress.append(ctf_tracker.snapshot(bots, cfg))
+            elif obj_tracker is not None:
+                result.objective_progress.append(obj_tracker.snapshot())
             result.shots.append([])
 
     c = _counts(bots, teams)
@@ -709,7 +771,7 @@ def run_battle(n_per_team=14, cfg=None, *, seed=0, max_ticks=800, num_teams=2):
 SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "maneuver_duel", "mapf_stack_duel", "mapf_total_war_local",
                   "mapf_total_war_mapf", "kingdom", "grand_alliance",
-                  "hill", "domination")
+                  "hill", "domination", "ctf")
 
 ALLIANCE_NAMES = {0: "western", 1: "eastern"}
 
@@ -889,6 +951,16 @@ def battle_scenario(name):
         )
         return (make_contest_armies(14, cfg, seed=9), cfg,
                 "Domination — control the centre")
+    if name == "ctf":
+        cfg = BattleConfig(
+            objective="ctf",
+            objective_radius=3.2,
+            base_radius=4.2,
+            tactics="count_aware",
+            formation="wedge",
+        )
+        return (make_armies(10, cfg, seed=10), cfg,
+                "Capture the flag — return home")
     if name in ("mapf_total_war_local", "mapf_total_war_mapf"):
         spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
         cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf

@@ -60,6 +60,7 @@
     <div class="field">
       <label for="scenario">Scenario</label>
       <select id="scenario">
+        <option value="ctf">capture the flag — grab centre, score at home</option>
         <option value="hill">king of the hill — hold the centre</option>
         <option value="domination">domination — control the centre</option>
         <option value="mapf_total_war">MAPF total war — hill, local vs MAPF stack</option>
@@ -154,7 +155,43 @@ function drawPanel(s, frameIdx, region) {
     ctx.fill();
   }
 
-  if (s.objective_zone && s.objective_zone.length === 3) {
+  if (s.objective === "ctf" && Array.isArray(s.objective_zone) && s.objective_zone.length
+      && typeof s.objective_zone[0][0] === "string") {
+    for (const z of s.objective_zone) {
+      if (z[0] === "flag") {
+        const [, zx, zy, zr] = z;
+        ctx.strokeStyle = "#f5cc4d";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.arc(X(zx), Y(zy), zr * sc, 0, 7);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (z[0] === "base") {
+        const [, team, bx, by, br] = z;
+        ctx.strokeStyle = TEAM[team] || MUTED;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(X(bx), Y(by), br * sc, 0, 7);
+        ctx.stroke();
+      }
+    }
+    const prog = (s.objective_progress || [])[
+      Math.min(frameIdx, (s.objective_progress || []).length - 1)] || {};
+    const flag = prog.flag || [];
+    if (flag.length === 2) {
+      const [fx, fy] = flag;
+      ctx.fillStyle = "#f5cc4d";
+      ctx.beginPath();
+      ctx.moveTo(X(fx), Y(fy) - 6);
+      ctx.lineTo(X(fx) + 6, Y(fy));
+      ctx.lineTo(X(fx), Y(fy) + 6);
+      ctx.lineTo(X(fx) - 6, Y(fy));
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else if (s.objective_zone && s.objective_zone.length === 3
+             && typeof s.objective_zone[0] !== "string") {
     const [zx, zy, zr] = s.objective_zone;
     ctx.strokeStyle = "#f5cc4d";
     ctx.lineWidth = 2;

@@ -8,6 +8,7 @@ algorithms** — regenerate any of them with the matching script:
 | `battle.gif` | `make_battle_gif.py` | total war — 576 robots, four armies, two allied fronts |
 | `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid: duel / FFA / quality vs quantity / chokepoint |
 | `objective_duel.gif` | `make_objective_gif.py` | hill vs domination — zone hold progress side-by-side |
+| `ctf_duel.gif` | `make_ctf_gif.py` | capture the flag — centre pickup, score at home base |
 | `maneuver_duel.gif` | `make_maneuver_gif.py` | greedy vs MAPF maneuver on the chokepoint |
 | `mapf_stack_duel.gif` | `make_mapf_stack_gif.py` | Hungarian+greedy vs CBS-TA+prioritized MAPF |
 | `mapf_total_war.gif` | `make_mapf_total_war_gif.py` | MAPF stack on 18 vs 18 king-of-the-hill contest |

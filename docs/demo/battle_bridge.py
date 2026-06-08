@@ -28,6 +28,7 @@ SCENARIOS = {
     "kingdom_lite": {"max_ticks": 800, "frame_stride": 4},
     "hill": {"max_ticks": 650, "frame_stride": 2},
     "domination": {"max_ticks": 700, "frame_stride": 2},
+    "ctf": {"max_ticks": 900, "frame_stride": 2},
 }
 
 
@@ -44,6 +45,20 @@ def _pack_frame(snapshot):
 def _pack_shots(shots):
     return [[round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2), team]
             for (x0, y0, x1, y1, team) in shots]
+
+
+def _pack_zones(zone):
+    if not zone:
+        return []
+    if len(zone) == 3 and isinstance(zone[0], (int, float)):
+        return [round(v, 2) if isinstance(v, float) else v for v in zone]
+    out = []
+    for z in zone:
+        if isinstance(z[0], str):
+            out.append([z[0]] + [round(v, 2) if isinstance(v, float) else v for v in z[1:]])
+        else:
+            out.append([round(v, 2) if isinstance(v, float) else v for v in z])
+    return out
 
 
 def _pack_result(bots, cfg, res, *, scenario_name, title, stride):
@@ -64,7 +79,7 @@ def _pack_result(bots, cfg, res, *, scenario_name, title, stride):
         "teams": list(res.teams),
         "alliances": {str(k): v for k, v in (cfg.alliances or {}).items()},
         "objective": res.objective,
-        "objective_zone": list(res.objective_zone) if res.objective_zone else [],
+        "objective_zone": _pack_zones(res.objective_zone),
         "objective_progress": res.objective_progress,
         "objective_hold_ticks": cfg.objective_hold_ticks,
         "winner": winner,

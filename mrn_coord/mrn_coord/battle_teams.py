@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+RED, BLUE, GREEN, YELLOW = 0, 1, 2, 3
+
 
 def alliance_of(alliances, team):
     """Alliance id for ``team``; without ``alliances`` each team is its own bloc."""

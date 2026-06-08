@@ -149,7 +149,8 @@ invariants) → gate → record the honest result.
 - [x] **Win conditions beyond annihilation** — king-of-the-hill and domination
   objective modules over the same engine, with ``battle_gate`` pins, browser demo,
   and headline GIFs (``objective_duel.gif``, ``mapf_total_war.gif``).
-  Still TODO: capture-the-flag, base assault, escort / payload.
+  Still TODO: base assault, escort / payload.
+  **CTF** (`capture the flag`) landed with ``ctf_duel.gif``, browser demo, and gate pin.
 - [ ] **Fog of war** — units only sense enemies within range (reuse the `mrn_sim`
   V2V / range sensor models), so scouting, ambush, and surprise become real.
 

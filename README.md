@@ -39,6 +39,10 @@ print(ALLIANCE_NAMES[res.winning_alliance], res.survivors)
 bots, cfg, _ = battle_scenario("hill")
 res = simulate(bots, cfg, max_ticks=600)
 print(res.objective, TEAM_NAMES[res.winner])
+
+bots, cfg, _ = battle_scenario("ctf")
+res = simulate(bots, cfg, max_ticks=900)
+print(res.objective, TEAM_NAMES[res.winner])
 ```
 
 It is built directly on the swarm flocking primitives in
@@ -77,6 +81,18 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
   centre. Try with <code>battle_scenario("hill")</code> or
   <code>battle_scenario("domination")</code>; render with
   <code>python3 scripts/make_objective_gif.py</code>.</em>
+</p>
+
+<p align="center">
+  <img src="docs/media/ctf_duel.gif" alt="Capture-the-flag on an open battlefield: a yellow diamond flag sits at the centre between red and blue home bases; robots fight forward, one side picks up the flag, runs home through laser fire, and scores when the carrier reaches its base circle." width="820">
+</p>
+
+<p align="center">
+  <em><strong>Capture the flag</strong> — grab the centre flag, fight your way home.
+  Carriers steer toward base; enemies intercept. Try
+  <code>battle_scenario("ctf")</code> or the
+  <a href="https://rsasaki0109.github.io/multirobot-battle/demo/battle.html">browser demo</a>;
+  matchup ladder in <a href="https://rsasaki0109.github.io/multirobot-battle/tournament.html">tournament.html</a>.</em>
 </p>
 
 The battle stack is modular — swap one layer at a time and measure the effect

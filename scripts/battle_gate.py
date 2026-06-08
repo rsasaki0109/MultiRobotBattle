@@ -150,6 +150,9 @@ def _run_kingdom_lite(*, max_ticks=800):
     }
 
 
+_SLOW_MATCHUP_SEEDS = 4
+
+
 def _run_objective_scenario(scenario_name, *, max_ticks=700):
     from mrn_coord.battle import RED, battle_scenario, simulate
 
@@ -210,8 +213,10 @@ def collect_metrics(*, seeds):
     metrics["kingdom_lite"] = _run_kingdom_lite()
     metrics["hill"] = _run_objective_scenario("hill")
     metrics["domination"] = _run_objective_scenario("domination")
-    metrics["mapf_total_war_local"] = _run_mapf_total_war_side("local", seeds=seeds)
-    metrics["mapf_total_war_mapf"] = _run_mapf_total_war_side("mapf", seeds=seeds)
+    metrics["ctf"] = _run_objective_scenario("ctf", max_ticks=900)
+    slow = seeds[: min(_SLOW_MATCHUP_SEEDS, len(seeds))]
+    metrics["mapf_total_war_local"] = _run_mapf_total_war_side("local", seeds=slow)
+    metrics["mapf_total_war_mapf"] = _run_mapf_total_war_side("mapf", seeds=slow)
     return metrics
 
 
