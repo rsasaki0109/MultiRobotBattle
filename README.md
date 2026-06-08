@@ -60,7 +60,7 @@ a duel, a three-army free-for-all, **unit classes** (scout / soldier / tank /
 sniper, so quality-vs-quantity falls out), and **terrain** that splits the field:
 
 <p align="center">
-  <img src="docs/media/battle_gallery.gif" alt="A 2x2 grid of four swarm battles running at once. Top-left, a 14-vs-14 duel; top-right, a three-army free-for-all where red, blue and green clusters converge and green wins; bottom-left, quality vs quantity — five big tank discs grind down sixteen small fast scout discs and the tanks win; bottom-right, a chokepoint where a vertical row of obstacles splits red and blue, who funnel through the gaps to fight. Laser lines and elimination flashes flicker across every panel, the per-team tallies count down, and each panel ends on its winner." width="820">
+  <img src="docs/media/battle_gallery.gif" alt="A 2x2 grid of four RoboMaster-style swarm battles: custom chassis with coloured armour stripes and turrets in each panel — duel, three-army free-for-all, five tanks vs sixteen scouts, and a chokepoint through terrain obstacles. Laser tracers and elimination flashes flicker across every panel until each shows its winner." width="820">
 </p>
 
 <p align="center">
@@ -143,7 +143,7 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
 </p>
 
 <p align="center">
-  <img src="docs/media/kingdom_clash.gif" alt="A wide battlefield viewed from above: two dense rectangular formations of red and blue dots — eighty per side — advance in battle lines from opposite flanks, collide in the centre in a chaotic melee of laser fire, and one army is wiped out." width="820">
+  <img src="docs/media/kingdom_clash.gif" alt="A wide RoboMaster competition grid: two dense battle lines of eighty custom red and blue chassis per side advance from opposite flanks, collide in the centre in a chaotic melee of barrel tracers, and one army is wiped out." width="820">
 </p>
 
 <p align="center">
