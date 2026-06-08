@@ -8,6 +8,7 @@ watch the collision-free paths animate. No install, no server-side compute.
 
 - `index.html` — MAPF zoo page (Pyodide loader + UI + canvas animator).
 - `battle.html` — swarm battle page (same wheel, different bridge).
+- `battle_robot_art.js` — RoboMaster-style chassis canvas renderer for battle.html.
 - `bridge.py` — MAPF glue: builds a small instance, runs the chosen solver,
   returns JSON for the animator.
 - `battle_bridge.py` — battle glue: runs a showcase scenario via

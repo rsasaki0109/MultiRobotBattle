@@ -107,7 +107,7 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
 | **LoS & cover** | ``require_los``, ``obstacles`` | terrain blocks or attenuates fire |
 
 <p align="center">
-  <img src="docs/media/maneuver_duel.gif" alt="Side-by-side chokepoint battles: left panel shows greedy straight-line pursuit through three terrain gaps; right panel shows the same soldiers with Hungarian assignment, wedge formation, and prioritized MAPF maneuver — red plans paths around obstacles while blue charges in, lasers flicker, and one side wins." width="820">
+  <img src="docs/media/maneuver_duel.gif" alt="Side-by-side chokepoint battles with RoboMaster-style chassis: left panel shows greedy straight-line pursuit through three terrain gaps; right panel shows the same soldiers with Hungarian assignment, wedge formation, and prioritized MAPF maneuver — red plans paths around obstacles while blue charges in, lasers flicker, and one side wins." width="820">
 </p>
 
 <p align="center">
@@ -119,7 +119,7 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
 </p>
 
 <p align="center">
-  <img src="docs/media/mapf_stack_duel.gif" alt="Side-by-side chokepoint battles comparing MAPF layers on red: left panel uses Hungarian assignment with greedy pursuit; right panel stacks CBS-TA path-aware assignment with prioritized MAPF maneuver and wedge formation — red routes through gaps while lasers fire." width="820">
+  <img src="docs/media/mapf_stack_duel.gif" alt="Side-by-side chokepoint battles with RoboMaster-style chassis comparing MAPF layers on red: left panel uses Hungarian assignment with greedy pursuit; right panel stacks CBS-TA path-aware assignment with prioritized MAPF maneuver and wedge formation — red routes through gaps while lasers fire." width="820">
 </p>
 
 <p align="center">

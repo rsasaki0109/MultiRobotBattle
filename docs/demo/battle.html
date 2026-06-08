@@ -87,6 +87,7 @@
       <span class="red">● red</span><span class="blue">● blue</span>
       <span style="color:#33d6a6">● green</span><span style="color:#ffd166">● yellow</span>
       <span style="color:#f5cc4d">◎ objective zone</span><span>— laser line</span><span>▦ terrain</span>
+      <span>▣ RoboMaster chassis</span>
     </div>
   </div>
 </main>
@@ -98,6 +99,7 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
+<script src="./battle_robot_art.js"></script>
 <script>
 const WHEEL = "./mapf_zoo-0.1.0-py3-none-any.whl";
 const BRIDGE = "./battle_bridge.py";
@@ -140,8 +142,23 @@ function drawPanel(s, frameIdx, region) {
   const X = x => ox + x * sc;
   const Y = y => oy + (s.height - y) * sc;
 
-  ctx.fillStyle = "#0b0f1c";
+  ctx.fillStyle = "#0a0e16";
   ctx.fillRect(x0, y0, w, h);
+  ctx.strokeStyle = "rgba(20,28,40,0.55)";
+  ctx.lineWidth = 0.5;
+  const gridStep = 8 * sc;
+  for (let gx = ox; gx <= ox + sc * s.width; gx += gridStep) {
+    ctx.beginPath();
+    ctx.moveTo(gx, oy);
+    ctx.lineTo(gx, oy + sc * s.height);
+    ctx.stroke();
+  }
+  for (let gy = oy; gy <= oy + sc * s.height; gy += gridStep) {
+    ctx.beginPath();
+    ctx.moveTo(ox, gy);
+    ctx.lineTo(ox + sc * s.width, gy);
+    ctx.stroke();
+  }
 
   if (label) {
     ctx.fillStyle = "#e6edf3";
@@ -150,10 +167,13 @@ function drawPanel(s, frameIdx, region) {
   }
 
   for (const [ox0, oy0, r] of s.obstacles) {
-    ctx.fillStyle = "#334155";
+    ctx.fillStyle = "#222a32";
+    ctx.strokeStyle = "#33405a";
+    ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(X(ox0), Y(oy0), r * sc, 0, 7);
     ctx.fill();
+    ctx.stroke();
   }
 
   if (s.objective === "ctf" && Array.isArray(s.objective_zone) && s.objective_zone.length
@@ -214,27 +234,23 @@ function drawPanel(s, frameIdx, region) {
   }
 
   const frame = s.frames[Math.min(frameIdx, s.frames.length - 1)] || [];
+  const prevFrame = frameIdx > 0
+    ? (s.frames[Math.min(frameIdx - 1, s.frames.length - 1)] || [])
+    : [];
   const shots = s.shots[Math.min(frameIdx, s.shots.length - 1)] || [];
-  ctx.globalAlpha = 0.35;
   for (const [sx0, sy0, x1, y1, team] of shots) {
-    ctx.strokeStyle = TEAM[team] || "#8b95a7";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(X(sx0), Y(sy0));
-    ctx.lineTo(X(x1), Y(y1));
-    ctx.stroke();
+    BattleRobotArt.drawShot(ctx, X, Y, sc, sx0, sy0, x1, y1, team);
   }
-  ctx.globalAlpha = 1;
 
-  for (const [x, y, team, hp, kind] of frame) {
-    const col = TEAM[team] || "#ccc";
-    const base = kind === "tank" ? 7 : kind === "scout" ? 3 : kind === "sniper" ? 4 : 5;
-    const rad = base + 2 * hp;
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.arc(X(x), Y(y), rad, 0, 7);
-    ctx.fill();
-  }
+  frame.forEach(([x, y, team, hp, kind], idx) => {
+    let px = x;
+    let py = y;
+    if (idx < prevFrame.length && prevFrame[idx][2] === team) {
+      [px, py] = prevFrame[idx];
+    }
+    const heading = BattleRobotArt.inferHeading(x, y, px, py, team);
+    BattleRobotArt.drawRobotChassis(ctx, X, Y, sc, x, y, team, hp, kind, heading);
+  });
 }
 
 function formatTally(s, frameIdx) {

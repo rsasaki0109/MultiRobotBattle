@@ -2,9 +2,10 @@
 """Headline demo — greedy vs MAPF-planned maneuver on the chokepoint.
 
 Runs the same soldiers-on-chokepoint setup twice (greedy pursuit vs prioritized
-maneuver + Hungarian assignment) and renders a side-by-side GIF.
+maneuver + Hungarian assignment) and renders a side-by-side GIF with RoboMaster
+chassis art.
 
-    python3 scripts/make_maneuver_gif.py --out out/maneuver_duel.gif
+    python3 scripts/make_maneuver_gif.py --out docs/media/maneuver_duel.gif
 """
 
 from __future__ import annotations
@@ -19,24 +20,20 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.animation import FuncAnimation, PillowWriter  # noqa: E402
-from matplotlib.collections import LineCollection  # noqa: E402
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "mrn_coord"))
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_SCRIPT_DIR, os.pardir, "mrn_coord"))
+sys.path.insert(0, _SCRIPT_DIR)
+
+import _battle_gif_render as render  # noqa: E402
 
 from mrn_coord.battle import (  # noqa: E402
-    BLUE,
     RED,
     BattleConfig,
-    battle_scenario,
     make_company,
     simulate,
 )
 import random  # noqa: E402
-
-BG = "#0b0e14"
-INK = "#e6edf3"
-MUTED = "#8b95a7"
-TEAM = {RED: "#ff5b5b", BLUE: "#5b8cff"}
 
 
 def _make_pair(seed=11):
@@ -51,82 +48,84 @@ def _make_pair(seed=11):
     cfg_g = BattleConfig(**base, maneuver="greedy")
     cfg_p = BattleConfig(**base, maneuver="prioritized")
     bots_g = (make_company(cfg_g, RED, center_r, roster, rng, jitter=2.8) +
-              make_company(cfg_g, BLUE, center_b, roster, random.Random(seed + 1),
+              make_company(cfg_g, 1, center_b, roster, random.Random(seed + 1),
                            jitter=2.8))
     bots_p = (make_company(cfg_p, RED, center_r, roster, random.Random(seed + 2),
                            jitter=2.8) +
-              make_company(cfg_p, BLUE, center_b, roster, random.Random(seed + 3),
+              make_company(cfg_p, 1, center_b, roster, random.Random(seed + 3),
                            jitter=2.8))
-    return (bots_g, cfg_g, simulate(bots_g, cfg_g, max_ticks=700),
-            bots_p, cfg_p, simulate(bots_p, cfg_p, max_ticks=700))
+    return (cfg_g, simulate(bots_g, cfg_g, max_ticks=700),
+            simulate(bots_p, cfg_p, max_ticks=700))
+
+
+class ManeuverPanel:
+    def __init__(self, ax, cfg, res, subtitle):
+        self.cfg = cfg
+        self.res = res
+        self.subtitle = subtitle
+        self.deaths = render.collect_deaths(res.frames)
+
+        ax.set_facecolor(render.FIELD)
+        ax.set_xlim(0, cfg.width)
+        ax.set_ylim(0, cfg.height)
+        ax.set_aspect("equal")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for sp in ax.spines.values():
+            sp.set_color(render.MUTED)
+        ax.set_title(subtitle, color=render.INK, fontsize=10)
+        render.draw_arena(ax, cfg, minimal=True)
+        render.draw_obstacles(ax, cfg.obstacles)
+        self.robots = render.RobotLayers(ax, flash_life=7)
+        self.banner = ax.text(cfg.width / 2, cfg.height / 2, "",
+                              ha="center", va="center", fontsize=18,
+                              fontweight="bold", alpha=0.0, zorder=12)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="out/maneuver_duel.gif")
-    ap.add_argument("--fps", type=int, default=12)
+    ap.add_argument("--out", default="docs/media/maneuver_duel.gif")
+    ap.add_argument("--fps", type=int, default=14)
     args = ap.parse_args()
 
-    _, cfg, res_g, _, _, res_p = _make_pair()
+    cfg, res_g, res_p = _make_pair()
     nframes = max(len(res_g.frames), len(res_p.frames))
-    obstacles = cfg.obstacles
+    ticks = list(range(nframes)) + [nframes - 1] * args.fps
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), facecolor=BG)
-    for ax, title, res in zip(axes,
-                               ("Greedy pursuit", "Prioritized MAPF maneuver"),
-                               (res_g, res_p)):
-        ax.set_facecolor(BG)
-        ax.set_xlim(0, cfg.width)
-        ax.set_ylim(0, cfg.height)
-        ax.set_aspect("equal")
-        ax.set_title(title, color=INK, fontsize=11)
-        ax.tick_params(colors=MUTED, labelsize=7)
-        for sp in ax.spines.values():
-            sp.set_color(MUTED)
-        for (ox, oy, r) in obstacles:
-            ax.add_patch(plt.Circle((ox, oy), r, color="#334155", alpha=0.85))
+    fig, axes = plt.subplots(1, 2, figsize=(12.4, 5.4))
+    fig.patch.set_facecolor(render.BG)
+    fig.suptitle("Chokepoint duel — greedy pursuit vs prioritized MAPF maneuver",
+                 color=render.INK, fontsize=12, fontweight="bold", y=0.98)
 
-    scat = [ax.scatter([], [], s=28, c=[], alpha=0.9) for ax in axes]
-    fire = [LineCollection([], colors=MUTED, linewidths=0.6, alpha=0.35)
-            for _ in axes]
-    for ax, lc in zip(axes, fire):
-        ax.add_collection(lc)
-    banner = fig.text(0.5, 0.02, "", ha="center", color=INK, fontsize=10)
+    panels = [
+        ManeuverPanel(axes[0], cfg, res_g, "Greedy pursuit"),
+        ManeuverPanel(axes[1], cfg, res_p, "Prioritized MAPF maneuver"),
+    ]
 
-    def frame(t):
-        artists = []
-        labels = []
-        for k, (res, ax, s, lc) in enumerate(zip((res_g, res_p), axes, scat, fire)):
-            fi = min(t, len(res.frames) - 1)
-            fr = res.frames[fi]
-            xs, ys, cols = [], [], []
-            for (x, y, team, hp, alive, kind) in fr:
-                if not alive:
-                    continue
-                xs.append(x)
-                ys.append(y)
-                cols.append(TEAM[team])
-            s.set_offsets(list(zip(xs, ys)) if xs else [(0, 0)])
-            s.set_color(cols if cols else [MUTED])
-            segs = []
-            if fi < len(res.shots):
-                for (x0, y0, x1, y1, team) in res.shots[fi]:
-                    segs.append([(x0, y0), (x1, y1)])
-            lc.set_segments(segs)
-            w = res.winner
-            if w is not None and fi >= len(res.frames) - 2:
-                labels.append(f"{'Greedy' if k == 0 else 'MAPF'}: "
-                              f"{'Red' if w == RED else 'Blue'} wins")
-            artists.extend([s, lc])
-        banner.set_text("  |  ".join(labels) if labels else "")
-        artists.append(banner)
-        return artists
+    def update(fi):
+        t = ticks[fi]
+        for p in panels:
+            fi_local = min(t, len(p.res.frames) - 1)
+            frame = p.res.frames[fi_local]
+            prev = p.res.frames[fi_local - 1] if fi_local > 0 else None
+            shots = p.res.shots[fi_local] if fi_local < len(p.res.shots) else ()
+            p.robots.update(frame, prev, shots, p.deaths, fi_local)
+            w = p.res.winner
+            if w is not None and fi_local >= len(p.res.frames) - 1:
+                p.banner.set_text(f"{'RED' if w == RED else 'BLUE'} WINS")
+                p.banner.set_color(render.TEAM_HEX[w])
+                p.banner.set_alpha(0.92)
+        return []
 
-    anim = FuncAnimation(fig, frame, frames=nframes + 20, interval=1000 // args.fps,
-                         blit=False)
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
-    anim.save(args.out, writer=PillowWriter(fps=args.fps))
-    print(f"wrote {args.out}")
+    fig.subplots_adjust(left=0.03, right=0.97, top=0.90, bottom=0.05, wspace=0.08)
+    anim = FuncAnimation(fig, update, frames=len(ticks),
+                         interval=1000 // args.fps, blit=False)
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
+    anim.save(args.out, writer=PillowWriter(fps=args.fps), dpi=96,
+              savefig_kwargs={"facecolor": render.BG})
+    plt.close(fig)
+    render.optimize_gif(args.out, args.fps, colors=64)
+    print(f"wrote {args.out}  greedy={res_g.winner} mapf={res_p.winner}")
 
 
 if __name__ == "__main__":
