@@ -29,11 +29,16 @@ fast, so the team that keeps formation and concentrates locally wears the other
 down. Nothing about that is scripted; it falls out of the local rules.
 
 ```python
-from mrn_coord.battle import ALLIANCE_NAMES, battle_scenario, simulate
+from mrn_coord.battle import ALLIANCE_NAMES, TEAM_NAMES, battle_scenario, simulate
 
 bots, cfg, _ = battle_scenario("grand_alliance")  # 4 armies, 2 allied fronts
 res = simulate(bots, cfg, max_ticks=1000)
 print(ALLIANCE_NAMES[res.winning_alliance], res.survivors)
+
+# Or fight for the centre instead of annihilation:
+bots, cfg, _ = battle_scenario("hill")
+res = simulate(bots, cfg, max_ticks=600)
+print(res.objective, TEAM_NAMES[res.winner])
 ```
 
 It is built directly on the swarm flocking primitives in

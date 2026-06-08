@@ -150,6 +150,20 @@ def _run_kingdom_lite(*, max_ticks=800):
     }
 
 
+def _run_objective_scenario(scenario_name, *, max_ticks=700):
+    from mrn_coord.battle import battle_scenario, simulate
+
+    bots, cfg, _ = battle_scenario(scenario_name)
+    res = simulate(bots, cfg, max_ticks=max_ticks, frame_stride=2)
+    from mrn_coord.battle import RED
+    return {
+        "scenario": scenario_name,
+        "decisive_rate": 1.0 if res.winner is not None else 0.0,
+        "red_win_rate": 1.0 if res.winner == RED else 0.0,
+        "objective": cfg.objective,
+    }
+
+
 def collect_metrics(*, seeds):
     metrics = {}
     for tactics in ("nearest", "count_aware", "transformer"):
@@ -174,6 +188,8 @@ def collect_metrics(*, seeds):
         red_maneuver="prioritized", blue_maneuver="greedy")
     metrics["grand_alliance_lite"] = _run_alliance_scenario("grand_alliance_lite")
     metrics["kingdom_lite"] = _run_kingdom_lite()
+    metrics["hill"] = _run_objective_scenario("hill")
+    metrics["domination"] = _run_objective_scenario("domination")
     return metrics
 
 

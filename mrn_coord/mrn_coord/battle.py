@@ -56,6 +56,7 @@ import random
 from dataclasses import dataclass, field
 
 from .battle_assignment import apply_assignments, AssignmentState
+from .battle_objectives import ObjectiveTracker, objective_zone, winner_from_objective, zone_leader
 from .battle_teams import alliance_of, teams_are_enemies
 from .spatial_hash import SpatialHash
 from .battle_formations import formation_commands
@@ -161,6 +162,11 @@ class BattleConfig:
     obstacles: tuple = ()
     # alliances — map team id -> alliance id; allied teams do not fire on each other
     alliances: dict = None
+    # objectives — ``annihilation`` (default), ``hill`` (consecutive hold), ``domination`` (cumulative)
+    objective: str = "annihilation"
+    objective_center: tuple = None
+    objective_radius: float = 5.0
+    objective_hold_ticks: int = 200
 
 
 @dataclass
@@ -174,6 +180,9 @@ class BattleResult:
     winner: object = None                         # winning team id / None (draw)
     winning_alliance: object = None             # winning alliance id when ``alliances`` set
     alliances: dict = field(default_factory=dict)
+    objective: str = "annihilation"
+    objective_zone: tuple = field(default_factory=tuple)
+    objective_progress: list = field(default_factory=list)
     ticks: int = 0
     survivors: dict = field(default_factory=dict)
 
@@ -247,6 +256,18 @@ def make_allied_armies(cfg, deployments):
             kind=dep.get("kind", "soldier"),
             spacing=dep.get("spacing", 2.0),
             rng=rng, face_right=dep.get("face_right", True)))
+    return bots
+
+
+def make_contest_armies(n_per_team, cfg, *, seed=0):
+    """Two armies spawned closer to centre — for hill / domination fights."""
+    rng = random.Random(seed)
+    bots = []
+    for team, cx in ((RED, cfg.width * 0.28), (BLUE, cfg.width * 0.72)):
+        for _ in range(n_per_team):
+            x = cx + rng.uniform(-2.8, 2.8)
+            y = cfg.height * 0.5 + rng.uniform(-6.5, 6.5)
+            bots.append(Bot(x, y, 0.0, 0.0, team, cfg.max_hp, cfg.max_hp))
     return bots
 
 
@@ -560,23 +581,32 @@ def _snapshot(bots):
 def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     """Play a whole engagement from a prepared list of bots (any teams/classes).
 
-    Records the per-tick snapshots and firing lines, stops as soon as at most one
-    team has living robots (or ``max_ticks``), and reports the winning team id
-    (or ``None`` for a draw). Deterministic given the inputs.
+    Records the per-tick snapshots and firing lines. Stops when at most one team
+    or alliance remains (annihilation), when an objective is secured (hill /
+    domination), or at ``max_ticks``. Deterministic given the inputs.
 
     ``frame_stride`` subsamples recorded frames (and shots) for large battles.
     """
     cfg = cfg or BattleConfig()
     frame_stride = max(1, frame_stride)
     teams = sorted({b.team for b in bots})
-    result = BattleResult(teams=teams, alliances=dict(cfg.alliances or {}))
+    obj_mode = cfg.objective or "annihilation"
+    result = BattleResult(
+        teams=teams,
+        alliances=dict(cfg.alliances or {}),
+        objective=obj_mode,
+        objective_zone=objective_zone(cfg) if obj_mode != "annihilation" else (),
+    )
     maneuver_state = ManeuverState()
     assignment_state = AssignmentState()
+    obj_tracker = ObjectiveTracker(cfg)
+    objective_win = None
     for tick in range(max_ticks):
         record = (tick % frame_stride == 0)
         if record:
             result.frames.append(_snapshot(bots))
             result.counts.append(_counts(bots, teams))
+            result.objective_progress.append(obj_tracker.snapshot())
         if len(_standing_alliances(bots, teams, cfg.alliances)) <= 1:
             if record:
                 result.shots.append([])
@@ -585,22 +615,32 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
                             assignment_state=assignment_state, tick=tick)
         if record:
             result.shots.append(shots)
+        if obj_mode != "annihilation":
+            leader = zone_leader(bots, cfg, teams)
+            objective_win = obj_tracker.tick(leader)
+            if objective_win is not None:
+                break
     else:
         if tick % frame_stride == 0:
             result.frames.append(_snapshot(bots))
             result.counts.append(_counts(bots, teams))
+            result.objective_progress.append(obj_tracker.snapshot())
             result.shots.append([])
 
     c = _counts(bots, teams)
     result.survivors = {t: n for t, n in zip(teams, c)}
     result.ticks = len(result.frames) - 1
-    result.winner, result.winning_alliance = _pick_winner(
-        teams, result.survivors, cfg.alliances)
-    if (result.winning_alliance is None and cfg.alliances
-            and len(_standing_alliances_from_counts(
-                teams, result.survivors, cfg.alliances)) > 1):
-        result.winner, result.winning_alliance = _pick_winner_by_survivors(
+    if objective_win is not None:
+        result.winner, result.winning_alliance = winner_from_objective(
+            objective_win, cfg, teams)
+    else:
+        result.winner, result.winning_alliance = _pick_winner(
             teams, result.survivors, cfg.alliances)
+        if (result.winning_alliance is None and cfg.alliances
+                and len(_standing_alliances_from_counts(
+                    teams, result.survivors, cfg.alliances)) > 1):
+            result.winner, result.winning_alliance = _pick_winner_by_survivors(
+                teams, result.survivors, cfg.alliances)
     return result
 
 
@@ -623,7 +663,8 @@ def run_battle(n_per_team=14, cfg=None, *, seed=0, max_ticks=800, num_teams=2):
 # reproducible. Each returns ``(bots, cfg, title)``; render them with
 # ``scripts/make_battle_gallery_gif.py``.
 SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
-                  "maneuver_duel", "mapf_stack_duel", "kingdom", "grand_alliance")
+                  "maneuver_duel", "mapf_stack_duel", "kingdom", "grand_alliance",
+                  "hill", "domination")
 
 ALLIANCE_NAMES = {0: "western", 1: "eastern"}
 
@@ -783,4 +824,24 @@ def battle_scenario(name):
                                rows=5, cols=8, rng=random.Random(43),
                                face_right=False)
         return (red + blue, cfg, "Kingdom clash — 40 vs 40 battle lines")
+    if name == "hill":
+        cfg = BattleConfig(
+            objective="hill",
+            objective_radius=4.2,
+            objective_hold_ticks=140,
+            tactics="count_aware",
+            formation="wedge",
+        )
+        return (make_contest_armies(12, cfg, seed=8), cfg,
+                "King of the hill — hold the centre")
+    if name == "domination":
+        cfg = BattleConfig(
+            objective="domination",
+            objective_radius=6.0,
+            objective_hold_ticks=220,
+            tactics="count_aware",
+            formation="line",
+        )
+        return (make_contest_armies(14, cfg, seed=9), cfg,
+                "Domination — control the centre")
     raise KeyError(name)

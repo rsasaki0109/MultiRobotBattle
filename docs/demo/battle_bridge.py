@@ -18,6 +18,8 @@ SCENARIOS = {
     "mapf_stack_duel": {"max_ticks": 550, "frame_stride": 2},
     "grand_alliance_lite": {"max_ticks": 800, "frame_stride": 4},
     "kingdom_lite": {"max_ticks": 800, "frame_stride": 4},
+    "hill": {"max_ticks": 650, "frame_stride": 2},
+    "domination": {"max_ticks": 700, "frame_stride": 2},
 }
 
 
@@ -53,6 +55,7 @@ def run(scenario_name: str) -> str:
             win_alliance = ALLIANCE_NAMES.get(res.winning_alliance,
                                               str(res.winning_alliance))
         alliances = {str(k): v for k, v in (cfg.alliances or {}).items()}
+        zone = list(res.objective_zone) if res.objective_zone else []
         return json.dumps(
             {
                 "ok": True,
@@ -66,6 +69,10 @@ def run(scenario_name: str) -> str:
                 "counts": res.counts,
                 "teams": list(res.teams),
                 "alliances": alliances,
+                "objective": res.objective,
+                "objective_zone": zone,
+                "objective_progress": res.objective_progress,
+                "objective_hold_ticks": cfg.objective_hold_ticks,
                 "winner": winner,
                 "winning_alliance": win_alliance,
                 "n_bots": len(bots),

@@ -69,6 +69,11 @@ jobs:
           # navigation, multi-robot avoidance, or MAPF (fewer goals reached, a
           # new collision, a worse makespan/sum-of-costs) fails the build.
           python3 scripts/benchmark_gate.py
+      - name: Battle gate
+        run: |
+          . /opt/ros/jazzy/setup.sh
+          . install/setup.sh
+          python3 scripts/battle_gate.py
 
   # Independent of the ROS build: validate that our pure-Python ORCA agrees with
   # the reference RVO2 library it claims to port. RVO2 is built from source here

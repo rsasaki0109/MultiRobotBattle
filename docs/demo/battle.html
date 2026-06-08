@@ -59,6 +59,8 @@
     <div class="field">
       <label for="scenario">Scenario</label>
       <select id="scenario">
+        <option value="hill">king of the hill — hold the centre</option>
+        <option value="domination">domination — control the centre</option>
         <option value="grand_alliance_lite">allied fronts — 128 robots, red+green vs blue+yellow</option>
         <option value="kingdom_lite">kingdom — 40 vs 40 battle lines</option>
         <option value="duel">duel — 14 vs 14 open field</option>
@@ -176,6 +178,27 @@ function draw() {
     ctx.beginPath();
     ctx.arc(X(ox0), Y(oy0), r * sc, 0, 7);
     ctx.fill();
+  }
+
+  if (s.objective_zone && s.objective_zone.length === 3) {
+    const [zx, zy, zr] = s.objective_zone;
+    ctx.strokeStyle = "#f5cc4d";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(X(zx), Y(zy), zr * sc, 0, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const prog = (s.objective_progress || [])[Math.min(fi, (s.objective_progress || []).length - 1)] || {};
+    const hold = s.objective_hold_ticks || 1;
+    const keys = Object.keys(prog);
+    if (keys.length && s.objective !== "annihilation") {
+      const lead = keys.reduce((a, b) => (prog[a] >= prog[b] ? a : b));
+      const pct = Math.min(100, Math.round(100 * prog[lead] / hold));
+      ctx.fillStyle = "#f5cc4d";
+      ctx.font = "11px monospace";
+      ctx.fillText(`${s.objective} ${pct}%`, X(zx) - 28, Y(zy) - zr * sc - 6);
+    }
   }
 
   const frame = s.frames[Math.min(fi, s.frames.length - 1)] || [];
