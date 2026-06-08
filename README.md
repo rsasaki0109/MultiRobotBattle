@@ -1,11 +1,16 @@
 # multirobot-battle
 
 <p align="center">
-  <img src="docs/media/battle.gif" alt="A dark battlefield where a red army and a blue army of robots, each a flocking swarm, advance from opposite sides into the centre and fight: laser lines flick between robots firing on their nearest enemy, expanding rings mark each elimination, the team tally bars shrink as robots fall, and after a back-and-forth that comes down to a one-on-one duel, RED WINS with a single survivor." width="820">
+  <img src="docs/media/battle.gif" alt="A wide kingdom-scale battlefield where four robot armies clash in battle lines: red and green on the western allied front versus blue and yellow on the eastern front. Soldier blocks hold the centre while scout flanks sweep the upper and lower edges; laser lines streak across the field, elimination flashes pop, alliance tally bars count down, and one allied coalition wins." width="820">
 </p>
 
 <p align="center">
-  <em>Two decentralized <strong>flocking armies</strong> — red vs blue — advance to contact and fight to the last robot. No commander: each robot only flocks with its team, chases its nearest enemy, and fires when in range. Damage is per-attacker, so <strong>focus fire emerges for free</strong> — and the battle is built on the same multi-robot stack that hosts a <strong>benchmark-gated MAPF zoo</strong> (below).</em>
+  <em>Four decentralized <strong>flocking armies</strong> in two allied fronts — red+green
+  vs blue+yellow — deploy in battle lines and fight until one alliance is eliminated.
+  Allied teams never fire on each other; each robot still flocks only with its own
+  colour, chases the nearest enemy, and trades fire when in range. Damage is
+  per-attacker, so <strong>focus fire emerges for free</strong> — and the battle is built on
+  the same multi-robot stack that hosts a <strong>benchmark-gated MAPF zoo</strong> (below).</em>
 </p>
 
 [![build-jazzy](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml/badge.svg)](https://github.com/rsasaki0109/multirobot-battle/actions/workflows/build_jazzy.yaml)
@@ -24,10 +29,11 @@ fast, so the team that keeps formation and concentrates locally wears the other
 down. Nothing about that is scripted; it falls out of the local rules.
 
 ```python
-from mrn_coord.battle import run_battle, TEAM_NAMES
+from mrn_coord.battle import ALLIANCE_NAMES, battle_scenario, simulate
 
-res = run_battle(n_per_team=14, seed=19)        # red vs blue, fight to the death
-print(TEAM_NAMES[res.winner], res.survivors)    # -> red {0: 1, 1: 0}
+bots, cfg, _ = battle_scenario("grand_alliance")  # 4 armies, 2 allied fronts
+res = simulate(bots, cfg, max_ticks=1000)
+print(ALLIANCE_NAMES[res.winning_alliance], res.survivors)
 ```
 
 It is built directly on the swarm flocking primitives in

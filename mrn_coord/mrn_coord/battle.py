@@ -56,6 +56,7 @@ import random
 from dataclasses import dataclass, field
 
 from .battle_assignment import apply_assignments, AssignmentState
+from .battle_teams import alliance_of, teams_are_enemies
 from .spatial_hash import SpatialHash
 from .battle_formations import formation_commands
 from .battle_maneuver import ManeuverState, maneuver_direction, maneuver_for_team, replan_paths
@@ -158,6 +159,8 @@ class BattleConfig:
     spatial_cell: float = 4.0
     # optional terrain: circular obstacles (x, y, radius) the robots flow around
     obstacles: tuple = ()
+    # alliances — map team id -> alliance id; allied teams do not fire on each other
+    alliances: dict = None
 
 
 @dataclass
@@ -169,6 +172,8 @@ class BattleResult:
     counts: list = field(default_factory=list)    # per tick: alive count per team (in `teams` order)
     teams: list = field(default_factory=list)     # team ids present, sorted
     winner: object = None                         # winning team id / None (draw)
+    winning_alliance: object = None             # winning alliance id when ``alliances`` set
+    alliances: dict = field(default_factory=dict)
     ticks: int = 0
     survivors: dict = field(default_factory=dict)
 
@@ -221,6 +226,27 @@ def make_grand_army(cfg, team, front_center, *, rows, cols, kind="soldier",
             x = front_center[0] + back + rng.uniform(-0.15, 0.15)
             y = front_center[1] + lateral + rng.uniform(-0.15, 0.15)
             bots.append(make_unit(x, y, team, kind))
+    return bots
+
+
+def make_allied_armies(cfg, deployments):
+    """Deploy several battle lines for a multi-army allied campaign.
+
+    Each entry in ``deployments`` is a dict with ``team``, ``front_center``, and
+    optional ``rows``, ``cols``, ``kind``, ``spacing``, ``face_right``, ``seed`` /
+    ``rng`` (passed to :func:`make_grand_army`).
+    """
+    bots = []
+    for dep in deployments:
+        rng = dep.get("rng")
+        if rng is None:
+            rng = random.Random(dep.get("seed", 0))
+        bots.extend(make_grand_army(
+            cfg, dep["team"], dep["front_center"],
+            rows=dep.get("rows", 6), cols=dep.get("cols", 8),
+            kind=dep.get("kind", "soldier"),
+            spacing=dep.get("spacing", 2.0),
+            rng=rng, face_right=dep.get("face_right", True)))
     return bots
 
 
@@ -397,7 +423,7 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None, tick=0
         if best < 0 or best >= n:
             continue
         e = live[best]
-        if e.team == b.team:
+        if not teams_are_enemies(cfg.alliances, b.team, e.team):
             continue
         bd = math.hypot(b.x - e.x, b.y - e.y)
         d = max(bd, 1e-9)
@@ -466,6 +492,43 @@ def _counts(bots, teams):
     return tuple(sum(1 for b in bots if b.alive and b.team == t) for t in teams)
 
 
+def _standing_alliances(bots, teams, alliances):
+    """Alliance ids (or team ids in FFA) that still have living robots."""
+    alive = set()
+    for t in teams:
+        if any(b.alive and b.team == t for b in bots):
+            if alliances:
+                alive.add(alliance_of(alliances, t))
+            else:
+                alive.add(t)
+    return alive
+
+
+def _pick_winner(teams, survivors, alliances):
+    standing = _standing_alliances_from_counts(teams, survivors, alliances)
+    if len(standing) != 1:
+        return None, None
+    win_key = next(iter(standing))
+    if alliances:
+        best_team, best_n = None, -1
+        for t, n in survivors.items():
+            if alliance_of(alliances, t) == win_key and n > best_n:
+                best_n, best_team = n, t
+        return best_team, win_key
+    return win_key, None
+
+
+def _standing_alliances_from_counts(teams, survivors, alliances):
+    alive = set()
+    for t in teams:
+        if survivors.get(t, 0) > 0:
+            if alliances:
+                alive.add(alliance_of(alliances, t))
+            else:
+                alive.add(t)
+    return alive
+
+
 def _snapshot(bots):
     return [(b.x, b.y, b.team, b.hp / b.max_hp if b.max_hp else 0.0, b.alive,
              b.kind) for b in bots]
@@ -483,7 +546,7 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     cfg = cfg or BattleConfig()
     frame_stride = max(1, frame_stride)
     teams = sorted({b.team for b in bots})
-    result = BattleResult(teams=teams)
+    result = BattleResult(teams=teams, alliances=dict(cfg.alliances or {}))
     maneuver_state = ManeuverState()
     assignment_state = AssignmentState()
     for tick in range(max_ticks):
@@ -491,8 +554,7 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
         if record:
             result.frames.append(_snapshot(bots))
             result.counts.append(_counts(bots, teams))
-        c = _counts(bots, teams)
-        if sum(1 for n in c if n > 0) <= 1:   # one (or zero) team left standing
+        if len(_standing_alliances(bots, teams, cfg.alliances)) <= 1:
             if record:
                 result.shots.append([])
             break
@@ -509,8 +571,8 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     c = _counts(bots, teams)
     result.survivors = {t: n for t, n in zip(teams, c)}
     result.ticks = len(result.frames) - 1
-    standing = [t for t, n in zip(teams, c) if n > 0]
-    result.winner = standing[0] if len(standing) == 1 else None
+    result.winner, result.winning_alliance = _pick_winner(
+        teams, result.survivors, cfg.alliances)
     return result
 
 
@@ -533,7 +595,9 @@ def run_battle(n_per_team=14, cfg=None, *, seed=0, max_ticks=800, num_teams=2):
 # reproducible. Each returns ``(bots, cfg, title)``; render them with
 # ``scripts/make_battle_gallery_gif.py``.
 SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
-                  "maneuver_duel", "mapf_stack_duel", "kingdom")
+                  "maneuver_duel", "mapf_stack_duel", "kingdom", "grand_alliance")
+
+ALLIANCE_NAMES = {0: "western", 1: "eastern"}
 
 
 def battle_scenario(name):
@@ -610,4 +674,28 @@ def battle_scenario(name):
                                rows=8, cols=10, rng=random.Random(43),
                                face_right=False)
         return (red + blue, cfg, "Kingdom clash — 80 vs 80 battle lines")
+    if name == "grand_alliance":
+        alliances = {RED: 0, GREEN: 0, BLUE: 1, YELLOW: 1}
+        cfg = kingdom_config(
+            alliances=alliances,
+            dps=38.0,
+            tactics="count_aware:aggressive",
+            formation_by_team={
+                RED: "line", BLUE: "line", GREEN: "wedge", YELLOW: "wedge",
+            },
+        )
+        w, h = cfg.width, cfg.height
+        # Two allied armies per flank — upper/lower wedges that pinch the centre.
+        bots = make_allied_armies(cfg, [
+            dict(team=RED, front_center=(w * 0.34, h * 0.38),
+                 rows=5, cols=8, face_right=True, seed=19),
+            dict(team=GREEN, front_center=(w * 0.34, h * 0.62),
+                 rows=5, cols=8, kind="scout", face_right=True, seed=20),
+            dict(team=BLUE, front_center=(w * 0.66, h * 0.38),
+                 rows=5, cols=8, face_right=False, seed=21),
+            dict(team=YELLOW, front_center=(w * 0.66, h * 0.62),
+                 rows=5, cols=8, kind="scout", face_right=False, seed=22),
+        ])
+        return (bots, cfg,
+                "Grand alliance — red+green vs blue+yellow battle lines")
     raise KeyError(name)

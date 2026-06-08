@@ -11,6 +11,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from ..battle_teams import alliance_of, teams_are_enemies
+
 
 @dataclass(frozen=True)
 class AgentToken:
@@ -68,7 +70,8 @@ def _make_token(observer, other, heading, live_index):
                       math.hypot(dx, dy), live_index)
 
 
-def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None):
+def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None,
+                      alliances=None):
     """Build a :class:`BattleObservation` for ``live[index]``."""
     me = live[index]
     positions = [(b.x, b.y) for b in live]
@@ -83,7 +86,7 @@ def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None
             d = math.hypot(me.x - other.x, me.y - other.y)
             if other.team == me.team:
                 allies.append((d, other, j))
-            else:
+            elif teams_are_enemies(alliances, me.team, other.team):
                 enemies.append((d, other, j))
     else:
         for j, other in enumerate(live):
@@ -92,7 +95,7 @@ def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None
             d = math.hypot(me.x - other.x, me.y - other.y)
             if other.team == me.team:
                 allies.append((d, other, j))
-            else:
+            elif teams_are_enemies(alliances, me.team, other.team):
                 enemies.append((d, other, j))
 
     allies.sort(key=lambda t: t[0])
@@ -100,7 +103,12 @@ def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None
     heading = _heading_from_bot(me, enemies)
 
     n_allies = sum(1 for b in live if b.team == me.team)
-    n_enemies = len(live) - n_allies
+    if alliances:
+        my_a = alliance_of(alliances, me.team)
+        n_enemies = sum(1 for b in live
+                        if alliance_of(alliances, b.team) != my_a)
+    else:
+        n_enemies = len(live) - n_allies
     n_local_allies = sum(1 for d, _, _ in allies if d <= perception)
     n_local_enemies = sum(1 for d, _, _ in enemies if d <= perception)
 

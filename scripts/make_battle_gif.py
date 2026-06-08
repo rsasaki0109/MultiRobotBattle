@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
-"""Animate a swarm battle — two flocking armies fight to the last robot.
+"""Animate the headline swarm battle — multi-army allied campaign on a wide field.
 
-Drives the real :mod:`mrn_coord.battle` simulation: red and blue armies, each a
-decentralized Boids flock, advance to contact and trade fire. Damage is
-per-attacker, so robots that get locally outnumbered melt fast — focus fire
-emerges from the local rules. The animation shows, from the simulation:
+Four armies (red + green vs blue + yellow) deploy in battle lines, advance to
+contact, and fight until one alliance is eliminated. Allied teams never fire on
+each other; each robot still flocks only with its own colour.
 
-- each robot as a team-coloured disc that **fades as its health drops**,
-- a **laser line** from every robot firing on its nearest in-range enemy,
-- an **expanding flash** wherever a robot is eliminated,
-- a live **tally** of the two armies and, at the end, the winner.
-
-    python3 scripts/make_battle_gif.py --out out/battle.gif --seed 19
+    python3 scripts/make_battle_gif.py --out docs/media/battle.gif
 
 Deterministic, headless (Agg), no ROS.
 """
@@ -34,125 +28,151 @@ from matplotlib.patches import Rectangle  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "mrn_coord"))
 
 from mrn_coord.battle import (  # noqa: E402
+    ALLIANCE_NAMES,
     BLUE,
+    GREEN,
     RED,
     TEAM_NAMES,
-    BattleConfig,
-    run_battle,
+    YELLOW,
+    battle_scenario,
+    simulate,
 )
 
 BG = "#0b0e14"
-PANEL = "#141a26"
 INK = "#e6edf3"
 MUTED = "#8b95a7"
-TEAM_COLOR = {RED: (1.00, 0.36, 0.36), BLUE: (0.36, 0.55, 1.00)}
-TEAM_HEX = {RED: "#ff5b5b", BLUE: "#5b8cff"}
-FLASH_LIFE = 7   # frames a death flash lives
+TEAM_COLOR = {
+    RED: (1.00, 0.36, 0.36),
+    BLUE: (0.36, 0.55, 1.00),
+    GREEN: (0.36, 0.85, 0.45),
+    YELLOW: (0.96, 0.80, 0.30),
+}
+TEAM_HEX = {
+    RED: "#ff5b5b",
+    BLUE: "#5b8cff",
+    GREEN: "#5bd96f",
+    YELLOW: "#f5cc4d",
+}
+ALLIANCE_HEX = {0: "#ff7a6a", 1: "#6a9cff"}
+KIND_SIZE = {"": 70, "scout": 34, "soldier": 64, "tank": 150, "sniper": 58}
+FLASH_LIFE = 7
 
 
 def _rgba(team, hp):
     r, g, b = TEAM_COLOR[team]
-    a = 0.28 + 0.72 * max(0.0, min(1.0, hp))   # wounded fade out
+    a = 0.28 + 0.72 * max(0.0, min(1.0, hp))
     return (r, g, b, a)
+
+
+def _alliance_totals(counts, teams, alliances):
+    totals = {}
+    for team, c in zip(teams, counts):
+        aid = alliances.get(team, team)
+        totals[aid] = totals.get(aid, 0) + c
+    return totals
 
 
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default="out/battle.gif")
-    ap.add_argument("--seed", type=int, default=19)
-    ap.add_argument("--n", type=int, default=14, help="robots per team")
-    ap.add_argument("--fps", type=int, default=24)
-    ap.add_argument("--stride", type=int, default=2,
-                    help="render every Nth simulation tick")
+    ap.add_argument("--out", default="docs/media/battle.gif")
+    ap.add_argument("--fps", type=int, default=18)
+    ap.add_argument("--stride", type=int, default=4,
+                    help="record every Nth simulation tick")
+    ap.add_argument("--max-ticks", type=int, default=1000)
     args = ap.parse_args()
 
-    cfg = BattleConfig()
-    res = run_battle(args.n, cfg, seed=args.seed)
+    bots, cfg, title = battle_scenario("grand_alliance")
+    res = simulate(bots, cfg, max_ticks=args.max_ticks, frame_stride=args.stride)
     nframes = len(res.frames)
-    win_name = TEAM_NAMES.get(res.winner, "draw")
+    teams = res.teams
+    alliances = res.alliances
+    n0 = {t: sum(1 for b in bots if b.team == t) for t in teams}
+    win_alliance = res.winning_alliance
+    win_name = (ALLIANCE_NAMES.get(win_alliance, "draw").upper()
+                if win_alliance is not None else "DRAW")
 
-    # detect eliminations: a bot alive at tick t but dead at t+1 → flash at t+1
-    deaths = {}   # tick -> list of (x, y, team)
+    deaths = {}
     for t in range(nframes - 1):
-        cur, nxt = res.frames[t], res.frames[t + 1]
-        for (b0, b1) in zip(cur, nxt):
+        for (b0, b1) in zip(res.frames[t], res.frames[t + 1]):
             if b0[4] and not b1[4]:
                 deaths.setdefault(t + 1, []).append((b1[0], b1[1], b1[2]))
 
-    ticks = list(range(0, nframes, args.stride))
-    if ticks[-1] != nframes - 1:
-        ticks.append(nframes - 1)
-    ticks += [nframes - 1] * (args.fps)   # hold on the result
+    ticks = list(range(0, nframes, 1))
+    ticks += [nframes - 1] * args.fps
 
-    fig, ax = plt.subplots(figsize=(9.2, 6.0))
+    fig, ax = plt.subplots(figsize=(14.0, 6.8))
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG)
     ax.set_xlim(0, cfg.width)
-    ax.set_ylim(-2.6, cfg.height + 2.4)  # headroom for the HUD (bottom) + title (top)
+    ax.set_ylim(-2.8, cfg.height + 2.2)
     ax.set_aspect("equal")
     ax.axis("off")
-
-    # battlefield frame
     ax.add_patch(Rectangle((0, 0), cfg.width, cfg.height, fill=False,
                            edgecolor="#222a38", lw=1.5))
 
-    # HUD: title + two tally bars just under the arena floor
-    ax.text(cfg.width / 2, cfg.height + 0.7,
-            "SWARM  BATTLE  —  two flocking armies, last robot standing",
+    ax.text(cfg.width / 2, cfg.height + 0.9,
+            "GRAND ALLIANCE WAR — four armies, two allied fronts",
             color=INK, fontsize=13, fontweight="bold", ha="center", va="bottom")
-    bar_y, bar_h, half = -1.9, 1.1, cfg.width / 2 - 1.5
-    red_lab = ax.text(1.5, bar_y + bar_h + 0.15, "", color=TEAM_HEX[RED],
-                      fontsize=12, fontweight="bold", ha="left", va="bottom")
-    blue_lab = ax.text(cfg.width - 1.5, bar_y + bar_h + 0.15, "",
-                       color=TEAM_HEX[BLUE], fontsize=12, fontweight="bold",
+    ax.text(cfg.width / 2, cfg.height + 0.2, title,
+            color=MUTED, fontsize=9, ha="center", va="bottom")
+
+    bar_y, bar_h = -2.1, 1.0
+    half = cfg.width / 2 - 2.0
+    west_lab = ax.text(2.0, bar_y + bar_h + 0.15, "", color=ALLIANCE_HEX[0],
+                       fontsize=11, fontweight="bold", ha="left", va="bottom")
+    east_lab = ax.text(cfg.width - 2.0, bar_y + bar_h + 0.15, "",
+                       color=ALLIANCE_HEX[1], fontsize=11, fontweight="bold",
                        ha="right", va="bottom")
-    ax.add_patch(Rectangle((1.5, bar_y), half, bar_h, fill=False,
+    ax.add_patch(Rectangle((2.0, bar_y), half, bar_h, fill=False,
                            edgecolor="#2a3242", lw=1.0))
-    ax.add_patch(Rectangle((cfg.width / 2 + 1.5, bar_y), half, bar_h, fill=False,
+    ax.add_patch(Rectangle((cfg.width / 2 + 2.0, bar_y), half, bar_h, fill=False,
                            edgecolor="#2a3242", lw=1.0))
-    red_bar = Rectangle((1.5 + half, bar_y), 0.0, bar_h,
-                        facecolor=TEAM_HEX[RED], edgecolor="none")
-    blue_bar = Rectangle((cfg.width / 2 + 1.5, bar_y), 0.0, bar_h,
-                         facecolor=TEAM_HEX[BLUE], edgecolor="none")
-    ax.add_patch(red_bar)
-    ax.add_patch(blue_bar)
+    west_bar = Rectangle((2.0 + half, bar_y), 0.0, bar_h,
+                         facecolor=ALLIANCE_HEX[0], edgecolor="none")
+    east_bar = Rectangle((cfg.width / 2 + 2.0, bar_y), 0.0, bar_h,
+                         facecolor=ALLIANCE_HEX[1], edgecolor="none")
+    ax.add_patch(west_bar)
+    ax.add_patch(east_bar)
+    team_lab = ax.text(cfg.width / 2, bar_y - 0.55, "", color=MUTED,
+                       fontsize=8, ha="center", va="top", family="monospace")
 
     bots_scatter = ax.scatter([], [], s=150, zorder=5, edgecolors="#0b0e14",
-                              linewidths=0.8)
-    fire = LineCollection([], linewidths=1.1, zorder=3)
+                              linewidths=0.6)
+    fire = LineCollection([], linewidths=0.9, zorder=3)
     ax.add_collection(fire)
-    flash_scatter = ax.scatter([], [], s=[], facecolors="none", linewidths=1.6,
+    flash_scatter = ax.scatter([], [], s=[], facecolors="none", linewidths=1.4,
                                zorder=6)
     banner = ax.text(cfg.width / 2, cfg.height / 2, "", ha="center", va="center",
-                     fontsize=30, fontweight="bold", zorder=10, alpha=0.0)
+                     fontsize=28, fontweight="bold", zorder=10, alpha=0.0)
 
-    n0 = args.n
+    n0_west = sum(n0[t] for t in teams if alliances.get(t, t) == 0)
+    n0_east = sum(n0[t] for t in teams if alliances.get(t, t) == 1)
 
     def update(fi):
         t = ticks[fi]
         frame = res.frames[t]
-        xs, ys, cols = [], [], []
-        for (x, y, team, hp, alive) in frame:
+        xs, ys, cols, sizes = [], [], [], []
+        for (x, y, team, hp, alive, kind) in frame:
             if not alive:
                 continue
             xs.append(x)
             ys.append(y)
             cols.append(_rgba(team, hp))
+            sizes.append(KIND_SIZE.get(kind, 64))
         bots_scatter.set_offsets(list(zip(xs, ys)) if xs else [(0, 0)])
         bots_scatter.set_facecolors(cols if cols else [(0, 0, 0, 0)])
+        bots_scatter.set_sizes(sizes if sizes else [0])
 
-        # firing lines for this tick
         segs, fcols = [], []
         for (ax0, ay0, bx, by, team) in res.shots[t]:
             segs.append([(ax0, ay0), (bx, by)])
             r, g, b = TEAM_COLOR[team]
-            fcols.append((r, g, b, 0.5))
+            fcols.append((r, g, b, 0.45))
         fire.set_segments(segs)
         fire.set_color(fcols if fcols else "none")
 
-        # active death flashes (expanding fading rings)
         fx, fy, fs, fc = [], [], [], []
         for dt in range(FLASH_LIFE):
             born = t - dt
@@ -160,28 +180,35 @@ def main():
                 age = dt / FLASH_LIFE
                 fx.append(x)
                 fy.append(y)
-                fs.append(150 + 950 * age)
+                fs.append(120 + 900 * age)
                 r, g, b = TEAM_COLOR[team]
                 fc.append((r, g, b, 0.9 * (1.0 - age)))
         flash_scatter.set_offsets(list(zip(fx, fy)) if fx else [(0, 0)])
         flash_scatter.set_sizes(fs if fs else [0])
         flash_scatter.set_edgecolors(fc if fc else [(0, 0, 0, 0)])
 
-        red, blue = res.counts[min(t, len(res.counts) - 1)]
-        red_bar.set_width(half * red / n0)
-        red_bar.set_x(1.5 + half - half * red / n0)   # grows from the centre out
-        blue_bar.set_width(half * blue / n0)
-        red_lab.set_text(f"RED  {red}")
-        blue_lab.set_text(f"{blue}  BLUE")
+        counts = res.counts[min(t, len(res.counts) - 1)]
+        totals = _alliance_totals(counts, teams, alliances)
+        west = totals.get(0, 0)
+        east = totals.get(1, 0)
+        west_bar.set_width(half * west / max(n0_west, 1))
+        west_bar.set_x(2.0 + half - half * west / max(n0_west, 1))
+        east_bar.set_width(half * east / max(n0_east, 1))
+        west_lab.set_text(f"WESTERN  {west}")
+        east_lab.set_text(f"{east}  EASTERN")
 
-        # winner banner once the result is in
-        if t >= nframes - 1 and res.winner is not None:
-            banner.set_text(f"{win_name.upper()}  WINS")
-            banner.set_color(TEAM_HEX[res.winner])
+        parts = []
+        for team, c in zip(teams, counts):
+            parts.append(f"{TEAM_NAMES[team]} {c}/{n0[team]}")
+        team_lab.set_text("  ·  ".join(parts))
+
+        if t >= nframes - 1 and win_alliance is not None:
+            banner.set_text(f"{win_name}  WINS")
+            banner.set_color(ALLIANCE_HEX[win_alliance])
             banner.set_alpha(0.92)
-        return [bots_scatter, fire, flash_scatter, red_bar, blue_bar, banner]
+        return [bots_scatter, fire, flash_scatter, west_bar, east_bar, banner]
 
-    fig.subplots_adjust(left=0.02, right=0.98, top=0.97, bottom=0.02)
+    fig.subplots_adjust(left=0.02, right=0.98, top=0.95, bottom=0.02)
     anim = FuncAnimation(fig, update, frames=len(ticks),
                          interval=1000 / args.fps, blit=False)
     os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
@@ -189,8 +216,7 @@ def main():
               savefig_kwargs={"facecolor": BG})
     plt.close(fig)
     _optimize_gif(args.out, args.fps)
-    print(f"wrote {args.out}  (seed {args.seed}: {win_name} wins in {res.ticks} "
-          f"ticks, survivors red={res.survivors[RED]} blue={res.survivors[BLUE]})")
+    print(f"wrote {args.out}  ({len(bots)} bots, {res.ticks} ticks -> {win_name})")
 
 
 def _optimize_gif(path, fps):

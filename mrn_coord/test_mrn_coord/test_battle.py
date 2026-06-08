@@ -172,7 +172,7 @@ class TestScenarios(unittest.TestCase):
     def test_all_scenarios_are_decisive(self):
         for name in SCENARIO_NAMES:
             bots, cfg, title = battle_scenario(name)
-            limit = 1000 if name == "kingdom" else 900
+            limit = 1000 if name in ("kingdom", "grand_alliance") else 900
             res = simulate(bots, cfg, max_ticks=limit)
             self.assertIsNotNone(res.winner, f"{name} stalled")
             self.assertTrue(title)

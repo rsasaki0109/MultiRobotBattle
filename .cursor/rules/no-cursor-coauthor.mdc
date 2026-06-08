@@ -1,0 +1,10 @@
+---
+description: Never add Cursor Co-authored-by trailer to git commits
+alwaysApply: true
+---
+
+# Git commits — no Cursor co-author
+
+- **Never** add `Co-authored-by: Cursor <cursoragent@cursor.com>` (or any Cursor co-author trailer) to commit messages.
+- Commit messages should contain only the user's authorship and the actual change summary.
+- If a hook or tool auto-appends it, do not use that path; write commits with a plain `git commit -m "$(cat <<'EOF' ... EOF)"` heredoc and verify with `git log -1 --format=full` that no Co-authored-by line is present.

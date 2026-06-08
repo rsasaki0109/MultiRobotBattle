@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from ..battle_teams import teams_are_enemies
 from .tokens import BattleObservation, build_observation
 
 
@@ -38,7 +39,7 @@ class NearestPolicy:
             if j == index:
                 continue
             other = live[j]
-            if other.team == me.team:
+            if not teams_are_enemies(cfg.alliances, me.team, other.team):
                 continue
             d = math.hypot(me.x - other.x, me.y - other.y)
             if d < bd:
@@ -64,7 +65,7 @@ class CountAwarePolicy:
 
     def decide(self, live, index, cfg, *, spatial=None):
         obs = build_observation(live, index, perception=cfg.perception,
-                                spatial=spatial)
+                                spatial=spatial, alliances=cfg.alliances)
         if not obs.enemy_tokens:
             return None
         target = self._pick_target(live, index, obs, cfg)
@@ -136,7 +137,7 @@ class CountAwarePolicy:
         # fall back to nearest enemy
         best, bd = None, float("inf")
         for j, other in enumerate(live):
-            if other.team == me.team:
+            if not teams_are_enemies(cfg.alliances, me.team, other.team):
                 continue
             d = math.hypot(me.x - other.x, me.y - other.y)
             if d < bd:

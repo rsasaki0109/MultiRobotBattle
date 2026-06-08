@@ -171,7 +171,10 @@ def decode_output(raw, enemy_indices, live, index, cfg):
     if best_slot is None:
         return None
     target = enemy_indices[best_slot]
-    if target < 0 or target >= len(live) or live[target].team == live[index].team:
+    from ..battle_teams import teams_are_enemies
+    if (target < 0 or target >= len(live)
+            or not teams_are_enemies(cfg.alliances, live[index].team,
+                                     live[target].team)):
         return None
     return TacticalDecision(target_index=target,
                             pursue_scale=pursue,
@@ -192,7 +195,7 @@ class TransformerPolicy:
 
     def decide(self, live, index, cfg, *, spatial=None):
         obs = build_observation(live, index, perception=cfg.perception,
-                                spatial=spatial)
+                                spatial=spatial, alliances=cfg.alliances)
         if not obs.enemy_tokens:
             return None
         self_feat, allies, enemies, enemy_indices = encode_features(

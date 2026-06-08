@@ -12,6 +12,7 @@ import math
 from dataclasses import dataclass, field
 
 from .battle_maneuver import _nearest_free, grid_from_battle, world_to_cell
+from .battle_teams import teams_are_enemies
 from .lifelong.allocation import INF, hungarian
 from .mapf.cbs_ta import _bfs_dist, _murty
 
@@ -157,7 +158,8 @@ def team_assignments(live, cfg):
         mode = assignment_mode_for_team(team, cfg)
         if mode not in ("hungarian", "cbs_ta"):
             continue
-        enemies = [j for j, b in enumerate(live) if b.team != team]
+        enemies = [j for j, b in enumerate(live)
+                   if teams_are_enemies(cfg.alliances, team, b.team)]
         if mode == "hungarian":
             targets.update(_hungarian_for_team(live, allies, enemies, cfg))
         else:
@@ -175,7 +177,8 @@ def hungarian_assignments(live, cfg):
     for team, allies in by_team.items():
         if assignment_mode_for_team(team, cfg) != "hungarian":
             continue
-        enemies = [j for j, b in enumerate(live) if b.team != team]
+        enemies = [j for j, b in enumerate(live)
+                   if teams_are_enemies(cfg.alliances, team, b.team)]
         targets.update(_hungarian_for_team(live, allies, enemies, cfg))
     return targets
 
