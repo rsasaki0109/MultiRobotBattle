@@ -187,6 +187,27 @@ def _run_mapf_total_war_side(side, *, seeds, n=18, max_ticks=650):
     }
 
 
+def _run_ctf_mapf_side(side, *, seeds, n=10, max_ticks=900):
+    """CTF contest — Hungarian+greedy (local) vs CBS-TA+MAPF, pinned per side."""
+    from mrn_coord.battle import BLUE, RED, clone_bots, ctf_mapf_pair, simulate
+
+    wins = {RED: 0, BLUE: 0, None: 0}
+    for seed in seeds:
+        spawn, cfg_local, cfg_mapf, _ = ctf_mapf_pair(n=n, seed=seed)
+        cfg = cfg_local if side == "local" else cfg_mapf
+        res = simulate(clone_bots(spawn), cfg, max_ticks=max_ticks)
+        wins[res.winner if res.winner is not None else None] += 1
+    n = len(seeds)
+    return {
+        "side": side,
+        "n_seeds": n,
+        "red_win_rate": wins[RED] / n,
+        "blue_win_rate": wins[BLUE] / n,
+        "draw_rate": wins[None] / n,
+        "decisive_rate": 1.0 - wins[None] / n,
+    }
+
+
 def collect_metrics(*, seeds):
     metrics = {}
     for tactics in ("nearest", "count_aware", "transformer"):
@@ -217,6 +238,8 @@ def collect_metrics(*, seeds):
     slow = seeds[: min(_SLOW_MATCHUP_SEEDS, len(seeds))]
     metrics["mapf_total_war_local"] = _run_mapf_total_war_side("local", seeds=slow)
     metrics["mapf_total_war_mapf"] = _run_mapf_total_war_side("mapf", seeds=slow)
+    metrics["ctf_mapf_local"] = _run_ctf_mapf_side("local", seeds=slow)
+    metrics["ctf_mapf_mapf"] = _run_ctf_mapf_side("mapf", seeds=slow)
     return metrics
 
 

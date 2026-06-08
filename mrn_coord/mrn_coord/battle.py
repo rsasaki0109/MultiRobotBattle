@@ -319,6 +319,42 @@ def mapf_total_war_pair(*, n=18, seed=8):
     return spawn, cfg_local, cfg_mapf, titles
 
 
+CTF_CONTEST_KW = dict(
+    objective="ctf",
+    objective_radius=3.2,
+    base_radius=4.2,
+    tactics="count_aware",
+    formation="wedge",
+    maneuver_replan_ticks=12,
+    assignment_replan_ticks=12,
+)
+
+
+def ctf_mapf_pair(*, n=10, seed=10):
+    """Same CTF spawn, two configs — Hungarian+greedy vs CBS-TA+prioritized MAPF."""
+    cfg_base = BattleConfig(**CTF_CONTEST_KW)
+    spawn = make_armies(n, cfg_base, seed=seed)
+    cfg_local = BattleConfig(
+        **CTF_CONTEST_KW,
+        assignment="none",
+        assignment_by_team={RED: "hungarian"},
+        maneuver="greedy",
+        maneuver_by_team={BLUE: "greedy"},
+    )
+    cfg_mapf = BattleConfig(
+        **CTF_CONTEST_KW,
+        assignment="none",
+        assignment_by_team={RED: "cbs_ta"},
+        maneuver="greedy",
+        maneuver_by_team={RED: "prioritized", BLUE: "greedy"},
+    )
+    titles = (
+        "Hungarian + greedy",
+        "CBS-TA + prioritized MAPF",
+    )
+    return spawn, cfg_local, cfg_mapf, titles
+
+
 def kingdom_config(**overrides):
     """Wide arena defaults for hundred-bot clashes."""
     base = dict(
@@ -770,7 +806,8 @@ def run_battle(n_per_team=14, cfg=None, *, seed=0, max_ticks=800, num_teams=2):
 # ``scripts/make_battle_gallery_gif.py``.
 SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "maneuver_duel", "mapf_stack_duel", "mapf_total_war_local",
-                  "mapf_total_war_mapf", "kingdom", "grand_alliance",
+                  "mapf_total_war_mapf", "ctf_mapf_local", "ctf_mapf_mapf",
+                  "kingdom", "grand_alliance",
                   "hill", "domination", "ctf")
 
 ALLIANCE_NAMES = {0: "western", 1: "eastern"}
@@ -965,5 +1002,10 @@ def battle_scenario(name):
         spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
         cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf
         title = f"MAPF total war — {titles[0 if name == 'mapf_total_war_local' else 1]}"
+        return (clone_bots(spawn), cfg, title)
+    if name in ("ctf_mapf_local", "ctf_mapf_mapf"):
+        spawn, cfg_local, cfg_mapf, titles = ctf_mapf_pair()
+        cfg = cfg_local if name == "ctf_mapf_local" else cfg_mapf
+        title = f"CTF MAPF — {titles[0 if name == 'ctf_mapf_local' else 1]}"
         return (clone_bots(spawn), cfg, title)
     raise KeyError(name)

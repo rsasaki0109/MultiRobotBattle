@@ -7,8 +7,10 @@ algorithms** — regenerate any of them with the matching script:
 | --- | --- | --- |
 | `battle.gif` | `make_battle_gif.py` | RoboMaster-style total war — 576 bots, chassis + turrets |
 | `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid with RoboMaster chassis: duel / FFA / quality vs quantity / chokepoint |
+| `objective_triple.gif` | `make_objective_triple_gif.py` | hill · domination · CTF — three objective modes, RoboMaster chassis |
 | `objective_duel.gif` | `make_objective_gif.py` | hill vs domination — zone hold progress, RoboMaster chassis |
 | `ctf_duel.gif` | `make_ctf_gif.py` | capture the flag — centre pickup, score at home base, RoboMaster chassis |
+| `ctf_mapf.gif` | `make_ctf_mapf_gif.py` | CTF × MAPF — Hungarian+greedy vs CBS-TA+prioritized, RoboMaster chassis |
 | `maneuver_duel.gif` | `make_maneuver_gif.py` | greedy vs MAPF maneuver on the chokepoint |
 | `mapf_stack_duel.gif` | `make_mapf_stack_gif.py` | Hungarian+greedy vs CBS-TA+prioritized MAPF |
 | `mapf_total_war.gif` | `make_mapf_total_war_gif.py` | MAPF stack on 18 vs 18 KOTH — RoboMaster chassis side-by-side |

@@ -74,6 +74,10 @@ jobs:
           . /opt/ros/jazzy/setup.sh
           . install/setup.sh
           python3 scripts/battle_gate.py
+      - name: Tournament page
+        run: |
+          python3 scripts/make_tournament_page.py
+          git diff --exit-code docs/tournament.json
 
   # Independent of the ROS build: validate that our pure-Python ORCA agrees with
   # the reference RVO2 library it claims to port. RVO2 is built from source here

@@ -73,27 +73,25 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
 </p>
 
 <p align="center">
-  <img src="docs/media/objective_duel.gif" alt="Side-by-side objective battles on an open field: left panel is king of the hill — red and blue wedges fight for a dashed yellow circle at the centre and a hold meter climbs until one side secures consecutive control; right panel is domination — the same contest but progress accumulates over time in the zone until one army reaches the control threshold." width="820">
+  <img src="docs/media/objective_triple.gif" alt="Three RoboMaster-style objective battles side by side: king of the hill with a climbing hold meter, domination with cumulative zone control, and capture-the-flag with a yellow diamond flag between red and blue home bases — custom chassis fight forward until one side wins each mode." width="820">
 </p>
 
 <p align="center">
-  <em>Win conditions beyond annihilation — <strong>hill</strong> (consecutive hold)
-  vs <strong>domination</strong> (cumulative zone control) on the same contested
-  centre. Try with <code>battle_scenario("hill")</code> or
-  <code>battle_scenario("domination")</code>; render with
-  <code>python3 scripts/make_objective_gif.py</code>.</em>
+  <em>Win conditions beyond annihilation — <strong>hill</strong> (consecutive hold),
+  <strong>domination</strong> (cumulative zone control), and
+  <strong>capture the flag</strong> (grab centre, score at home) on the same engine.
+  Try with <code>battle_scenario("hill")</code>, <code>"domination"</code>, or
+  <code>"ctf"</code>; render all three with
+  <code>python3 scripts/make_objective_triple_gif.py</code> or individually with
+  <code>make_objective_gif.py</code> / <code>make_ctf_gif.py</code>.</em>
 </p>
 
 <p align="center">
-  <img src="docs/media/ctf_duel.gif" alt="Capture-the-flag on an open battlefield: a yellow diamond flag sits at the centre between red and blue home bases; robots fight forward, one side picks up the flag, runs home through laser fire, and scores when the carrier reaches its base circle." width="820">
-</p>
-
-<p align="center">
-  <em><strong>Capture the flag</strong> — grab the centre flag, fight your way home.
-  Carriers steer toward base; enemies intercept. Try
-  <code>battle_scenario("ctf")</code> or the
-  <a href="https://rsasaki0109.github.io/multirobot-battle/demo/battle.html">browser demo</a>;
-  matchup ladder in <a href="https://rsasaki0109.github.io/multirobot-battle/tournament.html">tournament.html</a>.</em>
+  <em><strong>Capture the flag</strong> meets the MAPF zoo — same spawn, two movement
+  stacks. Compare in the
+  <a href="https://rsasaki0109.github.io/multirobot-battle/demo/battle.html">browser demo</a>
+  or the matchup ladder in
+  <a href="https://rsasaki0109.github.io/multirobot-battle/tournament.html">tournament.html</a>.</em>
 </p>
 
 The battle stack is modular — swap one layer at a time and measure the effect
@@ -140,6 +138,17 @@ with ``scripts/battle_gate.py`` (pinned win-rates in
   the hill; red runs <strong>Hungarian + greedy</strong> (left) or
   <strong>CBS-TA + prioritized MAPF</strong> (right). Render with
   <code>python3 scripts/make_mapf_total_war_gif.py</code>.</em>
+</p>
+
+<p align="center">
+  <img src="docs/media/ctf_mapf.gif" alt="Side-by-side capture-the-flag contests with RoboMaster chassis: left panel uses Hungarian assignment and greedy pursuit; right panel stacks CBS-TA assignment with prioritized MAPF maneuver — both armies fight for a yellow diamond flag at the centre while carriers run home through laser fire." width="820">
+</p>
+
+<p align="center">
+  <em>MAPF on capture-the-flag — same 10 vs 10 spawn; red runs
+  <strong>Hungarian + greedy</strong> (left) or <strong>CBS-TA + prioritized MAPF</strong>
+  (right). Render with <code>python3 scripts/make_ctf_mapf_gif.py</code>; try the dual
+  panel in the browser demo.</em>
 </p>
 
 <p align="center">

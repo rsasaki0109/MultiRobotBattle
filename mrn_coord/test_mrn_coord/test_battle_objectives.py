@@ -80,6 +80,13 @@ class TestObjectives(unittest.TestCase):
         self.assertEqual(res.objective, "ctf")
         self.assertTrue(len(res.objective_zone) >= 3)
 
+    def test_ctf_mapf_pair_resolves(self):
+        for name in ("ctf_mapf_local", "ctf_mapf_mapf"):
+            bots, cfg, _ = battle_scenario(name)
+            res = simulate(bots, cfg, max_ticks=900)
+            self.assertIsNotNone(res.winner)
+            self.assertEqual(res.objective, "ctf")
+
 
 if __name__ == "__main__":
     unittest.main()

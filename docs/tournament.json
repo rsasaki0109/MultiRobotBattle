@@ -80,6 +80,24 @@
       "note": "Hill \u2014 CBS-TA + MAPF",
       "red_elo_delta": -676,
       "red_win_rate": 0.0
+    },
+    {
+      "blue_win_rate": 1.0,
+      "decisive_rate": 1.0,
+      "id": "ctf_mapf_local",
+      "label": "CTF \u00d7 MAPF (local)",
+      "note": "CTF \u2014 Hungarian + greedy",
+      "red_elo_delta": -676,
+      "red_win_rate": 0.0
+    },
+    {
+      "blue_win_rate": 1.0,
+      "decisive_rate": 1.0,
+      "id": "ctf_mapf_mapf",
+      "label": "CTF \u00d7 MAPF (MAPF)",
+      "note": "CTF \u2014 CBS-TA + MAPF",
+      "red_elo_delta": -676,
+      "red_win_rate": 0.0
     }
   ],
   "source": "benchmarks/expected_metrics/battle_gate.json"

@@ -24,6 +24,8 @@ MATCHUPS = (
     ("mapf_stack_vs_local_chokepoint", "Full MAPF stack vs local", "CBS-TA + prioritized"),
     ("mapf_total_war_local", "MAPF total war (local)", "Hill — Hungarian + greedy"),
     ("mapf_total_war_mapf", "MAPF total war (MAPF)", "Hill — CBS-TA + MAPF"),
+    ("ctf_mapf_local", "CTF × MAPF (local)", "CTF — Hungarian + greedy"),
+    ("ctf_mapf_mapf", "CTF × MAPF (MAPF)", "CTF — CBS-TA + MAPF"),
 )
 
 

@@ -13,6 +13,7 @@ from mrn_coord.battle import (
     TEAM_NAMES,
     battle_scenario,
     clone_bots,
+    ctf_mapf_pair,
     mapf_total_war_pair,
     simulate,
 )
@@ -24,6 +25,7 @@ SCENARIOS = {
     "maneuver_duel": {"max_ticks": 550, "frame_stride": 2},
     "mapf_stack_duel": {"max_ticks": 550, "frame_stride": 2},
     "mapf_total_war": {"max_ticks": 650, "frame_stride": 2, "dual": True},
+    "ctf_mapf": {"max_ticks": 900, "frame_stride": 2, "dual": True},
     "grand_alliance_lite": {"max_ticks": 800, "frame_stride": 4},
     "kingdom_lite": {"max_ticks": 800, "frame_stride": 4},
     "hill": {"max_ticks": 650, "frame_stride": 2},
@@ -108,12 +110,32 @@ def _run_dual_mapf_total_war(opts):
     }
 
 
+def _run_dual_ctf_mapf(opts):
+    stride = opts["frame_stride"]
+    spawn, cfg_local, cfg_mapf, titles = ctf_mapf_pair()
+    panels = []
+    for cfg, short in ((cfg_local, titles[0]), (cfg_mapf, titles[1])):
+        res = simulate(clone_bots(spawn), cfg, max_ticks=opts["max_ticks"],
+                       frame_stride=stride)
+        panels.append(_pack_result(spawn, cfg, res, scenario_name="ctf_mapf",
+                                   title=short, stride=stride))
+    return {
+        "ok": True,
+        "dual": True,
+        "title": f"CTF × MAPF — {len(spawn)} robots, capture the flag",
+        "scenario": "ctf_mapf",
+        "panels": panels,
+    }
+
+
 def run(scenario_name: str) -> str:
     """Simulate ``scenario_name`` and return a JSON string for the animator."""
     try:
         if scenario_name not in SCENARIOS:
             return json.dumps({"ok": False, "error": "unknown scenario: %s" % scenario_name})
         opts = SCENARIOS[scenario_name]
+        if scenario_name == "ctf_mapf":
+            return json.dumps(_run_dual_ctf_mapf(opts))
         if opts.get("dual"):
             return json.dumps(_run_dual_mapf_total_war(opts))
         stride = opts["frame_stride"]
