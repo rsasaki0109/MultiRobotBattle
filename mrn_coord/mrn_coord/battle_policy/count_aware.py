@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass
 
 from ..battle_teams import teams_are_enemies
+from ..battle_fog import visible_enemy_indices
 from .tokens import BattleObservation, build_observation
 
 
@@ -30,6 +31,17 @@ class NearestPolicy:
 
     def decide(self, live, index, cfg, *, spatial=None):
         me = live[index]
+        if cfg.fog_of_war:
+            visible = visible_enemy_indices(live, index, cfg)
+            if not visible:
+                return None
+            best, bd = -1, float("inf")
+            for j in visible:
+                other = live[j]
+                d = math.hypot(me.x - other.x, me.y - other.y)
+                if d < bd:
+                    bd, best = d, j
+            return TacticalDecision(target_index=best)
         positions = [(b.x, b.y) for b in live]
         best, bd = -1, float("inf")
         scan = (spatial.query_disk(me.x, me.y,
@@ -65,7 +77,7 @@ class CountAwarePolicy:
 
     def decide(self, live, index, cfg, *, spatial=None):
         obs = build_observation(live, index, perception=cfg.perception,
-                                spatial=spatial, alliances=cfg.alliances)
+                                spatial=spatial, alliances=cfg.alliances, cfg=cfg)
         if not obs.enemy_tokens:
             return None
         target = self._pick_target(live, index, obs, cfg)
@@ -134,11 +146,15 @@ class CountAwarePolicy:
         if best_j is not None:
             return best_j
 
-        # fall back to nearest enemy
+        # fall back to nearest visible enemy
         best, bd = None, float("inf")
-        for j, other in enumerate(live):
-            if not teams_are_enemies(cfg.alliances, me.team, other.team):
-                continue
+        if cfg.fog_of_war:
+            scan = visible_enemy_indices(live, index, cfg)
+        else:
+            scan = [j for j, other in enumerate(live)
+                    if teams_are_enemies(cfg.alliances, me.team, other.team)]
+        for j in scan:
+            other = live[j]
             d = math.hypot(me.x - other.x, me.y - other.y)
             if d < bd:
                 bd, best = d, j

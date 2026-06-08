@@ -153,8 +153,10 @@ invariants) → gate → record the honest result.
   browser demo, and ``battle_gate`` pin.
   **Escort** (`escort`) — push the payload to the enemy HQ — landed with ``escort.gif``,
   browser demo, and ``battle_gate`` pin.
-- [ ] **Fog of war** — units only sense enemies within range (reuse the `mrn_sim`
+- [x] **Fog of war** — units only sense enemies within range (reuse the `mrn_sim`
   V2V / range sensor models), so scouting, ambush, and surprise become real.
+  **Fog ambush** (`fog_ambush`) — limited sensing + scout-led contact — landed with
+  ``fog_ambush.gif``, browser demo, and ``battle_gate`` pin.
 
 ### Drive the battle with the MAPF zoo (the synergy)
 The repo's rare asset is 50 faithfully-reproduced, benchmark-gated planners. The

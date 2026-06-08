@@ -93,6 +93,17 @@ sniper, so quality-vs-quantity falls out), and **terrain** that splits the field
 </p>
 
 <p align="center">
+  <img src="docs/media/fog_ambush.gif" alt="Fog of war dual panel: left shows the full spectator map, right shows red team vision where unseen blue robots are hidden until scouts make contact — count-aware wedge strikes after contact." width="820">
+</p>
+
+<p align="center">
+  <em><strong>Fog of war</strong> — robots only sense enemies within range (and line
+  of sight). Scouts spot first; count-aware focus fire after contact. Try
+  <code>battle_scenario("fog_ambush")</code> or
+  <code>python3 scripts/make_fog_gif.py</code>.</em>
+</p>
+
+<p align="center">
   <em><strong>Capture the flag</strong> meets the MAPF zoo — same spawn, two movement
   stacks. Compare in the
   <a href="https://rsasaki0109.github.io/MultiRobotBattle/demo/battle.html">browser demo</a>

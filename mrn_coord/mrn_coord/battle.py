@@ -29,6 +29,9 @@ is no central commander — yet coherent battlefield behaviour emerges:
 - **planned maneuver** (optional) — :mod:`mrn_coord.battle_maneuver` swaps the
   movement layer for grid A* / prioritized / CBS / LaCAM-PIBT
   (``BattleConfig.maneuver``) while tactics still pick targets.
+- **fog of war** (optional) — :mod:`mrn_coord.battle_fog` limits each robot to
+  enemies within ``sense_range`` (and optionally line of sight through terrain),
+  so scouting and ambush matter; scouts / snipers see farther.
 
 The one tactically interesting consequence is **focus fire for free**: damage is
 per-attacker, so a robot caught by three enemies at once takes triple damage.
@@ -81,6 +84,12 @@ from .battle_objectives import (
 )
 from .battle_teams import alliance_of, teams_are_enemies
 from .spatial_hash import SpatialHash
+from .battle_fog import (
+    blind_advance_vector,
+    can_see_enemy,
+    filter_decision,
+    team_visible_enemy_bot_indices,
+)
 from .battle_formations import formation_commands
 from .battle_maneuver import ManeuverState, maneuver_direction, maneuver_for_team, replan_paths
 from .battle_projectiles import (
@@ -218,6 +227,11 @@ class BattleConfig:
     escort_radius: float = 5.5  # allies within this range advance the payload
     payload_speed: float = 1.4
     payload_radius: float = 1.0
+    # fog of war — sense enemies only within range (and optionally LoS)
+    fog_of_war: bool = False
+    sense_range: float = None   # defaults to ``perception``; scouts see farther
+    fog_requires_los: bool = True
+    fog_view_team: int = None   # spectator view team for snapshots (defaults RED)
 
 
 @dataclass
@@ -235,6 +249,7 @@ class BattleResult:
     objective: str = "annihilation"
     objective_zone: tuple = field(default_factory=tuple)
     objective_progress: list = field(default_factory=list)
+    fog_visible: list = field(default_factory=list)  # per frame: enemy bot indices seen
     ticks: int = 0
     survivors: dict = field(default_factory=dict)
 
@@ -592,6 +607,8 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
                  for i in range(n)]
     decisions = apply_assignments(decisions, live, cfg,
                                   assignment_state=assignment_state, tick=tick)
+    if cfg.fog_of_war:
+        decisions = [filter_decision(d, live, i, cfg) for i, d in enumerate(decisions)]
     replan_paths(bots, live, decisions, cfg, maneuver_state, tick)
 
     def _formation_for(team):
@@ -689,6 +706,11 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
                 desired[i][0] += scale * dx / d
                 desired[i][1] += scale * dy / d
         if decision is None:
+            if cfg.fog_of_war and not ctf_mode and not escort_mode:
+                ux, uy = blind_advance_vector(b, cfg)
+                scale = cfg.w_pursue * 0.92
+                desired[i][0] += scale * ux
+                desired[i][1] += scale * uy
             continue
         best = decision.target_index
         if best < 0 or best >= n:
@@ -724,7 +746,7 @@ def battle_step(bots, cfg, *, maneuver_state=None, assignment_state=None,
             desired[i][0] += scale * ux
             desired[i][1] += scale * uy
         b_range = b.attack_range if b.attack_range is not None else cfg.attack_range
-        if bd <= b_range:
+        if bd <= b_range and (not cfg.fog_of_war or can_see_enemy(live, i, best, cfg)):
             _fire_at_target(b, e, bot_idx, bots.index(e), i, best, cfg, live,
                             damage=damage, shots=shots,
                             projectile_state=projectile_state, tick=tick,
@@ -892,6 +914,10 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
         if record:
             result.frames.append(_snapshot(bots))
             result.counts.append(_counts(bots, teams))
+            if cfg.fog_of_war:
+                view_team = cfg.fog_view_team if cfg.fog_view_team is not None else RED
+                result.fog_visible.append(
+                    team_visible_enemy_bot_indices(bots, cfg, view_team))
             if ctf_tracker is not None:
                 result.objective_progress.append(ctf_tracker.snapshot(bots, cfg))
             elif assault_tracker is not None:
@@ -941,6 +967,10 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
                 result.objective_progress.append(escort_tracker.snapshot())
             elif obj_tracker is not None:
                 result.objective_progress.append(obj_tracker.snapshot())
+            if cfg.fog_of_war:
+                view_team = cfg.fog_view_team if cfg.fog_view_team is not None else RED
+                result.fog_visible.append(
+                    team_visible_enemy_bot_indices(bots, cfg, view_team))
             result.shots.append([])
             result.projectiles.append([])
 
@@ -1003,7 +1033,7 @@ SCENARIO_NAMES = ("duel", "free_for_all", "quality_vs_quantity", "chokepoint",
                   "maneuver_duel", "mapf_stack_duel", "mapf_total_war_local",
                   "mapf_total_war_mapf", "ctf_mapf_local", "ctf_mapf_mapf",
                   "kingdom", "grand_alliance",
-                  "hill", "domination", "ctf", "base_assault", "escort")
+                  "hill", "domination", "ctf", "base_assault", "escort", "fog_ambush")
 
 MANEUVER_HEADLINE_MODES = ("greedy", "astar", "prioritized", "cbs")
 MANEUVER_HEADLINE_LABELS = {
@@ -1250,6 +1280,23 @@ def battle_scenario(name):
         )
         return (make_armies(12, cfg, seed=10), cfg,
                 "Escort — push the payload to the enemy HQ")
+    if name == "fog_ambush":
+        cfg = BattleConfig(
+            **arena_terrain(),
+            fog_of_war=True,
+            sense_range=8.0,
+            fog_requires_los=True,
+            tactics="count_aware",
+            tactics_by_team={RED: "count_aware", BLUE: "nearest"},
+            formation="wedge",
+            fire_mode="hitscan",
+        )
+        rng = random.Random(34)
+        red = make_company(cfg, RED, (cfg.width * 0.15, cfg.height * 0.5),
+                           [("scout", 4), ("soldier", 10)], rng, jitter=3.2)
+        blue = make_company(cfg, BLUE, (cfg.width * 0.85, cfg.height * 0.5),
+                            [("soldier", 12)], random.Random(35), jitter=3.2)
+        return (red + blue, cfg, "Fog ambush — scouts spot, wedge strikes")
     if name in ("mapf_total_war_local", "mapf_total_war_mapf"):
         spawn, cfg_local, cfg_mapf, titles = mapf_total_war_pair()
         cfg = cfg_local if name == "mapf_total_war_local" else cfg_mapf

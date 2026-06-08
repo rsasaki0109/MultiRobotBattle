@@ -12,6 +12,7 @@ algorithms** — regenerate any of them with the matching script:
 | `ctf_duel.gif` | `make_ctf_gif.py` | capture the flag — centre pickup, score at home base, RoboMaster chassis |
 | `base_assault.gif` | `make_base_assault_gif.py` | base assault — hold enemy HQ, tracer fire, capture progress |
 | `escort.gif` | `make_escort_gif.py` | escort — push payload to enemy HQ, spawn/goal rings, delivery progress |
+| `fog_ambush.gif` | `make_fog_gif.py` | fog of war — spectator vs red vision dual panel, scout contact |
 | `ctf_mapf.gif` | `make_ctf_mapf_gif.py` | CTF × MAPF — Hungarian+greedy vs CBS-TA+prioritized, RoboMaster chassis |
 | `maneuver_layers.gif` | `make_maneuver_gif.py` | 2×2 headline — greedy / A* / prioritized / CBS red vs greedy blue |
 | `maneuver_duel.gif` | *(legacy)* | prioritized MAPF red vs greedy blue — two-panel chokepoint |

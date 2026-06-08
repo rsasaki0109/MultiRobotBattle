@@ -60,6 +60,7 @@
     <div class="field">
       <label for="scenario">Scenario</label>
       <select id="scenario">
+        <option value="fog_ambush">fog ambush — limited vision, scout contact</option>
         <option value="escort">escort — push the payload to enemy HQ</option>
         <option value="base_assault">base assault — hold the enemy HQ</option>
         <option value="ctf">capture the flag — grab centre, score at home</option>
@@ -308,15 +309,34 @@ function drawPanel(s, frameIdx, region) {
     BattleRobotArt.drawProjectile(ctx, X, Y, sc, px, py, team);
   }
 
-  frame.forEach(([x, y, team, hp, kind], idx) => {
+  frame.forEach((row, idx) => {
+    const [x, y, team, hp, kind] = row;
+    const visible = row.length >= 6 ? row[5] : true;
     let px = x;
     let py = y;
     if (idx < prevFrame.length && prevFrame[idx][2] === team) {
       [px, py] = prevFrame[idx];
     }
     const heading = BattleRobotArt.inferHeading(x, y, px, py, team);
+    if (s.fog_of_war && visible === false) {
+      ctx.globalAlpha = 0.14;
+    }
     BattleRobotArt.drawRobotChassis(ctx, X, Y, sc, x, y, team, hp, kind, heading);
+    ctx.globalAlpha = 1.0;
   });
+
+  if (s.fog_of_war) {
+    ctx.fillStyle = "rgba(6, 8, 13, 0.10)";
+    ctx.fillRect(x0, y0, w, h);
+    const spotted = frame.some((row) => row.length >= 6 && row[2] !== 0 && row[5]);
+    if (!spotted) {
+      ctx.fillStyle = "rgba(6, 8, 13, 0.18)";
+      ctx.font = "11px system-ui,sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("blind advance", x0 + w / 2, y0 + h - 10);
+      ctx.textAlign = "left";
+    }
+  }
 }
 
 function formatTally(s, frameIdx) {

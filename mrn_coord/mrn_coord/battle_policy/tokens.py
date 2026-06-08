@@ -12,6 +12,7 @@ import math
 from dataclasses import dataclass, field
 
 from ..battle_teams import alliance_of, teams_are_enemies
+from ..battle_fog import can_see_enemy, sense_range_for
 
 
 @dataclass(frozen=True)
@@ -71,14 +72,16 @@ def _make_token(observer, other, heading, live_index):
 
 
 def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None,
-                      alliances=None):
+                      alliances=None, cfg=None):
     """Build a :class:`BattleObservation` for ``live[index]``."""
     me = live[index]
+    sense = sense_range_for(me, cfg) if cfg is not None and cfg.fog_of_war else perception
     positions = [(b.x, b.y) for b in live]
     enemies = []
     allies = []
+    query_r = sense * 2.5 if cfg is not None and cfg.fog_of_war else perception * 2.5
     if spatial is not None:
-        cand = spatial.query_disk(me.x, me.y, perception * 2.5, positions)
+        cand = spatial.query_disk(me.x, me.y, query_r, positions)
         for j in cand:
             if j == index:
                 continue
@@ -87,6 +90,8 @@ def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None
             if other.team == me.team:
                 allies.append((d, other, j))
             elif teams_are_enemies(alliances, me.team, other.team):
+                if cfg is not None and cfg.fog_of_war and not can_see_enemy(live, index, j, cfg):
+                    continue
                 enemies.append((d, other, j))
     else:
         for j, other in enumerate(live):
@@ -96,6 +101,8 @@ def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None
             if other.team == me.team:
                 allies.append((d, other, j))
             elif teams_are_enemies(alliances, me.team, other.team):
+                if cfg is not None and cfg.fog_of_war and not can_see_enemy(live, index, j, cfg):
+                    continue
                 enemies.append((d, other, j))
 
     allies.sort(key=lambda t: t[0])
@@ -109,8 +116,8 @@ def build_observation(live, index, *, perception=6.0, max_tokens=8, spatial=None
                         if alliance_of(alliances, b.team) != my_a)
     else:
         n_enemies = len(live) - n_allies
-    n_local_allies = sum(1 for d, _, _ in allies if d <= perception)
-    n_local_enemies = sum(1 for d, _, _ in enemies if d <= perception)
+    n_local_allies = sum(1 for d, _, _ in allies if d <= sense)
+    n_local_enemies = sum(1 for d, _, _ in enemies if d <= sense)
 
     teammate_tokens = [_make_token(me, o, heading, j)
                        for d, o, j in allies[:max_tokens]]

@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from .battle_fog import can_see_enemy
 from .battle_maneuver import _nearest_free, grid_from_battle, world_to_cell
 from .battle_teams import teams_are_enemies
 from .lifelong.allocation import INF, hungarian
@@ -204,6 +205,8 @@ def apply_assignments(decisions, live, cfg, *, assignment_state=None, tick=0):
         if decision is None or i not in assigns:
             continue
         t = assigns[i]
+        if cfg.fog_of_war and not can_see_enemy(live, i, t, cfg):
+            continue
         out[i] = type(decision)(
             target_index=t,
             pursue_scale=decision.pursue_scale,

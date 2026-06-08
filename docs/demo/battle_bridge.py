@@ -33,16 +33,21 @@ SCENARIOS = {
     "ctf": {"max_ticks": 900, "frame_stride": 2},
     "base_assault": {"max_ticks": 900, "frame_stride": 2},
     "escort": {"max_ticks": 900, "frame_stride": 2},
+    "fog_ambush": {"max_ticks": 900, "frame_stride": 2},
 }
 
 
-def _pack_frame(snapshot):
-    """Alive bots only: ``[x, y, team, hp_frac, kind]``."""
+def _pack_frame(snapshot, *, fog_visible=None, view_team=0):
+    """Alive bots only: ``[x, y, team, hp_frac, kind]`` or with trailing ``visible``."""
     out = []
-    for x, y, team, hp, alive, kind in snapshot:
+    vis = set(fog_visible or [])
+    for i, (x, y, team, hp, alive, kind) in enumerate(snapshot):
         if not alive:
             continue
-        out.append([round(x, 2), round(y, 2), team, round(hp, 3), kind or ""])
+        row = [round(x, 2), round(y, 2), team, round(hp, 3), kind or ""]
+        if fog_visible is not None:
+            row.append(team == view_team or i in vis)
+        out.append(row)
     return out
 
 
@@ -79,7 +84,14 @@ def _pack_result(bots, cfg, res, *, scenario_name, title, stride):
         "obstacles": [list(o) for o in cfg.obstacles],
         "walls": [list(w) for w in getattr(cfg, "walls", ())],
         "elevation": [list(z) for z in getattr(cfg, "elevation", ())],
-        "frames": [_pack_frame(fr) for fr in res.frames],
+        "frames": [
+            _pack_frame(
+                fr,
+                fog_visible=res.fog_visible[i] if cfg.fog_of_war else None,
+                view_team=cfg.fog_view_team if cfg.fog_view_team is not None else 0,
+            )
+            for i, fr in enumerate(res.frames)
+        ],
         "shots": [_pack_shots(sh) for sh in res.shots],
         "projectiles": [
             [[round(x, 2), round(y, 2), team] for (x, y, team) in fr]
@@ -92,6 +104,7 @@ def _pack_result(bots, cfg, res, *, scenario_name, title, stride):
         "objective_zone": _pack_zones(res.objective_zone),
         "objective_progress": res.objective_progress,
         "objective_hold_ticks": cfg.objective_hold_ticks,
+        "fog_of_war": bool(getattr(cfg, "fog_of_war", False)),
         "winner": winner,
         "winning_alliance": win_alliance,
         "n_bots": len(bots),
