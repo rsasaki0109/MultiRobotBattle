@@ -5,7 +5,7 @@ algorithms** — regenerate any of them with the matching script:
 
 | GIF | Script | Shows |
 | --- | --- | --- |
-| `battle.gif` | `make_battle_gif.py` | grand alliance war — four armies, two allied fronts |
+| `battle.gif` | `make_battle_gif.py` | total war — 576 robots, four armies, two allied fronts |
 | `battle_gallery.gif` | `make_battle_gallery_gif.py` | 2×2 grid: duel / FFA / quality vs quantity / chokepoint |
 | `maneuver_duel.gif` | `make_maneuver_gif.py` | greedy vs MAPF maneuver on the chokepoint |
 | `mapf_stack_duel.gif` | `make_mapf_stack_gif.py` | Hungarian+greedy vs CBS-TA+prioritized MAPF |

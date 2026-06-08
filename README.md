@@ -1,12 +1,12 @@
 # multirobot-battle
 
 <p align="center">
-  <img src="docs/media/battle.gif" alt="A wide kingdom-scale battlefield where four robot armies clash in battle lines: red and green on the western allied front versus blue and yellow on the eastern front. Soldier blocks hold the centre while scout flanks sweep the upper and lower edges; laser lines streak across the field, elimination flashes pop, alliance tally bars count down, and one allied coalition wins." width="820">
+  <img src="docs/media/battle.gif" alt="Total-war swarm battle on a wide dark battlefield: hundreds of tiny robot discs mass in infantry blocks, tank echelons, scout wedges and sniper lines. Red and green western armies charge east into blue and yellow eastern lines across a central no-man's-land; laser fire criss-crosses the front, casualty counters climb, and one allied coalition claims victory." width="820">
 </p>
 
 <p align="center">
-  <em>Four decentralized <strong>flocking armies</strong> in two allied fronts — red+green
-  vs blue+yellow — deploy in battle lines and fight until one alliance is eliminated.
+  <em><strong>Total war</strong> — four allied armies and <strong>576 robots</strong> in combined-arms
+  echelons (infantry, tanks, snipers) clash on a wide front until one coalition wins.
   Allied teams never fire on each other; each robot still flocks only with its own
   colour, chases the nearest enemy, and trades fire when in range. Damage is
   per-attacker, so <strong>focus fire emerges for free</strong> — and the battle is built on
@@ -41,7 +41,7 @@ It is built directly on the swarm flocking primitives in
 cohesion + mutual avoidance); the simulation lives in
 [`mrn_coord.battle`](mrn_coord/mrn_coord/battle.py), is pure Python (no numpy)
 and deterministic given the seed, and the hero GIF above is rendered straight
-from it (`python3 scripts/make_battle_gif.py --seed 19`). A wounded-retreat
+from it (`python3 scripts/make_battle_gif.py`). A wounded-retreat
 behaviour is available (`BattleConfig(retreat_frac=...)`) but off by default so
 the default battle always reaches a decisive result.
 

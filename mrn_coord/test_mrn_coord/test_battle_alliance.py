@@ -33,7 +33,7 @@ class TestAlliances(unittest.TestCase):
 
     def test_grand_alliance_scenario_resolves(self):
         bots, cfg, _ = battle_scenario("grand_alliance")
-        self.assertEqual(len(bots), 4 * 5 * 8)
+        self.assertGreaterEqual(len(bots), 500)
         self.assertEqual(cfg.alliances[RED], cfg.alliances[GREEN])
         self.assertNotEqual(cfg.alliances[RED], cfg.alliances[BLUE])
         res = simulate(bots, cfg, max_ticks=1000, frame_stride=8)

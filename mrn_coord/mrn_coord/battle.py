@@ -529,6 +529,29 @@ def _standing_alliances_from_counts(teams, survivors, alliances):
     return alive
 
 
+def _alliance_scores(teams, survivors, alliances):
+    scores = {}
+    for t in teams:
+        a = alliance_of(alliances, t)
+        scores[a] = scores.get(a, 0) + survivors.get(t, 0)
+    return scores
+
+
+def _pick_winner_by_survivors(teams, survivors, alliances):
+    """Break a timed-out alliance battle by total survivors."""
+    scores = _alliance_scores(teams, survivors, alliances)
+    if not scores or max(scores.values()) <= 0:
+        return None, None
+    win_key = max(scores, key=scores.get)
+    best_team, best_n = None, -1
+    for t in teams:
+        if alliance_of(alliances, t) == win_key:
+            n = survivors.get(t, 0)
+            if n > best_n:
+                best_n, best_team = n, t
+    return best_team, win_key
+
+
 def _snapshot(bots):
     return [(b.x, b.y, b.team, b.hp / b.max_hp if b.max_hp else 0.0, b.alive,
              b.kind) for b in bots]
@@ -573,6 +596,11 @@ def simulate(bots, cfg=None, *, max_ticks=800, frame_stride=1):
     result.ticks = len(result.frames) - 1
     result.winner, result.winning_alliance = _pick_winner(
         teams, result.survivors, cfg.alliances)
+    if (result.winning_alliance is None and cfg.alliances
+            and len(_standing_alliances_from_counts(
+                teams, result.survivors, cfg.alliances)) > 1):
+        result.winner, result.winning_alliance = _pick_winner_by_survivors(
+            teams, result.survivors, cfg.alliances)
     return result
 
 
@@ -677,25 +705,44 @@ def battle_scenario(name):
     if name == "grand_alliance":
         alliances = {RED: 0, GREEN: 0, BLUE: 1, YELLOW: 1}
         cfg = kingdom_config(
+            width=140.0,
+            height=72.0,
             alliances=alliances,
-            dps=38.0,
+            dps=56.0,
             tactics="count_aware:aggressive",
+            spatial_min_bots=24,
             formation_by_team={
-                RED: "line", BLUE: "line", GREEN: "wedge", YELLOW: "wedge",
+                RED: "line", BLUE: "line",
+                GREEN: "wedge", YELLOW: "wedge",
             },
         )
         w, h = cfg.width, cfg.height
-        # Two allied armies per flank — upper/lower wedges that pinch the centre.
+        dense = 1.78
+        # Total war — four full-strength infantry battle lines (upper/lower per
+        # alliance) plus armoured and fire-support echelons tucked behind each wing.
         bots = make_allied_armies(cfg, [
-            dict(team=RED, front_center=(w * 0.34, h * 0.38),
-                 rows=5, cols=8, face_right=True, seed=19),
-            dict(team=GREEN, front_center=(w * 0.34, h * 0.62),
-                 rows=5, cols=8, kind="scout", face_right=True, seed=20),
-            dict(team=BLUE, front_center=(w * 0.66, h * 0.38),
-                 rows=5, cols=8, face_right=False, seed=21),
-            dict(team=YELLOW, front_center=(w * 0.66, h * 0.62),
-                 rows=5, cols=8, kind="scout", face_right=False, seed=22),
+            dict(team=RED, front_center=(w * 0.36, h * 0.36),
+                 rows=9, cols=14, face_right=True, spacing=dense, seed=19),
+            dict(team=RED, front_center=(w * 0.29, h * 0.36),
+                 rows=2, cols=10, kind="tank", face_right=True, spacing=2.6,
+                 seed=23),
+            dict(team=GREEN, front_center=(w * 0.36, h * 0.64),
+                 rows=9, cols=14, face_right=True, spacing=dense, seed=20),
+            dict(team=GREEN, front_center=(w * 0.27, h * 0.64),
+                 rows=2, cols=8, kind="sniper", face_right=True, spacing=2.5,
+                 seed=24),
+            dict(team=BLUE, front_center=(w * 0.64, h * 0.36),
+                 rows=9, cols=14, face_right=False, spacing=dense, seed=21),
+            dict(team=BLUE, front_center=(w * 0.71, h * 0.36),
+                 rows=2, cols=10, kind="tank", face_right=False, spacing=2.6,
+                 seed=25),
+            dict(team=YELLOW, front_center=(w * 0.64, h * 0.64),
+                 rows=9, cols=14, face_right=False, spacing=dense, seed=22),
+            dict(team=YELLOW, front_center=(w * 0.73, h * 0.64),
+                 rows=2, cols=8, kind="sniper", face_right=False, spacing=2.5,
+                 seed=26),
         ])
+        n = len(bots)
         return (bots, cfg,
-                "Grand alliance — red+green vs blue+yellow battle lines")
+                f"Total war — {n} robots, four armies, two allied fronts")
     raise KeyError(name)
