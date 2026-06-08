@@ -121,6 +121,35 @@ def _run_chokepoint_matchup(*, seeds, n_per_team=8, max_ticks=650,
     }
 
 
+def _run_alliance_scenario(scenario_name, *, max_ticks=800):
+    """Deterministic allied-front scenario — must always pick a winning alliance."""
+    from mrn_coord.battle import battle_scenario, simulate
+
+    bots, cfg, _ = battle_scenario(scenario_name)
+    res = simulate(bots, cfg, max_ticks=max_ticks, frame_stride=4)
+    return {
+        "scenario": scenario_name,
+        "n_bots": len(bots),
+        "decisive_rate": 1.0 if res.winning_alliance is not None else 0.0,
+        "western_win_rate": 1.0 if res.winning_alliance == 0 else 0.0,
+        "ticks": res.ticks,
+    }
+
+
+def _run_kingdom_lite(*, max_ticks=800):
+    """Deterministic 40 vs 40 line clash."""
+    from mrn_coord.battle import RED, battle_scenario, simulate
+
+    bots, cfg, _ = battle_scenario("kingdom_lite")
+    res = simulate(bots, cfg, max_ticks=max_ticks, frame_stride=4)
+    return {
+        "n_bots": len(bots),
+        "decisive_rate": 1.0 if res.winner is not None else 0.0,
+        "red_win_rate": 1.0 if res.winner == RED else 0.0,
+        "ticks": res.ticks,
+    }
+
+
 def collect_metrics(*, seeds):
     metrics = {}
     for tactics in ("nearest", "count_aware", "transformer"):
@@ -143,6 +172,8 @@ def collect_metrics(*, seeds):
     metrics["mapf_stack_vs_local_chokepoint"] = _run_chokepoint_matchup(
         seeds=seeds, red_assignment="cbs_ta", blue_assignment="hungarian",
         red_maneuver="prioritized", blue_maneuver="greedy")
+    metrics["grand_alliance_lite"] = _run_alliance_scenario("grand_alliance_lite")
+    metrics["kingdom_lite"] = _run_kingdom_lite()
     return metrics
 
 
@@ -151,9 +182,15 @@ def _flatten_metrics(metrics):
     for key, block in metrics.items():
         if "decisive_rate" in block:
             out[f"{key}_rate"] = block["decisive_rate"]
+            out[f"{key}_decisive_rate"] = block["decisive_rate"]
         if "red_win_rate" in block:
             out[f"{key}_red_win_rate"] = block["red_win_rate"]
-            out[f"{key}_decisive_rate"] = block["decisive_rate"]
+        if "western_win_rate" in block:
+            out[f"{key}_western_win_rate"] = block["western_win_rate"]
+        if key == "grand_alliance_lite" and "n_bots" in block:
+            out["grand_alliance_lite_n_bots"] = block["n_bots"]
+        if key == "kingdom_lite" and "n_bots" in block:
+            out["kingdom_lite_n_bots"] = block["n_bots"]
     return out
 
 

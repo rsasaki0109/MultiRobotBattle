@@ -47,10 +47,10 @@
 <body>
 <header>
   <h1>Swarm <span class="z">battle</span> — fight in your browser</h1>
-  <p class="sub">Two flocking armies, last robot standing — the same pure-Python
-  engine that drives the repo's GIFs, running live via
+  <p class="sub">Multi-army swarm battles — duels, allied fronts, and kingdom-scale
+  lines — the same pure-Python engine that drives the repo's GIFs, running live via
   <a href="https://pyodide.org/" target="_blank" rel="noopener">Pyodide</a>.
-  Pick a scenario and watch red vs blue advance, fire, and collapse. Also try the
+  Pick a scenario and watch armies advance, fire, and collapse. Also try the
   <a href="./index.html">MAPF zoo demo</a>.</p>
 </header>
 
@@ -59,6 +59,8 @@
     <div class="field">
       <label for="scenario">Scenario</label>
       <select id="scenario">
+        <option value="grand_alliance_lite">allied fronts — 128 robots, red+green vs blue+yellow</option>
+        <option value="kingdom_lite">kingdom — 40 vs 40 battle lines</option>
         <option value="duel">duel — 14 vs 14 open field</option>
         <option value="chokepoint">chokepoint — wedge through terrain</option>
         <option value="maneuver_duel">maneuver duel — MAPF red vs greedy blue</option>
@@ -77,6 +79,7 @@
     <div class="tally" id="tally"></div>
     <div class="legend">
       <span class="red">● red</span><span class="blue">● blue</span>
+      <span style="color:#33d6a6">● green</span><span style="color:#ffd166">● yellow</span>
       <span>— laser line</span><span>▦ terrain</span>
     </div>
   </div>
@@ -144,8 +147,10 @@ async function fight() {
   if (!res.ok) { setStatus(res.error, true); current = null; draw(); return; }
   current = res;
   fi = 0;
-  const w = res.winner ? `<b>${res.winner.toUpperCase()}</b> wins` : "draw";
-  setStatus(`<b>${res.title}</b> — ${res.frames.length} frames (stride ${res.stride}), ${w}.`);
+  const w = res.winner ? `<b>${res.winner.toUpperCase()}</b> wins` : "";
+  const aw = res.winning_alliance ? `<b>${res.winning_alliance.toUpperCase()}</b> alliance wins` : "";
+  const outcome = aw || w || "draw";
+  setStatus(`<b>${res.title}</b> — ${res.n_bots} bots, ${res.frames.length} frames (stride ${res.stride}), ${outcome}.`);
   t0 = performance.now(); playing = true; $("play").textContent = "Pause";
   loop();
 }
@@ -178,7 +183,8 @@ function draw() {
   ctx.strokeStyle = "#8b95a7";
   ctx.lineWidth = 1;
   ctx.globalAlpha = 0.35;
-  for (const [x0, y0, x1, y1] of shots) {
+  for (const [x0, y0, x1, y1, team] of shots) {
+    ctx.strokeStyle = TEAM[team] || "#8b95a7";
     ctx.beginPath();
     ctx.moveTo(X(x0), Y(y0));
     ctx.lineTo(X(x1), Y(y1));
@@ -186,9 +192,10 @@ function draw() {
   }
   ctx.globalAlpha = 1;
 
-  for (const [x, y, team, hp] of frame) {
+  for (const [x, y, team, hp, kind] of frame) {
     const col = TEAM[team] || "#ccc";
-    const rad = 4 + 3 * hp;
+    const base = kind === "tank" ? 7 : kind === "scout" ? 3 : kind === "sniper" ? 4 : 5;
+    const rad = base + 2 * hp;
     ctx.fillStyle = col;
     ctx.beginPath();
     ctx.arc(X(x), Y(y), rad, 0, 7);
@@ -196,10 +203,27 @@ function draw() {
   }
 
   const counts = s.counts[Math.min(fi, s.counts.length - 1)] || [];
-  tallyEl.innerHTML = s.teams.map((t, i) => {
-    const cls = t === 0 ? "red" : t === 1 ? "blue" : "";
-    return `<span class="${cls}">${TEAM_LABEL[t] || t}: ${counts[i] ?? 0}</span>`;
-  }).join("");
+  const al = s.alliances || {};
+  const hasAlliance = Object.keys(al).length > 0;
+  if (hasAlliance) {
+    let west = 0, east = 0;
+    s.teams.forEach((t, i) => {
+      const side = al[String(t)] ?? al[t];
+      if (side === 0) west += counts[i] ?? 0;
+      else if (side === 1) east += counts[i] ?? 0;
+    });
+    tallyEl.innerHTML =
+      `<span class="red">Western ${west}</span><span class="blue">Eastern ${east}</span>` +
+      s.teams.map((t, i) => {
+        const cls = t === 0 ? "red" : t === 1 ? "blue" : "";
+        return `<span class="${cls}">${TEAM_LABEL[t] || t}: ${counts[i] ?? 0}</span>`;
+      }).join("");
+  } else {
+    tallyEl.innerHTML = s.teams.map((t, i) => {
+      const cls = t === 0 ? "red" : t === 1 ? "blue" : "";
+      return `<span class="${cls}">${TEAM_LABEL[t] || t}: ${counts[i] ?? 0}</span>`;
+    }).join("");
+  }
 }
 
 const STEP_MS = 80;

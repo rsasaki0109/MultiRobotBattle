@@ -745,4 +745,42 @@ def battle_scenario(name):
         n = len(bots)
         return (bots, cfg,
                 f"Total war — {n} robots, four armies, two allied fronts")
+    if name == "grand_alliance_lite":
+        alliances = {RED: 0, GREEN: 0, BLUE: 1, YELLOW: 1}
+        cfg = kingdom_config(
+            width=88.0,
+            height=50.0,
+            alliances=alliances,
+            dps=50.0,
+            tactics="count_aware:aggressive",
+            spatial_min_bots=48,
+            formation_by_team={
+                RED: "line", BLUE: "line", GREEN: "wedge", YELLOW: "wedge",
+            },
+        )
+        w, h = cfg.width, cfg.height
+        dense = 2.0
+        bots = make_allied_armies(cfg, [
+            dict(team=RED, front_center=(w * 0.34, h * 0.38),
+                 rows=4, cols=8, face_right=True, spacing=dense, seed=19),
+            dict(team=GREEN, front_center=(w * 0.34, h * 0.62),
+                 rows=4, cols=8, face_right=True, spacing=dense, seed=20),
+            dict(team=BLUE, front_center=(w * 0.66, h * 0.38),
+                 rows=4, cols=8, face_right=False, spacing=dense, seed=21),
+            dict(team=YELLOW, front_center=(w * 0.66, h * 0.62),
+                 rows=4, cols=8, face_right=False, spacing=dense, seed=22),
+        ])
+        n = len(bots)
+        return (bots, cfg,
+                f"Allied fronts — {n} robots (browser scale)")
+    if name == "kingdom_lite":
+        cfg = kingdom_config(formation_by_team={RED: "line", BLUE: "line"})
+        w, h = cfg.width, cfg.height
+        red = make_grand_army(cfg, RED, (w * 0.30, h * 0.5),
+                              rows=5, cols=8, rng=random.Random(42),
+                              face_right=True)
+        blue = make_grand_army(cfg, BLUE, (w * 0.70, h * 0.5),
+                               rows=5, cols=8, rng=random.Random(43),
+                               face_right=False)
+        return (red + blue, cfg, "Kingdom clash — 40 vs 40 battle lines")
     raise KeyError(name)

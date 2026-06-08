@@ -18,9 +18,9 @@
 [![live demos](https://img.shields.io/badge/live%20demos-GitHub%20Pages-5b8cff)](https://rsasaki0109.github.io/multirobot-battle/)
 [![MAPF zoo](https://img.shields.io/badge/MAPF%20zoo-45%2B%20algorithms%20%C2%B7%20gated-blue)](docs/coordination.md)
 
-## Swarm battle — two flocking armies, last robot standing
+## Swarm battle — multi-army total war
 
-Split a Boids swarm into two teams and let them fight. Every robot steers from
+Split a Boids swarm into teams (and allied fronts) and let them fight. Every robot steers from
 only local information — flock with living teammates, advance on its nearest
 living enemy, keep spacing, and deal continuous damage to whatever enemy is in
 range — yet coherent battlefield behaviour emerges. Because damage is
@@ -150,7 +150,7 @@ same `(grid, agents)` interface. The core has **zero required dependencies**
 
 > **Try it without installing anything** — **[live browser demos](https://rsasaki0109.github.io/multirobot-battle/)**
 > run the pure-Python engine via Pyodide: the [**swarm battle**](https://rsasaki0109.github.io/multirobot-battle/demo/battle.html)
-> (duel / chokepoint / maneuver duel) and the [**MAPF zoo**](https://rsasaki0109.github.io/multirobot-battle/demo/)
+> (duel / allied fronts / kingdom lines / chokepoint / MAPF duel) and the [**MAPF zoo**](https://rsasaki0109.github.io/multirobot-battle/demo/)
 > (pick instance + solver, watch paths animate). Local fallback:
 > `python3 -m http.server` from `docs/demo/`.
 

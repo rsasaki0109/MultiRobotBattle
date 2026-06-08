@@ -8,16 +8,16 @@ from __future__ import annotations
 
 import json
 
-from mrn_coord.battle import RED, TEAM_NAMES, battle_scenario, simulate
+from mrn_coord.battle import ALLIANCE_NAMES, TEAM_NAMES, battle_scenario, simulate
 
-# Subsample frames so the JSON payload stays small in the browser tab.
-FRAME_STRIDE = 2
-
+# Per-scenario limits — lite scenarios subsample more to keep Pyodide payloads small.
 SCENARIOS = {
-    "duel": 600,
-    "chokepoint": 650,
-    "maneuver_duel": 550,
-    "mapf_stack_duel": 550,
+    "duel": {"max_ticks": 600, "frame_stride": 2},
+    "chokepoint": {"max_ticks": 650, "frame_stride": 2},
+    "maneuver_duel": {"max_ticks": 550, "frame_stride": 2},
+    "mapf_stack_duel": {"max_ticks": 550, "frame_stride": 2},
+    "grand_alliance_lite": {"max_ticks": 800, "frame_stride": 4},
+    "kingdom_lite": {"max_ticks": 800, "frame_stride": 4},
 }
 
 
@@ -41,11 +41,18 @@ def run(scenario_name: str) -> str:
     try:
         if scenario_name not in SCENARIOS:
             return json.dumps({"ok": False, "error": "unknown scenario: %s" % scenario_name})
+        opts = SCENARIOS[scenario_name]
+        stride = opts["frame_stride"]
         bots, cfg, title = battle_scenario(scenario_name)
-        res = simulate(bots, cfg, max_ticks=SCENARIOS[scenario_name])
-        frames = [_pack_frame(fr) for fr in res.frames[::FRAME_STRIDE]]
-        shots = [_pack_shots(sh) for sh in res.shots[::FRAME_STRIDE]]
+        res = simulate(bots, cfg, max_ticks=opts["max_ticks"], frame_stride=stride)
+        frames = [_pack_frame(fr) for fr in res.frames]
+        shots = [_pack_shots(sh) for sh in res.shots]
         winner = None if res.winner is None else TEAM_NAMES.get(res.winner, str(res.winner))
+        win_alliance = None
+        if res.winning_alliance is not None:
+            win_alliance = ALLIANCE_NAMES.get(res.winning_alliance,
+                                              str(res.winning_alliance))
+        alliances = {str(k): v for k, v in (cfg.alliances or {}).items()}
         return json.dumps(
             {
                 "ok": True,
@@ -56,11 +63,14 @@ def run(scenario_name: str) -> str:
                 "obstacles": [list(o) for o in cfg.obstacles],
                 "frames": frames,
                 "shots": shots,
-                "counts": res.counts[::FRAME_STRIDE],
+                "counts": res.counts,
                 "teams": list(res.teams),
+                "alliances": alliances,
                 "winner": winner,
+                "winning_alliance": win_alliance,
+                "n_bots": len(bots),
                 "ticks": res.ticks,
-                "stride": FRAME_STRIDE,
+                "stride": stride,
             }
         )
     except Exception as exc:

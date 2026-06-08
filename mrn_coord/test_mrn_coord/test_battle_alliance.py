@@ -41,5 +41,18 @@ class TestAlliances(unittest.TestCase):
         self.assertIsNotNone(res.winner)
 
 
+    def test_grand_alliance_lite_resolves(self):
+        bots, cfg, _ = battle_scenario("grand_alliance_lite")
+        self.assertEqual(len(bots), 128)
+        res = simulate(bots, cfg, max_ticks=800, frame_stride=8)
+        self.assertIsNotNone(res.winning_alliance)
+
+    def test_kingdom_lite_resolves(self):
+        bots, cfg, _ = battle_scenario("kingdom_lite")
+        self.assertEqual(len(bots), 80)
+        res = simulate(bots, cfg, max_ticks=800, frame_stride=8)
+        self.assertIsNotNone(res.winner)
+
+
 if __name__ == "__main__":
     unittest.main()
