@@ -54,10 +54,10 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="docs/media/battle.gif")
-    ap.add_argument("--fps", type=int, default=16)
-    ap.add_argument("--stride", type=int, default=4,
+    ap.add_argument("--fps", type=int, default=18)
+    ap.add_argument("--stride", type=int, default=2,
                     help="record every Nth simulation tick")
-    ap.add_argument("--max-ticks", type=int, default=1000)
+    ap.add_argument("--max-ticks", type=int, default=520)
     ap.add_argument("--width-px", type=int, default=_HERO_WIDTH_PX,
                     help="output GIF width in pixels (README embed width)")
     args = ap.parse_args()

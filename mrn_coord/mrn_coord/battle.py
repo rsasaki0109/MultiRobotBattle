@@ -1229,9 +1229,17 @@ def battle_scenario(name):
             width=140.0,
             height=72.0,
             alliances=alliances,
-            dps=62.0,
-            w_pursue=2.35,
-            fire_interval=0.05,
+            dps=78.0,
+            w_pursue=3.35,
+            w_retreat=0.85,
+            w_formation=1.25,
+            formation_gain=0.82,
+            max_speed=2.85,
+            fire_interval=0.028,
+            perception=8.5,
+            sep_strength=0.72,
+            sep_radius=1.55,
+            accuracy_min=0.88,
             tactics="count_aware:aggressive",
             spatial_min_bots=24,
             **total_war_terrain(width=140.0, height=72.0),
@@ -1241,31 +1249,36 @@ def battle_scenario(name):
             },
         )
         w, h = cfg.width, cfg.height
-        dense = 1.78
-        # Deployed close to the centre strip so the two fronts collide in no-man's-land
-        # within the first seconds — readable contact and tracer fire from frame one.
+        dense = 1.52
+        # Front ranks start within rifle range — both alliances trade fire from tick 0
+        # and wedge formations drive straight into the centre strip.
         bots = make_allied_armies(cfg, [
-            dict(team=RED, front_center=(w * 0.455, h * 0.36),
+            dict(team=RED, front_center=(w * 0.496, h * 0.36),
                  rows=9, cols=14, face_right=True, spacing=dense, seed=19),
-            dict(team=RED, front_center=(w * 0.395, h * 0.36),
-                 rows=2, cols=10, kind="tank", face_right=True, spacing=2.6,
+            dict(team=RED, front_center=(w * 0.422, h * 0.36),
+                 rows=2, cols=10, kind="tank", face_right=True, spacing=2.4,
                  seed=23),
-            dict(team=GREEN, front_center=(w * 0.455, h * 0.64),
+            dict(team=GREEN, front_center=(w * 0.496, h * 0.64),
                  rows=9, cols=14, face_right=True, spacing=dense, seed=20),
-            dict(team=GREEN, front_center=(w * 0.385, h * 0.64),
-                 rows=2, cols=8, kind="sniper", face_right=True, spacing=2.5,
+            dict(team=GREEN, front_center=(w * 0.412, h * 0.64),
+                 rows=2, cols=8, kind="sniper", face_right=True, spacing=2.3,
                  seed=24),
-            dict(team=BLUE, front_center=(w * 0.545, h * 0.36),
+            dict(team=BLUE, front_center=(w * 0.504, h * 0.36),
                  rows=9, cols=14, face_right=False, spacing=dense, seed=21),
-            dict(team=BLUE, front_center=(w * 0.605, h * 0.36),
-                 rows=2, cols=10, kind="tank", face_right=False, spacing=2.6,
+            dict(team=BLUE, front_center=(w * 0.578, h * 0.36),
+                 rows=2, cols=10, kind="tank", face_right=False, spacing=2.4,
                  seed=25),
-            dict(team=YELLOW, front_center=(w * 0.545, h * 0.64),
+            dict(team=YELLOW, front_center=(w * 0.504, h * 0.64),
                  rows=9, cols=14, face_right=False, spacing=dense, seed=22),
-            dict(team=YELLOW, front_center=(w * 0.615, h * 0.64),
-                 rows=2, cols=8, kind="sniper", face_right=False, spacing=2.5,
+            dict(team=YELLOW, front_center=(w * 0.588, h * 0.64),
+                 rows=2, cols=8, kind="sniper", face_right=False, spacing=2.3,
                  seed=26),
         ])
+        # Per-class DPS overrides cfg.dps — scale here for a hotter opening brawl.
+        for b in bots:
+            if b.dps is not None:
+                b.dps *= {"scout": 1.75, "soldier": 2.45, "tank": 1.95,
+                          "sniper": 2.15}.get(b.kind, 2.0)
         n = len(bots)
         return (bots, cfg,
                 f"Total war — {n} robots, four armies, two allied fronts")

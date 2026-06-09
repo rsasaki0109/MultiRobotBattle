@@ -26,9 +26,10 @@ simulator emits them; that repo consumes them.
 - `mrn_sim` — deterministic 2D world (unicycle kinematics, obstacles, collision,
   V2V/GNSS/range sensors), point-to-point navigation, and the swarm driver; a
   thin `mrn_sim_world` ROS node.
-- `mrn_coord` — coordination: **swarm battle** (`battle.py`), swarm flocking,
-  MAPF (CBS / prioritized + the 50-paper zoo in `mrn_coord.mapf`), formation
-  control, coverage (frontier + greedy/Hungarian).
+- `mrn_coord` — coordination: **swarm battle** (`battle.py`, `battle_morale.py`,
+  `battle_charge.py`, `battle_maneuver.py`, `battle_assignment.py`,
+  `battle_policy/`), swarm flocking, MAPF (CBS / prioritized + the 50-paper zoo in
+  `mrn_coord.mapf`), formation control, coverage (frontier + greedy/Hungarian).
 - `mrn_gazebo` — optional Gazebo (`gz sim`) adapter (requires Gazebo; not in CI).
 
 ## Done
@@ -60,6 +61,31 @@ simulator emits them; that repo consumes them.
   sniper via `CLASSES` + `make_company`, so quality-vs-quantity & combined arms
   emerge), and **terrain** (circular `obstacles`); `make_battle_gallery_gif.py`
   renders a 2×2 gallery of duel / free-for-all / quality-vs-quantity / chokepoint.
+- [x] **Allied multi-army total war** — four teams on two alliances
+  (`RED`+`GREEN` vs `BLUE`+`YELLOW` via `BattleConfig.alliances`); allied teams
+  never fire on each other but still flock only with their own colour.
+  `make_allied_armies` deploys eight echelons (infantry / tank / sniper wings ×
+  two fronts). Headline scenario **`grand_alliance`**: **576 bots** on a
+  140×72 competition arena with `total_war_terrain` (walls, elevation, chicanes);
+  **`grand_alliance_lite`** (128 bots) for the browser demo. Tested in
+  `test_battle_alliance.py`; `grand_alliance_lite` pinned in `battle_gate`.
+- [x] **Morale / rout** (`mrn_coord.battle_morale`) — when a team's surviving
+  fraction falls below `morale_rout_frac`, its bots flee toward the spawn flank
+  and are removed off-field instead of stalling in wounded-retreat draws.
+  `BattleConfig(morale=True)`; headline scenario `morale_duel` (6 tanks vs 18
+  scouts); GIF `morale_rout.gif`; browser demo + `battle_gate` pin.
+- [x] **ORCA / BVC charge** (`mrn_coord.battle_charge`) — MAPF-zoo collision
+  avoidance as a post-steering movement filter (`charge_by_team`: `orca` /
+  `bvc` / `none`). Headline scenario `orca_charge_duel`; comparison GIF
+  `charge_layers.gif` (greedy vs ORCA vs BVC); `battle_gate` pins
+  `orca_charge_vs_greedy` / `bvc_charge_vs_greedy`.
+- [x] **Hero GIF presentation pass** — README `battle.gif` is tuned for embed
+  readability and combat intensity: canvas aspect matches the arena exactly
+  (820 px wide, HUD overlaid *inside* field bounds so title / casualty bars are
+  never clipped); `grand_alliance` opens with front ranks within rifle range
+  (≈90 tracers tick 0, ~26 KIA by tick 20) via closer wedge deployment,
+  per-class DPS scaling, aggressive `count_aware` stance, and faster
+  `fire_interval`; `make_battle_gif.py` defaults stride 2 / 520 ticks / 18 fps.
 - [x] Navigation: occupancy grid + grid A* + pure pursuit; reciprocal
   multi-robot collision avoidance; replanning around dynamic obstacles.
 - [x] Optional Gazebo adapter: validated diff-drive world, `ros_gz_bridge`,
@@ -107,14 +133,34 @@ simulator emits them; that repo consumes them.
 ## Battle roadmap — where the fight goes next
 
 The battle today is the honest minimum: decentralized flocking + advance-to-
-contact + continuous in-range damage, with unit classes, N-army free-for-all, and
-terrain. It already produces **emergent focus fire** (per-attacker damage means a
-locally-outnumbered robot melts) and a clean quality-vs-quantity result (5 tanks
-beat 16 scouts). The roadmap deepens the **combat model**, adds a **tactics / AI
-layer**, and — the whole point of this repo — **drives the battle with the MAPF
-zoo's own planners** so the fight becomes a showcase of the algorithms rather than
-a thing beside them. Same cadence as the solvers: build → measure (win-rate /
-invariants) → gate → record the honest result.
+contact + continuous in-range damage, with unit classes, N-army free-for-all,
+terrain, allied fronts, morale/rout, and MAPF-zoo charge layers. It already
+produces **emergent focus fire** (per-attacker damage means a locally-outnumbered
+robot melts) and a clean quality-vs-quantity result (5 tanks beat 16 scouts). The
+headline **`grand_alliance`** GIF now reads as total war from frame one — both
+coalitions trade tracers in the centre strip immediately, casualty bars climb
+inside the arena bounds, and wedge echelons push until one alliance wins. The
+roadmap deepens the **combat model**, adds a **tactics / AI layer**, and — the
+whole point of this repo — **drives the battle with the MAPF zoo's own planners**
+so the fight becomes a showcase of the algorithms rather than a thing beside them.
+Same cadence as the solvers: build → measure (win-rate / invariants) → gate →
+record the honest result.
+
+### Recently landed (combat + presentation)
+
+| Feature | Module / scenario | GIF / gate |
+| --- | --- | --- |
+| Allied 576-bot total war | `grand_alliance`, `make_allied_armies` | `battle.gif` |
+| Morale / rout | `battle_morale`, `morale_duel` | `morale_rout.gif`, `battle_gate` |
+| ORCA / BVC charge | `battle_charge`, `orca_charge_duel` | `charge_layers.gif`, `battle_gate` |
+| Hero embed polish | `make_battle_gif.py` in-bounds HUD | README @ 820 px |
+| Opening-barrage tuning | per-class DPS scale + wedge deploy | ~90 shots tick 0 |
+
+**Still open on the headline scenario:** full annihilation within the GIF window
+(576-bot melees often time out on survivor count — ~130+ KIA in 400 ticks but
+hundreds remain; raising lethality further vs. keeping combined-arms readability
+is the trade-off). Next presentation pass: shorter "decisive wipe" variant or a
+`grand_alliance_decisive` seed sweep for a cleaner victory banner.
 
 ### Combat model depth
 - [x] **Line of sight & cover** — obstacles (and optionally other bodies) block
@@ -129,7 +175,10 @@ invariants) → gate → record the honest result.
   landed with ``fog_artillery.gif``, browser demo, and ``battle_gate`` pin.
 - [x] **Morale / rout** — collapsing teams flee off-field and are removed instead
   of stalling in wounded-retreat draws (`morale_duel`, ``morale_rout.gif``,
-  ``battle_gate`` pin).
+  ``battle_gate`` pin). Module: ``mrn_coord.battle_morale`` — tracks per-team
+  strength fraction, overrides steering for routed bots, removes survivors past
+  the arena margin. Config: ``morale``, ``morale_rout_frac``,
+  ``morale_rout_speed``, ``morale_exit_margin``.
 - [ ] **Typed damage & armor** — a small rock-paper-scissors (e.g. AP vs shield)
   so composition matters beyond raw dps; plus cooldown / reload / finite ammo so
   positioning and timing count.
@@ -181,6 +230,9 @@ battle is exactly where they should *do work*:
 - [x] **Collision-free charges** — ORCA / Buffered Voronoi Cells as a post-
   steering filter on the chokepoint (`orca_charge_duel`, ``charge_layers.gif``,
   ``battle_gate`` pins ``orca_charge_vs_greedy`` / ``bvc_charge_vs_greedy``).
+  Module: ``mrn_coord.battle_charge`` — ``apply_charge`` dispatches to
+  ``mrn_coord.orca.orca_velocity`` or ``mrn_coord.mapf.bvc.step_bvc`` per team;
+  ``charge_headline_duel`` runs greedy vs ORCA vs BVC side-by-side for the GIF.
 - [ ] **Switchable-ADG execution** — when maneuver is pre-planned and someone is
   delayed, gate execution on the coordination graph.
 - [x] **The headline demo** — swap *only* the movement layer (greedy ↔ A\* ↔ CBS)
@@ -204,7 +256,10 @@ battle is exactly where they should *do work*:
 - [ ] **Scale to hundreds** — spatial hashing for the O(n²) neighbour / nearest-
   enemy queries so battles of 100s of robots stay fast *and* deterministic.
   *(partial: ``mrn_coord.spatial_hash`` + ``make_grand_army`` / ``kingdom``
-  scenario — 80 vs 80 line clash on a 100×56 field; ``make_kingdom_gif.py``.)*
+  scenario — 80 vs 80 line clash on a 100×56 field; ``make_kingdom_gif.py``.
+  **576-bot ``grand_alliance``** runs with spatial hash enabled
+  (``spatial_min_bots=24``); sim ~5 min at full fidelity, GIF subsamples with
+  ``frame_stride``.)*
 - [ ] **Auto-balance / find-the-meta** — hill-climb / CMA-ES over class stats or
   steering weights against a fixed opponent to discover the strongest composition
   (optional; a pure-Python optimizer, no heavyweight deps).
@@ -215,14 +270,31 @@ battle is exactly where they should *do work*:
   already runs under Pyodide.
   *(partial: ``docs/demo/battle.html`` + ``battle_bridge.py`` — hill / domination /
   MAPF total-war dual panel, allied fronts, kingdom lite, duel / chokepoint /
-  maneuver / MAPF stack; ``pages.yaml`` deploys ``docs/`` on push to ``main``.)*
+  maneuver / MAPF stack, **morale_duel**, **orca_charge_duel**; ``pages.yaml``
+  deploys ``docs/`` on push to ``main``.)*
 - [ ] **Battle in the sim / Gazebo** — drive the real diff-drive robots as
   combatants through the existing `mrn_sim` / `mrn_gazebo` wiring (closed-loop,
   real-machine — not CI).
+- [x] **Hero GIF readability & intensity** — the README lead visual must read at
+  embed size and feel like a fight from frame one:
+  - **Layout** — ``make_battle_gif.py`` canvas = arena aspect ratio; ``xlim`` /
+    ``ylim`` locked to ``(0, width) × (0, height)``; title + western/eastern
+    casualty bars + KIA counter drawn as transparent overlays *inside* the field
+    (``pad_inches=0``); output width pinned to 820 px to match README embed.
+  - **Scenario tuning** — ``grand_alliance`` deploys eight wedge echelons with
+    ~1 m front gap so both alliances are in rifle range on tick 0; per-class DPS
+    scaled in-scenario (``cfg.dps`` does not override ``CLASSES`` stats);
+    ``count_aware:aggressive``, ``w_pursue=3.35``, ``w_retreat=0.85``,
+    ``fire_interval=0.028``, tighter spacing (``dense=1.52``). Measured opening:
+    ~90 tracers tick 0, ~26 KIA tick 20, ~74 KIA tick 76 (stride 2).
+  - **Render defaults** — ``make_battle_gif.py``: stride 2, max-ticks 520, 18 fps
+    for a snappier loop without losing the central brawl.
 - [ ] **More GIFs + a one-line hook** — each new feature gets a GIF driven by the
   real engine, plus a short "how it works" writeup for sharing.
   *(partial: ``maneuver_duel.gif`` + ``mapf_stack_duel.gif`` in README;
-  ``make_mapf_stack_gif.py`` for assignment+maneuver stack.)*
+  ``make_mapf_stack_gif.py`` for assignment+maneuver stack; **``morale_rout.gif``**
+  + **``charge_layers.gif``** for the latest combat-model landings;
+  ``docs/media/README.md`` catalogues all generators.)*
 
 ## Next ideas
 
@@ -259,7 +331,8 @@ Leverage order:
   *Show HN*, X) and the one-line hook ("swarm robot battles, driven by a 50-paper
   MAPF zoo"), then land the substance — the benchmarked solver collection; open a
   PR adding the repo to *Awesome-MAPF* / *Awesome-Robotics*.
-  *(draft posts + links in ``docs/distribution/README.md``.)*
+  *(draft posts + links in ``docs/distribution/README.md``; hero GIF now opens
+  with immediate tracer barrage and in-bounds HUD for social embeds.)*
 - [x] **README refresh**: leads with the MAPF zoo — the `mapf_gallery.gif` hero,
   a 5-line `pip install` + solve quickstart, and a representative comparison
   table (algorithm | paper | one-line idea | gated result) linking the full
